@@ -15,6 +15,84 @@ Deník projektu: po **každé session** sem přibude jeden zápis (nejnovější
 
 ---
 
+## 2026-10-31 – session 16: výběr funkcí na tlačítkách 1–4
+
+**Rozhodnutí uživatele:** tlačítko 1 (Domů) = funkce z „Navigace a stránka“ + Gesta; tlačítka 2 a 3 (Karty, Oblíbené) = funkce ze skupiny „Záložky, historie, hledání“; tlačítko 4 (Nastavení) = nejde měnit nic.
+
+**Hotovo**
+- `ButtonFunction.allowedOn` pro tlačítka 1–4: vždy povolená je původní funkce tlačítka (klepnutí i držení), navíc 1 = skupina „Navigace a stránka“ + Gesta, 2 a 3 = skupina „Záložky, historie, hledání“, 4 = nic. „Žádná funkce“ jde vždy vybrat.
+- `AppSettings.fixButtons`: tlačítko 4 se vždy vrací na výchozí funkce; u 1–3 se nepovolená funkce (např. po importu) vrátí na výchozí.
+- Nastavení tlačítka: u 1–3 jde měnit klepnutí i držení, u 4 ne; u 1–3 je tlačítko „Obnovit výchozí funkce“; nápověda podle tlačítka. Gesta na tlačítku 1 (kulička) fungují stejně jako jinde.
+- Tutoriál „Tlačítka“, `FUNKCE.md` a `architecture.md` upraveny.
+
+**Neověřeno / pozor:** kulička gest na tlačítku 1 (vlevo dole) a její překrytí s dolní lištou; animace Domů/Karty/Oblíbené se přehrávají jen u výchozí funkce.
+
+---
+
+## 2026-10-31 – session 15: zasunutá boční tlačítka, aktivní tlačítko, kulička a Čtverečky
+
+**Hotovo**
+- **Boční tlačítka (5, 6, 9–12) trvale zasunutá:** `AppSettings.buttonRetract` (50 nebo 70 %, výchozí 50, v exportu); `hiddenX` počítá posun z této hodnoty; tlačítka se nevysouvají, klepnutí i držení spustí funkci rovnou (odpadl `scheduleSideHide`, `sideHide`). Plně vidět jsou v konfiguračním módu tlačítek i gest a tlačítko 5 u otevřené lišty. Starý `buttonSlide` zůstal jen kvůli staršímu exportu a nepoužité obrazovce `ButtonsConfigScreen`.
+- **Nastavení tlačítka (modal):** přepínač „Tlačítko je aktivní“ (5–8) je teď úplně nahoře; výběr „Zasunutí za okraj“ 50 % / 70 % u bočních tlačítek (nahradil „Vysouvací“).
+- **Neaktivní tlačítka 5–8** mají v konfiguračním módu místo ikony velké číslo (`showNumbersOnDisabledButtons`, `numberBitmap`) a jsou vidět zřetelněji (průhlednost 0,75).
+- **Konfigurace gest:** kulička (kde gesto začíná) je vidět vždy; když funkci Gesta nemá žádné tlačítko, ukáže se na místě tlačítka 6 s upozorněním. Boční tlačítka jsou v tomto módu celá.
+- **Čtverečky (zamčený vzor):** třetí styl plochy v panelu gest, jde ho vybrat jen jako náhled v editoru; neuloží se (`gestPreviewStyle`, po zavření se zahodí) a gesta ho nepoužijí. `GestureSurface` umí styl 2 (ostré čtverce bez čísel).
+- Tutoriál „Tlačítka“: tip aktualizován.
+
+**Čeká na rozhodnutí:** Gesta na tlačítkách 1–4 (tlačítka 1–4 jsou pevná – viz otázka v chatu).
+**Neověřeno / pozor:** zasunutá kulička gest (šestka) napůl za okrajem, chování `singleTask` a zasunutí po otevření lišty; vzhled čísel na vypnutých tlačítkách.
+
+---
+
+## 2026-10-31 – session 14: výchozí prohlížeč, diagnostika e-mailu
+
+**Hotovo**
+- **Výchozí prohlížeč:** `AndroidManifest.xml` – `MainActivity` má filtr `VIEW` pro `http`/`https` (`DEFAULT` + `BROWSABLE`) a `launchMode="singleTask"`. `handleIncomingIntent` (`MainFunctions.kt`) otevře odkaz z jiné aplikace na nové kartě (jen http/https; při startu přes `createTab`, za běhu přes `onNewIntent` a `openInNewTab`).
+- **Nastavení → Výchozí prohlížeč:** řádek ukazuje stav (je / není výchozí). Klepnutí: na Androidu 10+ systémový dialog (`RoleManager.ROLE_BROWSER`), na starších Výchozí aplikace v nastavení. Stav se obnoví po návratu (`onResume`).
+- **Funkce `submit-feedback`:** odpověď nově obsahuje `email`: `sent` / `failed_<kód>` / `error` / `skipped`; chybějící tajné proměnné se zapíšou do logu. Slouží k hledání, proč e-mail nedorazil.
+
+**Neověřeno / pozor:** `singleTask` mění chování zadního zásobníku (po otevření odkazu z jiné aplikace se použije běžící instance); dialog výchozího prohlížeče na různých telefonech.
+**Změněné soubory:** `AndroidManifest.xml`, `MainActivity.kt`, `MainFunctions.kt`, `SettingsActivity.kt`, `ui/SettingsScreens.kt`, `supabase/functions/submit-feedback/index.ts`, docs.
+
+---
+
+## 2026-10-31 – session 13: hodnocení napojeno na Supabase
+
+- Funkce `submit-feedback` nasazena v projektu `web_tetris` (Supabase, EU). `FeedbackConfig` v `ui/SettingsFeedback.kt` má adresu funkce a veřejný klíč `anon` (role `anon`, ověřeno dekódováním), takže odesílání z obrazovky Hodnocení a chyby je zapnuté.
+- Server: tabulka `feedback` (RLS bez policy; zapisuje jen funkce přes servisní klíč), e-mail přes Resend, tajné proměnné `RESEND_API_KEY` a `FEEDBACK_TO_EMAIL` jen v Supabase.
+- **Ověřit:** zkušební odeslání z terminálu a z aplikace (e-mail dorazí na adresu z Resendu, řádek je v tabulce `feedback`).
+
+---
+
+## 2026-10-31 – session 12: TabManager
+
+**Hotovo**
+- Nový `TabManager.kt`: čistá logika složek a pořadí karet (`groupOf`, `newGroup`, `prune`, `removeFromGroups`, `expandIds`, `buildItems`, `reorderedFlat`, `moveInGroup`, `merge`) bez Androidu a bez `WebView`; pracuje s id karet a s obecným seznamem (`T` + `idOf`). `TabGroup` je teď samostatná třída (dřív vnořená v `MainActivity`).
+- `MainActivity` drží `tabManager`; `groups` zůstalo jako pomocný getter, takže ostatní kód funguje beze změny. `MainTabs.kt`: `buildItems`, `pruneGroups`, `moveTab`, `moveInGroup`, `mergeTabs`, `extractTabs`, `closeTabs`, `clearAllTabs`, `restoreTabs` a změna barvy složky volají `TabManager`. `WebView` zůstává v aktivitě.
+- Proč ne `ViewModel`: `WebView` drží kontext aktivity (únik paměti) a aktivita se při otočení nerestartuje (`configChanges`).
+- `supabase/schema.sql`: přidány `grant` pro `service_role` (kdyby v projektu bylo vypnuté „Automatically expose new tables“).
+
+**Kontrola:** logika `TabManager` byla zkompilována samostatně a spuštěna s 17 kontrolami (slučování, přesuny, složky, rušení, zavírání): všechny prošly. Celý projekt: žádný nový druh chyby kompilátoru.
+
+**Změněné soubory:** nový `TabManager.kt`; `MainActivity.kt`, `MainTabs.kt`, `supabase/schema.sql`, docs.
+
+---
+
+## 2026-10-31 – session 11: refaktor B2b – MainActivity.kt rozdělen, server pro hodnocení
+
+Čistý přesun kódu, **žádná změna chování**. Bez možnosti sestavit; po nasazení sestavit a projít celou appku (karty, tlačítka, gesta, adresní pole, screenshoty, AdBlock, úvodní animace).
+
+**Hotovo**
+- `MainActivity.kt` (3 831 → ~970 řádků): přesunuto dalších 130 funkcí jako rozšíření do `MainTabs.kt`, `MainButtons.kt`, `MainFunctions.kt`, `MainInput.kt`, `MainSiteInfo.kt`, `MainLongPress.kt`, `MainAnimations.kt`, `MainStartPage.kt`, `MainDialogs.kt` (k dřívějším `MainScreenshots`, `MainGestures`, `MainAdBlock`).
+- Ve `MainActivity.kt` zůstalo jádro: pole a stav, `onCreate` a životní cyklus, `setupBars`, `buildWebView`, `CosmeticBridge`, skrývání lišt, zpětné tlačítko; funkce s výrazovým tělem (`fun x() = ...`) také zůstaly.
+- Vnořené třídy (`MenuRow`, `TabGroup`) a konstanty z `companion` se v rozšířeních píší s `MainActivity.`; přibyla `isWebViewReady()` (kontrola `lateinit webView` jde jen uvnitř třídy).
+- Server pro hodnocení a hlášení chyb: `supabase/schema.sql` (tabulka `feedback` s RLS bez policy) a `supabase/functions/submit-feedback/index.ts` (kontrola vstupu, max. 5 zpráv za hodinu z jedné adresy, uložení, e-mail přes Resend). Klíče jen v tajných proměnných funkce.
+
+**Kontrola:** všechny zdroje zkompilovány Kotlin kompilátorem před i po, žádný nový druh chyby. Nástroj pro přesun má pojistky (výrazová těla, cizí deklarace v bloku); první pokus je odhalil (`settingsIntent`, `loadPreview` si „přibraly“ okolní kód) a byl vrácen.
+**Čeká:** stav karet do `ViewModel` (až po úspěšném sestavení tohoto kroku), `FeedbackConfig` (adresa funkce a anon klíč).
+
+---
+
 ## 2026-10-31 – session 10: pozadí UFO Field, hodnocení a chyby (držení Nastavení), O aplikaci
 
 **Hotovo**

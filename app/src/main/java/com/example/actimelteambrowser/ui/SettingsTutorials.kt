@@ -154,10 +154,10 @@ private val TUTORIALS = listOf(
         steps = listOf(
             "Klepnutí spustí hlavní funkci tlačítka. Například Karty otevřou přehled karet.",
             "Držení spustí druhou funkci. Například držení Karet otevře novou kartu, držení Oblíbených přidá stránku do vybrané složky a držení Nastavení otevře hodnocení a hlášení chyb.",
-            "Tlačítka 1–4 (Domů, Karty, Oblíbené, Nastavení) jsou pevná. Funkce ostatních tlačítek si nastavíš sám.",
+            "Tlačítko Nastavení je pevné. Domů, Karty a Oblíbené mají omezený výběr (Domů: navigace a Gesta, Karty a Oblíbené: záložky, historie, hledání), ostatní tlačítka si nastavíš sám.",
             "Změna: Nastavení → Tlačítka, klepni na tlačítko a vyber funkci pro klepnutí a pro držení."
         ),
-        tip = "Boční tlačítka 9–12 přidáš přes „+“ v nastavení tlačítek. Tlačítka 7 a 8 (AdBlock a VPN) mají jen funkce zap/vyp."
+        tip = "Boční tlačítka (5, 6 a přidaná 9–12) jsou trvale zasunutá za okraj, v nastavení tlačítka jde zasunutí změnit z 50 % na 70 %. Přidáš je přes „+“. Tlačítka 5–8 jdou vypnout (v nastavení poznáš vypnuté podle velkého čísla); 7 a 8 (AdBlock a VPN) mají jen funkce zap/vyp."
     ),
     Tutorial(
         title = "Gesta",

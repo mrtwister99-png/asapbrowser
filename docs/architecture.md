@@ -32,7 +32,7 @@ Jak aplikace funguje uvnitř. Kde co leží je v [struktura.md](struktura.md).
 
 - `ButtonFunction` (enum v `AppSettings.kt`) je **jediný seznam funkcí**, které jde dát tlačítku nebo gestu. Každá má klíč, popisek, emoji (záloha) a vektorovou ikonu (`iconRes`).
 - `MainActivity.performFunction(fn)` funkci provede. „Otevírací" funkce (Nastavení, Karty, Domů…) jdou přes **zámek proti dvojitému otevření** (0,9 s).
-- Tlačítka **1–4 jsou pevná** (výchozí funkce, vlastní animace při klepnutí a držení). 5–8 lze skrýt, 7 a 8 mají jen zap/vyp funkce, 9–12 jsou přidaná boční (max 2 + 2).
+- Tlačítko **4 (Nastavení) je pevné**; **1–3** mají omezený výběr (1 = Navigace a stránka + Gesta, 2 a 3 = Záložky, historie, hledání; výchozí funkce zůstávají povolené a mají vlastní animace při klepnutí a držení). 5–8 lze skrýt, 7 a 8 mají jen zap/vyp funkce, 9–12 jsou přidaná boční (max 2 + 2).
 - **Pravidla** hlídá `AppSettings.fixButtons()` (volá se při startu a po importu) a `ButtonConfigModal` při přiřazení: Gesta a Boční lišta max 1×, Boční lišta jen na 5/6, Gesta nikdy na 7/8, Gesta a Boční lišta ne na jednom tlačítku.
 - **Konfigurační mód tlačítek:** Nastavení → Tlačítka zavře Nastavení a hlavní okno přejde do módu (ztmavení, tlačítka reagují na klepnutí otevřením modalu, „+" nad bočními tlačítky, uprostřed zelené přerušované „Uložit a zavřít nastavení").
 

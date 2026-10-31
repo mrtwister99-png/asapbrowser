@@ -23,8 +23,8 @@
 - Anti‑fingerprint skripty jsou připravené v Rust jádru, ale hlavní okno je zatím nepoužívá.
 
 ## Tlačítka a ovládání
-- Tlačítka 1–4 (stálá), 5–8 (lze skrýt), 9–12 (přidaná boční, max. 2 vlevo a 2 vpravo).
-- Každé tlačítko: funkce pro **klepnutí** a pro **držení**; boční tlačítka mohou být **vysouvací** (vidět napůl) – držení spustí funkci rovnou.
+- Tlačítka 1–4 (stálá; Nastavení je pevné, Domů má výběr z navigace a Gesta, Karty a Oblíbené ze skupiny Záložky, historie, hledání), 5–8 (lze skrýt), 9–12 (přidaná boční, max. 2 vlevo a 2 vpravo).
+- Každé tlačítko: funkce pro **klepnutí** a pro **držení**; boční tlačítka (5, 6, 9–12) jsou **trvale zasunutá** za okraj (50 %, v nastavení tlačítka jde 70 %); klepnutí i držení spustí funkci rovnou. Tlačítka 5–8 jdou vypnout; vypnutá poznáš v nastavení podle velkého čísla.
 - Pojistka: aspoň jedno zobrazené tlačítko vždy otevírá Nastavení.
 - **Boční lišta** (funkce „Boční lišta" jen na tlačítku 5 = vlevo nebo 6 = vpravo, otevře se na straně tlačítka): screenshot, sdílet odkaz, QR kód, verze pro počítač, najít na stránce.
 - **Gesta**: kulička s ohňostrojem je na tlačítku, které má funkci Gesta (výchozí 6, jde dát na kteroukoliv pozici kromě 7 a 8; vždy jen jedna), plocha 3×3 (číselná / kuličky), vlastní kódy gest, zkušební plocha; zabrnění a zvuk po úspěšném gestu (vypínatelné). Funkce Gesta a Boční lišta nesmí být na jednom tlačítku zároveň.
@@ -108,3 +108,6 @@ Kód: čísla 1–9 na mřížce 3×3 (1 2 3 / 4 5 6 / 7 8 9), začíná se dev�
 ## Hodnocení a hlášení chyb
 - Držení tlačítka Nastavení otevře obrazovku s hvězdičkami (1–5), volbou Recenze / Chyba, textem a nepovinným e-mailem; na pozadí běží animace UFO Field (klepnutí = ohňostroj, prst = odpuzovač UFO). Odesílá se na server (Supabase), viz `FeedbackConfig`.
 - Stejné pozadí je i v Nastavení → O aplikaci.
+
+## Výchozí prohlížeč
+- Nastavení → Výchozí prohlížeč: ASAP Browser se dá nastavit jako výchozí; odkazy http/https z jiných aplikací se pak otevřou na nové kartě.

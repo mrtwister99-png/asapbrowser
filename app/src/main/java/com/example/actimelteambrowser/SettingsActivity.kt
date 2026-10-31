@@ -47,6 +47,43 @@ class SettingsActivity : ComponentActivity() {
     // true = ukazuje se dialog "Uložit do telefonu / Odeslat na e-mail"
     private var showExportChooser by mutableStateOf(false)
 
+    // true = ASAP Browser je vychozi prohlizec (obnovuje se po navratu z nastaveni Androidu)
+    private var defaultBrowser by mutableStateOf(false)
+
+    private val roleLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { defaultBrowser = isDefaultBrowser() }
+
+    private fun isDefaultBrowser(): Boolean {
+        val probe = Intent(Intent.ACTION_VIEW, Uri.parse("http://www.example.com"))
+        val ri = packageManager.resolveActivity(probe, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        return ri?.activityInfo?.packageName == packageName
+    }
+
+    // Android 10+: systemovy dialog "Nastavit jako vychozi prohlizec"; starsi telefony: Vychozi aplikace v nastaveni
+    private fun requestDefaultBrowser() {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER) &&
+                !rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)
+            ) {
+                roleLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER))
+                return
+            }
+        }
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+        } catch (e: Exception) {
+            try { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } catch (e2: Exception) {
+                Toast.makeText(this, "Nastavení se nepodařilo otevřít", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        defaultBrowser = isDefaultBrowser()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppSettings.init(this)
@@ -90,6 +127,8 @@ class SettingsActivity : ComponentActivity() {
                     onResetAll = { resetEverything() },
                     onButtonConfig = { openButtonConfig() },
                     onGestureConfig = { openGestureConfig() },
+                    isDefaultBrowser = defaultBrowser,
+                    onDefaultBrowser = { requestDefaultBrowser() },
                     onClose = { finish() }
                 )
                 if (showExportChooser) {

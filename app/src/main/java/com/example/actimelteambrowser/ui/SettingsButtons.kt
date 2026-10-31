@@ -735,7 +735,7 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
     fun toast(text: String) = android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_LONG).show()
 
     fun assign(long: Boolean, fn: ButtonFunction) {
-        if (n <= 4) return   // tlacitka 1-4 jsou pevna
+        if (n == 4) return   // tlacitko 4 (Nastaveni) je pevne
         // Bocni lista a Gesta nesmi byt na jednom tlacitku spolu (klepnuti + drzeni)
         val pair = setOf(ButtonFunction.LEFT_BAR.key, ButtonFunction.GESTURES.key)
         val otherKey = (if (long) AppSettings.buttonTap[n - 1] else AppSettings.buttonLong[n - 1]).get()
@@ -768,6 +768,7 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
         AppSettings.buttonTap[n - 1].set(ButtonDefaults.tap(n).key)
         AppSettings.buttonLong[n - 1].set(ButtonDefaults.long(n).key)
         AppSettings.buttonEnabled[n - 1].reset()
+        AppSettings.buttonRetract[n - 1].reset()
         AppSettings.fixButtons()   // kdyby se tim Gesta / Bocni lista objevily podruhe
         tick++
         onChanged()
@@ -779,6 +780,7 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
         AppSettings.buttonTap[n - 1].set(ButtonDefaults.tap(n).key)
         AppSettings.buttonLong[n - 1].set(ButtonDefaults.long(n).key)
         AppSettings.buttonSlide[n - 1].reset()
+        AppSettings.buttonRetract[n - 1].reset()
         onRemoved()
     }
 
@@ -804,35 +806,19 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                     "Tlačítko $n – ${ButtonDefaults.name(n)}",
                     color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold
                 )
-                FunctionRow("Klepnutí", tapFn, fixed = n <= 4) { picking = false }
-                FunctionRow("Držení", longFn, fixed = n <= 4) { picking = true }
-                if (isSide) {
-                    var slide by remember(version) { mutableStateOf(AppSettings.buttonSlide[n - 1].get()) }
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ROW).padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("VYSOUVACÍ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                if (slide) "Ano – vidět jen z poloviny (50 %)" else "Ne – vidět celé (100 %)",
-                                color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Switch(checked = slide, onCheckedChange = {
-                            slide = it
-                            AppSettings.buttonSlide[n - 1].set(it)
-                            onChanged()
-                        })
-                    }
-                }
                 if (n in 5..8) {
                     var shown by remember(version) { mutableStateOf(AppSettings.buttonEnabled[n - 1].get()) }
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ROW).padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Zobrazit toto tlačítko", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f)) {
+                            Text("TLAČÍTKO JE AKTIVNÍ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (shown) "Ano – je vidět a funguje" else "Ne – je skryté (tady ho poznáš podle čísla)",
+                                color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold
+                            )
+                        }
                         Switch(checked = shown, onCheckedChange = {
                             shown = it
                             AppSettings.buttonEnabled[n - 1].set(it)
@@ -840,8 +826,29 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                         })
                     }
                 }
-                if (n <= 4) {
-                    Text("Tlačítka 1–4 jsou pevná: funkce ani zobrazení nejdou měnit.", color = MUTED, fontSize = 12.sp)
+                FunctionRow("Klepnutí", tapFn, fixed = n == 4) { picking = false }
+                FunctionRow("Držení", longFn, fixed = n == 4) { picking = true }
+                if (isSide) {
+                    var retract by remember(version) { mutableStateOf(AppSettings.buttonRetract[n - 1].get()) }
+                    Text("ZASUNUTÍ ZA OKRAJ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StyleCard("50 %", "napůl vidět", retract != 70, Modifier.weight(1f)) {
+                            retract = 50; AppSettings.buttonRetract[n - 1].set(50); onChanged()
+                        }
+                        StyleCard("70 %", "vidět jen kousek", retract == 70, Modifier.weight(1f)) {
+                            retract = 70; AppSettings.buttonRetract[n - 1].set(70); onChanged()
+                        }
+                    }
+                    Text("Boční tlačítka jsou trvale zasunutá. Tady se zobrazují celá, zasunou se po uložení nastavení.", color = MUTED, fontSize = 12.sp)
+                }
+                if (n == 4) {
+                    Text("Tlačítko Nastavení je pevné: nejde na něm nic měnit.", color = MUTED, fontSize = 12.sp)
+                }
+                if (n == 1) {
+                    Text("Na tlačítku Domů jde vybrat funkce z Navigace a stránky a Gesta.", color = MUTED, fontSize = 12.sp)
+                }
+                if (n == 2 || n == 3) {
+                    Text("Na tomto tlačítku jde vybrat funkce ze skupiny Záložky, historie, hledání (nebo vrátit původní funkci).", color = MUTED, fontSize = 12.sp)
                 }
                 if (n in 7..8) {
                     Text("Tlačítka 7 a 8 mají jen funkce zap/vyp.", color = MUTED, fontSize = 12.sp)
@@ -855,7 +862,7 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                         contentAlignment = Alignment.Center
                     ) { Text("Odebrat toto tlačítko", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                 }
-                if (n > 4) {
+                if (n != 4) {
                     Box(
                         Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { resetThis() },
                         contentAlignment = Alignment.Center

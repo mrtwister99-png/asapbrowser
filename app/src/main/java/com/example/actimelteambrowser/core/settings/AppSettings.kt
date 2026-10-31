@@ -109,12 +109,14 @@ object AppSettings {
     val tabsImported = BoolSetting("tabs_import_pending", false)
 
     // Funkce tlacitek 1-8: klepnuti a drzeni (klic funkce z ButtonFunction)
-    // Tlacitka 1-8 jsou pevna, 9-12 jsou pridana boci (max 2 vlevo a 2 vpravo)
+    // Tlacitko 4 je pevne, 1-3 maji omezeny vyber funkci (viz ButtonFunction.allowedOn), 9-12 jsou pridana boci (max 2 vlevo a 2 vpravo)
     val buttonTap: List<StringSetting> = (1..12).map { StringSetting("btn${it}_tap", ButtonDefaults.tap(it).key) }
     val buttonLong: List<StringSetting> = (1..12).map { StringSetting("btn${it}_long", ButtonDefaults.long(it).key) }
     // Bocni tlacitka (5, 6, 9-12): true = vysouvaci (videt jen 50 %), false = videt cele
     // Tlacitko 6 (gesta) je vychozi nevysouvaci: klepnuti rovnou otevre plochu gest
-    val buttonSlide: List<BoolSetting> = (1..12).map { BoolSetting("btn${it}_slide", it != 6) }
+    val buttonSlide: List<BoolSetting> = (1..12).map { BoolSetting("btn${it}_slide", it != 6) }   // zastarale (nahrazeno buttonRetract), zustava kvuli starsimu exportu a nepouzite obrazovce
+    // Bocni tlacitka (5, 6, 9-12) jsou trvale zasunuta za okraj: o kolik % sirky (50 nebo 70)
+    val buttonRetract: List<IntSetting> = (1..12).map { IntSetting("btn${it}_retract", 50) }
     // Gesta: vzhled plochy (0 = ciselna klavesnice, 1 = kulicky), velikost v dp a seznam gest (JSON)
     val gestureStyle = IntSetting("gesture_style", 0)
     val gestureSize = IntSetting("gesture_size", 260)
@@ -158,14 +160,17 @@ object AppSettings {
     }
 
     /**
-     * Uklid funkci tlacitek: 1-4 pevne vychozi, na ostatnich jen povolena funkce (7 a 8 jen on/off)
+     * Uklid funkci tlacitek: 4 pevne vychozi, 1-3 jen povolene funkce (jinak vychozi), na ostatnich jen povolena funkce (7 a 8 jen on/off)
      * a Gesta i Bocni lista smi byt max 1x (prvni nalezena zustane, dalsi se nastavi na "Zadna funkce").
      */
     fun fixButtons() {
-        // tlacitka 1-4 jsou pevna: vzdy vychozi funkce (klepnuti i drzeni)
+        // tlacitko 4 (Nastaveni) je pevne: vzdy vychozi funkce; tlacitka 1-3: nepovolena funkce se vrati na vychozi
         for (i in 1..4) {
-            if (buttonTap[i - 1].get() != ButtonDefaults.tap(i).key) buttonTap[i - 1].set(ButtonDefaults.tap(i).key)
-            if (buttonLong[i - 1].get() != ButtonDefaults.long(i).key) buttonLong[i - 1].set(ButtonDefaults.long(i).key)
+            for ((slot, def) in listOf(buttonTap[i - 1] to ButtonDefaults.tap(i), buttonLong[i - 1] to ButtonDefaults.long(i))) {
+                val fn = ButtonFunction.fromKey(slot.get())
+                val reset = if (i == 4) fn != def else (fn != ButtonFunction.NONE && !fn.allowedOn(i))
+                if (reset) slot.set(def.key)
+            }
         }
         var gestures = false
         var leftBar = false
@@ -186,7 +191,7 @@ object AppSettings {
         adBlockOn, adBlockYoutube, adBlockCookies, adBlockAutoUpdate,
         vpnOn,
         homeUrl, startupRestoreTabs
-    ) + buttonTap + buttonLong + buttonSlide + buttonEnabled + listOf(extraLeft, extraRight) +
+    ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
         listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, sitePermissions, totalBlocked, startShowFavorites,
         thumbsOn, animationsOn, introOn, soundsOn, vibrationOn, hideBarsOnScroll, searchEngine, desktopSites)
 
@@ -294,10 +299,18 @@ enum class ButtonFunction(val key: String, val label: String, val glyph: String,
      */
     fun allowedOn(button: Int): Boolean {
         if (button in 7..8) return this == ADBLOCK_TOGGLE || this == VPN || this == DESKTOP_MODE
-        return when (this) {
-            LEFT_BAR -> button == 5 || button == 6
-            else -> true
+        if (this == LEFT_BAR) return button == 5 || button == 6
+        // Tlacitka 1-4: vychozi funkce tlacitka smi vzdy; navic 1 = Navigace a stranka + Gesta, 2 a 3 = Zalozky, historie, hledani;
+        // 4 (Nastaveni) je pevne
+        if (button in 1..4) {
+            if (this == ButtonDefaults.tap(button) || this == ButtonDefaults.long(button)) return true
+            return when (button) {
+                1 -> group == "Navigace a stránka" || this == GESTURES
+                2, 3 -> group == "Záložky, historie, hledání"
+                else -> false
+            }
         }
+        return true
     }
 
     /** Kratky popis, co funkce dela (ukazuje se pod nazvem ve vyberu funkci). */

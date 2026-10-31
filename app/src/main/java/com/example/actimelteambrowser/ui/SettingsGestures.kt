@@ -289,6 +289,16 @@ fun GestureSurface(
                         topLeft = tl, size = sz, cornerRadius = cr, style = Stroke(width = 2.dp.toPx())
                     )
                     drawContext.canvas.nativeCanvas.drawText(n.toString(), cx, cy + numPaint.textSize * 0.35f, numPaint)
+                } else if (style == 2) {
+                    // Ctverecky (zamceny vzor, jen nahled): ostre ctverce bez cisel
+                    val half = cell * 0.26f
+                    val tl = Offset(cx - half, cy - half)
+                    val sz = Size(half * 2, half * 2)
+                    drawRect(color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.14f), topLeft = tl, size = sz)
+                    drawRect(
+                        color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.6f),
+                        topLeft = tl, size = sz, style = Stroke(width = 2.dp.toPx())
+                    )
                 } else {
                     drawCircle(
                         color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.85f),
@@ -793,7 +803,7 @@ fun GestureAreaEditor(
  * Je scrollovaci. onChanged = zmena se projevila (editor se prekresli), onResetArea = vratit polohu a velikost plochy.
  */
 @Composable
-fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit) {
+fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}) {
     var style by remember { mutableStateOf(AppSettings.gestureStyle.get()) }
     var opacity by remember { mutableStateOf(AppSettings.gestureOpacity.get()) }
     var hapticOn by remember { mutableStateOf(AppSettings.gestureHaptic.get()) }
@@ -856,11 +866,21 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                     Text("STYL PLOCHY", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         StyleCard("Číslice", "1 2 3 / 4 5 6 / 7 8 9", style == 0, Modifier.weight(1f)) {
-                            style = 0; AppSettings.gestureStyle.set(0); onChanged()
+                            style = 0; AppSettings.gestureStyle.set(0); onPreviewStyle(null); onChanged()
                         }
                         StyleCard("Kolečka", "mřížka 3 × 3", style == 1, Modifier.weight(1f)) {
-                            style = 1; AppSettings.gestureStyle.set(1); onChanged()
+                            style = 1; AppSettings.gestureStyle.set(1); onPreviewStyle(null); onChanged()
                         }
+                        // zamceny vzor: jde ho vybrat jen na zkousku, neulozi se a gesta ho nepouziji
+                        StyleCard("🔒 Čtverečky", "zamčeno, jen náhled", style == 2, Modifier.weight(1f)) {
+                            style = 2; onPreviewStyle(2); onChanged()
+                        }
+                    }
+                    if (style == 2) {
+                        Text(
+                            "Čtverečky jsou zamčené: jde je jen vyzkoušet. Neuloží se a gesta je nepoužijí, po zavření nastavení zůstane původní vzhled.",
+                            color = MUTED, fontSize = 12.sp
+                        )
                     }
 
                     Text("VIDITELNOST PLOCHY: $opacity %", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)

@@ -157,6 +157,8 @@ fun SettingsApp(
     onResetAll: () -> Unit,
     onButtonConfig: () -> Unit,
     onGestureConfig: () -> Unit,
+    isDefaultBrowser: Boolean,
+    onDefaultBrowser: () -> Unit,
     onClose: () -> Unit
 ) {
     var route by remember { mutableStateOf(startRoute) }
@@ -179,6 +181,8 @@ fun SettingsApp(
             onOther = { route = Route.Other },
             onTutorials = { route = Route.Tutorials },
             onAbout = { route = Route.About },
+            isDefaultBrowser = isDefaultBrowser,
+            onDefaultBrowser = onDefaultBrowser,
             onResetAll = onResetAll,
             onBack = onClose
         )
@@ -303,6 +307,8 @@ private fun SettingsRoot(
     onOther: () -> Unit,
     onTutorials: () -> Unit,
     onAbout: () -> Unit,
+    isDefaultBrowser: Boolean,
+    onDefaultBrowser: () -> Unit,
     onResetAll: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -319,6 +325,11 @@ private fun SettingsRoot(
             SettingsRow("Gesta", "Plocha pro gesta, vzhled, velikost a kódy gest", onGestures)
             SettingsRow("Export", "Uložit nastavení, záložky a historii do telefonu nebo poslat na e-mail", onExport)
             SettingsRow("Import", "Načíst nastavení ze souboru (nahradí záložky a historii)", onImport)
+            SettingsRow(
+                "Výchozí prohlížeč",
+                if (isDefaultBrowser) "ASAP Browser je výchozí prohlížeč. Odkazy z jiných aplikací se otevírají tady." else "Nastavit ASAP Browser jako výchozí, odkazy z jiných aplikací se pak otevřou tady",
+                onDefaultBrowser
+            )
             SettingsRow("Tutoriály", "Krátké ukázky, jak jednotlivé funkce fungují", onTutorials)
             // konfigurace: vsechno zbyle (animace, zvuky, vibrace, vyhledavac, ...)
             Column(

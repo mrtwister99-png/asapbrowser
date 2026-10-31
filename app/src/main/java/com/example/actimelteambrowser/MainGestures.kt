@@ -127,7 +127,7 @@ internal fun MainActivity.enterGestureConfig() {
     gestureView.setContent {
         @Suppress("UNUSED_VARIABLE") val tick = gestTick.value
         GestureAreaEditor(
-            style = AppSettings.gestureStyle.get(),
+            style = gestPreviewStyle.value ?: AppSettings.gestureStyle.get(),
             opacity = AppSettings.gestureOpacity.get() / 100f,
             defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
             bottomOffsetDp = bottomDp,
@@ -147,7 +147,8 @@ internal fun MainActivity.enterGestureConfig() {
                 AppSettings.gestureSize.reset()
                 gestResetKey.value = gestResetKey.value + 1
             },
-            onClose = { exitGestureConfig() }
+            onClose = { exitGestureConfig() },
+            onPreviewStyle = { gestPreviewStyle.value = it }
         )
     }
     panel.elevation = dp(45).toFloat()
@@ -163,6 +164,9 @@ internal fun MainActivity.enterGestureConfig() {
         panel.visibility = View.VISIBLE
         panel.animate().translationY(0f).setDuration(280).start()
     }
+    for (n in listOf(5, 6) + extraViews.keys) buttonView(n)?.let { applySideMode(n, it) }   // bocni tlacitka celá
+    updateOrbTarget()   // kulicka (start gesta) je v konfiguraci videt vzdy
+    if (gestureButtonN() == 0) Toast.makeText(this, "Tlačítko Gesta není přiřazené, kulička ukazuje výchozí místo (tlačítko 6)", Toast.LENGTH_LONG).show()
     applyGestureConfigUi()
 }
 
@@ -195,6 +199,7 @@ internal fun MainActivity.exitGestureConfig() {
     gestPanel = null
     gestScrim?.let { parent.removeView(it) }
     gestScrim = null
+    gestPreviewStyle.value = null   // zamceny vzor se neuklada
     for ((v, vis) in gestHidden) v.visibility = vis
     gestHidden.clear()
     hideGestures()   // zavre editor (ComposeView plochy)
@@ -261,6 +266,14 @@ internal fun MainActivity.updateOrbTarget() {
     }
     val orb = orbView ?: return
     if (g == 0) {
+        // v konfiguraci gest je kulicka videt vzdy, i kdyz zadne tlacitko nema funkci Gesta: ukazuje, kde gesto zacina
+        val b6 = buttonView(6)
+        if (gestureConfigMode && b6 != null) {
+            if (b6.visibility == View.GONE) b6.visibility = View.INVISIBLE   // jinak by nemelo polohu
+            orb.target = b6
+            orb.visibility = View.VISIBLE
+            return
+        }
         orb.visibility = View.GONE
         return
     }

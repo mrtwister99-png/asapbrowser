@@ -174,8 +174,8 @@ internal fun UfoBackground(content: @Composable BoxScope.() -> Unit) {
  * Klic od e-mailove sluzby ani servisni klic se do aplikace NIKDY nedavaji, zustavaji v tajnych promennych funkce.
  */
 internal object FeedbackConfig {
-    const val FUNCTION_URL = ""
-    const val ANON_KEY = ""
+    const val FUNCTION_URL = "https://ukcqkospxxauoygxhufk.supabase.co/functions/v1/submit-feedback"
+    const val ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrY3Frb3NweHhhdW95Z3hodWZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjM1NDUsImV4cCI6MjEwNjk5OTU0NX0.1BBPqgNUSZK2TlQ8LfpuHsRZR-fjhjwkUEEkR3S05jI"
 }
 
 // Odesle zpravu na server. Vraci null = odeslano, jinak text chyby (vola se z pozadi vlakna).
