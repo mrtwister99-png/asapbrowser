@@ -1,0 +1,5 @@
+# Baseline Profile: ART si tyhle tridy a metody predkompiluje pri instalaci, takze appka startuje rychleji.
+# Zapis s hvezdickami znamena "vsechno v balicku appky" (H = hot, S = startup, P = post-startup).
+# Pozn.: je to hruby profil psany rucne. Presnejsi (mensi, rychlejsi) vznikne az generovanim z mereni na telefone.
+HSPLcom/example/actimelteambrowser/**;->**(**)**
+Lcom/example/actimelteambrowser/**;

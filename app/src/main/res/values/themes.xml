@@ -1,0 +1,12 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.ActimelTeamBrowser" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Android 12+: bez systemoveho uvodniho loga (ikona appky pred spustenim); cerne pozadi, hned se ukaze uvodni animace -->
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
+
+    <style name="Theme.ActimelTeamBrowser" parent="Base.Theme.ActimelTeamBrowser" />
+</resources>
