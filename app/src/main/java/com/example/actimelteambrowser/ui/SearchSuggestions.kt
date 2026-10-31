@@ -267,10 +267,15 @@ private fun PinnedRow(pinned: SearchSuggestion, onCopy: (SearchSuggestion) -> Un
             )
         }
         // upravit adresu aktualni stranky: vlozi ji do pole, kurzor na konec
-        Box(
-            Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable { onEdit(pinned) },
-            contentAlignment = Alignment.Center
-        ) { Text("✎", color = Color.White, fontSize = 22.sp) }
+        Image(
+            painter = painterResource(R.drawable.ic_edit_url),
+            contentDescription = "Upravit adresu",
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onEdit(pinned) }
+                .padding(10.dp)
+        )
         // kopirovat adresu aktualni stranky
         if (copied) {
             Text(

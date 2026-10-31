@@ -4,6 +4,8 @@ Přehled složek a souborů: **co kde leží**. Jak věci spolu fungují je v [a
 
 Balíček: `com.example.actimelteambrowser` · Kotlin · View (XML) + Jetpack Compose · WebView · Rust jádro (AdBlock) · minSdk 24.
 
+> Soubory `Main*.kt` jsou rozšíření třídy `MainActivity` (`internal fun MainActivity.xxx()`), stav zůstává ve `MainActivity.kt`.
+
 ## Kořen projektu
 
 ```
@@ -13,6 +15,7 @@ Balíček: `com.example.actimelteambrowser` · Kotlin · View (XML) + Jetpack Co
 ├─ README.md                   popis aplikace pro lidi
 ├─ docs/                       dokumentace (tento soubor, architecture, zapisovnik, todolist, FUNKCE, ICONS)
 ├─ app/                        Android modul (vše podstatné)
+├─ supabase/                   server pro hodnocení a hlášení chyb (schema.sql, funkce submit-feedback)
 └─ rust-enginee/               Rust jádro (AdBlock, JNI most)
 ```
 
@@ -33,7 +36,16 @@ app/src/main/
 
 | Soubor | Co v něm je |
 |---|---|
-| `MainActivity.kt` (~3 830 řádků) | **Hlavní okno.** Karty a WebView, adresní řádek a našeptávač, tlačítka 1–12 a jejich funkce (`performFunction`), animace tlačítek, levá lišta, screenshoty, informace o stránce, sdílení, oprávnění webů, konfigurační módy tlačítek a gest, úvodní stránka nové karty, ukládání a obnova karet, úvodní animace |
+| `MainActivity.kt` (~970 řádků) | **Jádro hlavního okna:** pole a stav (karty, složky, přehled karet), `onCreate` a životní cyklus, `setupBars`, `buildWebView` (WebView + klienti), `CosmeticBridge`, skrývání lišt při posouvání, zpětné tlačítko, celoobrazovkové video |
+| `MainTabs.kt` | Karty: vytváření, přepínání, složky, zavírání, ukládání a obnova, přehled karet (rozšíření `MainActivity`) |
+| `MainButtons.kt` | Tlačítka 1–12, konfigurační mód tlačítek, boční lišta, vzhled tlačítek |
+| `MainFunctions.kt` | `performFunction` – provedení funkce tlačítka nebo gesta a jednoduché akce |
+| `MainInput.kt` | Adresní pole, našeptávač, klávesnice, zadávání adresy |
+| `MainSiteInfo.kt` | Informace o stránce, oprávnění webů, sdílení a QR kód |
+| `MainLongPress.kt` | Dlouhé podržení na stránce: nabídka odkazu a obrázku |
+| `MainAnimations.kt` | Úvodní animace s hudbou, animace tlačítek, plnění tlačítek při stahování |
+| `MainStartPage.kt` | Úvodní stránka nové karty, náhledy a ikony webů, stahování souborů |
+| `MainDialogs.kt` | Sjednocené dialogy appky |
 | `RegionSelectView.kt` | Výběr části obrazovky pro screenshot (kreslení obdélníku s úchyty) |
 | `StarBurstView.kt` | Animace hvězdy Oblíbených (zlatá hvězda + jiskry) |
 | `GestureOrbView.kt` | Živá kulička na tlačítku s funkcí Gesta |
@@ -43,6 +55,7 @@ app/src/main/
 | `MainGestures.kt` | Gesta: plocha, kulička a konfigurační mód gest (rozšíření `MainActivity`) |
 | `MainAdBlock.kt` | AdBlock: pravidla, kosmetické filtry, YouTube, počítadlo, cookie lišty (rozšíření `MainActivity`) |
 | `UfoFieldView.kt` | Animované pozadí „UFO Field“ (roj UFO, ohňostroje, odpuzovač prstu, portály); používá ho Hodnocení a chyby a O aplikaci |
+| `TabManager.kt` | Čistá logika složek a pořadí karet (`TabManager`, `TabGroup`): slučování, přesuny, rušení složek; bez Androidu |
 | `BrowserTabs.kt` | `BrowserTab` (jedna karta: WebView, adresa, náhled, favicon, počítadlo reklam) a `BrowserTabs` (seznam karet + aktivní) |
 | `SettingsActivity.kt` | Okno Nastavení (Compose host), export/import, `ExportFileProvider` (sdílení souborů z cache) |
 

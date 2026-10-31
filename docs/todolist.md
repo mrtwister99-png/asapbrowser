@@ -27,7 +27,9 @@ Co zbývá udělat. Hotové věci se přesouvají do [zapisovnik.md](zapisovnik.
 ## 6. Dluhy a vylepšení (dohodnuto 2026-10-30)
 - [x] Baseline Profile (`profileinstaller` + ruční `baseline-prof.txt`) – hotovo; později vygenerovat přesnější z měření
 - [x] Rozdělit `SettingsScreens.kt` na 9 souborů (hotovo)
-- [ ] Rozdělit `MainActivity.kt` (~5 000 řádků): krok 1 samostatné třídy, krok 2 funkce podle oblastí
+- [x] Rozdělit `MainActivity.kt` (5 014 → ~970 řádků) – hotovo
+- [x] Logika složek karet do `TabManager.kt` (hotovo; `ViewModel` ne: únik paměti přes `WebView`)
+- [ ] Jednotkové testy `TabManager` do `app/src/test` (logika je čistá, test je připravený)
 - [ ] Ověřit release APK (R8 pravidla, AdBlock přes Rust)
 - [ ] Verze pro Google Play (odlehčená příchuť) – změnit `applicationId` (`com.example.*` Play nepřijme)
 

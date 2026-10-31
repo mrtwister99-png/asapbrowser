@@ -194,7 +194,7 @@ internal fun MainActivity.performFunction(fn: ButtonFunction) {
             startActivity(Intent.createChooser(send, "Sdílet adresu"))
         }
         ButtonFunction.COPY_URL -> if (curUrl != null) {
-            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             cm.setPrimaryClip(android.content.ClipData.newPlainText("url", curUrl))
             Toast.makeText(this, "Adresa zkopírována", Toast.LENGTH_SHORT).show()
         }

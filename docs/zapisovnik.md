@@ -15,6 +15,13 @@ Deník projektu: po **každé session** sem přibude jeden zápis (nejnovější
 
 ---
 
+## 2026-10-31 – session 17: oprava sestavení po refaktoru
+
+- Kompilace v Android Studiu ukázala chyby, které kontrola bez Android SDK nemohla odhalit: zděděné konstanty z `Context` (`CLIPBOARD_SERVICE`, `INPUT_METHOD_SERVICE`, `DOWNLOAD_SERVICE`) se v rozšířeních mimo třídu musí psát plným jménem (`android.content.Context.…`). Opraveno v `MainFunctions.kt`, `MainInput.kt`, `MainLongPress.kt`, `MainSiteInfo.kt`, `MainStartPage.kt`.
+- Poučení: u dalšího přesunu kódu z `MainActivity` hledat i jiné zděděné statické členy (`RESULT_OK`, `MODE_PRIVATE` a podobně); v současných souborech žádné další nejsou.
+
+---
+
 ## 2026-10-31 – session 16: výběr funkcí na tlačítkách 1–4
 
 **Rozhodnutí uživatele:** tlačítko 1 (Domů) = funkce z „Navigace a stránka“ + Gesta; tlačítka 2 a 3 (Karty, Oblíbené) = funkce ze skupiny „Záložky, historie, hledání“; tlačítko 4 (Nastavení) = nejde měnit nic.
