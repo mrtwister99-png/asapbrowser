@@ -802,11 +802,11 @@ private fun MainActivity.ensureStrip(top: Boolean): HorizontalScrollView {
     sv.visibility = View.GONE
     val row = LinearLayout(this)
     row.orientation = LinearLayout.HORIZONTAL
+    row.setPadding(dp(8), 0, dp(8), 0)
     sv.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)))
     val lp = ConstraintLayout.LayoutParams(0, dp(30))
     lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
     lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-    lp.marginStart = dp(8); lp.marginEnd = dp(8)
     if (top) { lp.topToBottom = R.id.progressBar; lp.topMargin = dp(2) }
     else { lp.bottomToTop = R.id.bottomBar; lp.bottomMargin = dp(4) }
     (root as ConstraintLayout).addView(sv, lp)
@@ -880,6 +880,20 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
     val tileW = (screenW - gap * 4) / 5          // 5 dlazdic na sirku, dalsi se posouvaji
     val all = tabs.list.filter { it.incognito == incog }
     var activeLeft = -1
+    // skupina pokracujici na druhe liste: dole posledni karta dojede az na pravy okraj, nahore prvni az na levy
+    val other = if (top) shownBottomIds else shownTopIds
+    val edgeIdx = if (top) 0 else list.size - 1
+    val edgeOpen = list.isNotEmpty() && groupOf(list[edgeIdx].id)?.members?.any { it in other } == true
+    row.setPadding(if (top && edgeOpen) 0 else dp(8), 0, if (!top && edgeOpen) 0 else dp(8), 0)
+    var contentW = 0
+    list.forEachIndexed { i, tab ->
+        val g = groupOf(tab.id)
+        val jn = g != null && i < list.size - 1 && groupOf(list[i + 1].id) === g
+        contentW += tileW + (if (jn) 0 else gap)
+    }
+    contentW -= gap   // za posledni kartou mezera neni potreba
+    val fullW = resources.displayMetrics.widthPixels
+    val edgeExtra = if (edgeOpen) (fullW - dp(8) - contentW).coerceAtLeast(0) else 0
     list.forEachIndexed { i, tab ->
         val active = tab.id == tabs.activeId
         val h = if (active) dp(30) else dp(26)
@@ -892,8 +906,9 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
         val joinPrev = grp != null && i > 0 && groupOf(list[i - 1].id) === grp
         val joinNext = grp != null && i < list.size - 1 && groupOf(list[i + 1].id) === grp
         val r = dp(8).toFloat()
-        val l = if (joinPrev) 0f else r
-        val rr = if (joinNext) 0f else r
+        val atEdge = edgeOpen && i == edgeIdx
+        val l = if (joinPrev || (atEdge && top)) 0f else r
+        val rr = if (joinNext || (atEdge && !top)) 0f else r
         bg.cornerRadii = floatArrayOf(l, l, rr, rr, rr, rr, l, l)
         tile.background = bg
         if (joinPrev) {
@@ -920,9 +935,9 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
             tile.addView(pin, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START))
         }
         attachTileTouch(tile, tab, list, row, sv)
-        val lp = LinearLayout.LayoutParams(tileW, h)
+        val lp = LinearLayout.LayoutParams(tileW + (if (atEdge) edgeExtra else 0), h)
         lp.gravity = if (top) Gravity.TOP else Gravity.BOTTOM
-        lp.marginEnd = if (joinNext) 0 else gap
+        lp.marginEnd = if (joinNext || (atEdge && !top)) 0 else gap
         row.addView(tile, lp)
         if (active) activeLeft = i * (tileW + gap)
     }
