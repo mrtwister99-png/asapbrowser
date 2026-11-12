@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>ASAP Browser – co se ukládá</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1a1a1a; font-size: 10.5pt; line-height: 1.4; }
+  h1 { font-size: 20pt; margin: 0 0 2mm; }
+  .sub { color: #555; margin-bottom: 6mm; }
+  h2 { font-size: 13pt; margin: 7mm 0 2mm; padding-bottom: 1mm; border-bottom: 2px solid #00B055; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 2mm; }
+  th, td { text-align: left; vertical-align: top; padding: 1.6mm 2mm; border-bottom: 1px solid #e3e3e3; }
+  th { background: #f2f7f4; font-size: 9.5pt; }
+  td.k { font-family: Consolas, monospace; font-size: 9pt; color: #0b5e3a; white-space: nowrap; }
+  td.d { color: #555; white-space: nowrap; }
+  .note { background: #fff8d6; border-left: 4px solid #FFD600; padding: 2.5mm 3mm; margin: 3mm 0; }
+  .ok { background: #e8f7ef; border-left: 4px solid #00B055; padding: 2.5mm 3mm; margin: 3mm 0; }
+  ul { margin: 1mm 0 2mm 5mm; padding: 0; }
+</style>
+</head>
+<body>
+<h1>ASAP Browser – co se ukládá</h1>
+<div class="sub">Přehled všech nastavení a dat, která si aplikace pamatuje, a co z toho jde do zálohy (Nastavení → Export / Import). Stav k 12. 11. 2026.</div>
+
+<div class="ok"><b>Kontrola ukládání:</b> každé nastavení se zapisuje hned při změně (SharedPreferences), karty při odchodu z aplikace a při každé změně pořadí, skupiny nebo barvy. Počet zablokovaných reklam se ukládá každých 20 reklam a vždy při odchodu z aplikace. Při kontrole jsem našel a opravil jednu mezeru: export karet ukládal jen adresu a název – nově obsahuje i připnutí, barvu karty a skupiny (starší verze appky tyhle řádky jen přeskočí).</div>
+
+<h2>1. Části zálohy</h2>
+<table>
+<tr><th>Část</th><th>Co obsahuje</th></tr>
+<tr><td class="k">[nas] + [tl]</td><td>Všechna nastavení níže a tlačítka (funkce na klepnutí a podržení, zasunutí, zapnuto/vypnuto)</td></tr>
+<tr><td class="k">[za]</td><td>Záložky: složky (název, pořadí, nadřazená složka) a uložené stránky (adresa, název, datum, pořadí)</td></tr>
+<tr><td class="k">[ka]</td><td>Otevřené karty: adresa, název, aktivní karta, připnutí, barva karty, skupiny (barva, název, členové)</td></tr>
+<tr><td class="k">[hi]</td><td>Historie: adresa, název, čas návštěvy</td></tr>
+<tr><td class="k">[va]</td><td>Trezor hesel – zašifrovaný, obnoví se jen s 12 slovy (do exportu jen když ho zaškrtneš)</td></tr>
+</table>
+
+<h2>2. Nastavení prohlížeče</h2>
+<table>
+<tr><th>Nastavení</th><th>Klíč</th><th>Výchozí</th></tr>
+<tr><td>Domovská stránka</td><td class="k">home_url</td><td class="d">m.youtube.com</td></tr>
+<tr><td>Po spuštění obnovit poslední karty</td><td class="k">startup_restore_tabs</td><td class="d">zap.</td></tr>
+<tr><td>Vyhledávač (Google / Seznam / DuckDuckGo)</td><td class="k">search_engine</td><td class="d">Google</td></tr>
+<tr><td>Nová karta: oblíbené místo nejnavštěvovanějších</td><td class="k">start_show_favorites</td><td class="d">vyp.</td></tr>
+<tr><td>Spodní lista karet</td><td class="k">tab_strip_bottom</td><td class="d">zap. (nově)</td></tr>
+<tr><td>Horní lista karet</td><td class="k">tab_strip_top</td><td class="d">zap. (nově)</td></tr>
+<tr><td>Weby ve verzi pro počítač</td><td class="k">desktop_sites</td><td class="d">–</td></tr>
+<tr><td>Povolení webů (poloha, kamera, mikrofon)</td><td class="k">site_permissions</td><td class="d">–</td></tr>
+<tr><td>Náhledy stránek a ikony webů</td><td class="k">thumbs_on</td><td class="d">zap.</td></tr>
+<tr><td>Schovat lišty při posouvání</td><td class="k">hide_bars_on_scroll</td><td class="d">zap.</td></tr>
+<tr><td>Obnovení tažením shora + vzdálenost (dp)</td><td class="k">pull_refresh_on, pull_refresh_distance</td><td class="d">zap., 120</td></tr>
+<tr><td>Animace</td><td class="k">animations_on</td><td class="d">zap.</td></tr>
+<tr><td>Úvodní animace při spuštění</td><td class="k">intro_on</td><td class="d">zap.</td></tr>
+<tr><td>Zvuky</td><td class="k">sounds_on</td><td class="d">zap.</td></tr>
+<tr><td>Vibrace</td><td class="k">vibration_on</td><td class="d">zap.</td></tr>
+<tr><td>Informační toasty</td><td class="k">info_toasts</td><td class="d">zap.</td></tr>
+<tr><td>VPN (zatím jen přepínač)</td><td class="k">vpn_on</td><td class="d">vyp.</td></tr>
+</table>
+
+<h2>3. AdBlock</h2>
+<table>
+<tr><th>Nastavení</th><th>Klíč</th><th>Výchozí</th></tr>
+<tr><td>AdBlock zapnutý</td><td class="k">adblock_on</td><td class="d">zap.</td></tr>
+<tr><td>Reklamy na YouTube</td><td class="k">adblock_youtube</td><td class="d">zap.</td></tr>
+<tr><td>Automaticky odmítat cookie lišty</td><td class="k">adblock_cookies</td><td class="d">zap.</td></tr>
+<tr><td>Automatická aktualizace seznamů</td><td class="k">adblock_auto_update</td><td class="d">zap.</td></tr>
+<tr><td>Weby, kde je AdBlock vypnutý</td><td class="k">adblock_exceptions</td><td class="d">–</td></tr>
+<tr><td>Celkem zablokováno reklam</td><td class="k">total_blocked</td><td class="d">0</td></tr>
+</table>
+
+<h2>4. Tlačítka</h2>
+<table>
+<tr><th>Nastavení</th><th>Klíč</th><th>Poznámka</th></tr>
+<tr><td>Funkce na klepnutí (tlačítka 1–12)</td><td class="k">btn1_tap … btn12_tap</td><td class="d">4 je pevné</td></tr>
+<tr><td>Funkce na podržení (1–12)</td><td class="k">btn1_long … btn12_long</td><td class="d"></td></tr>
+<tr><td>Zasunutí bočních tlačítek (50 / 70 %)</td><td class="k">btn*_retract</td><td class="d">50 %</td></tr>
+<tr><td>Tlačítko zobrazené (5–8 jde skrýt)</td><td class="k">btn*_enabled</td><td class="d">zap.</td></tr>
+<tr><td>Přidaná tlačítka vlevo / vpravo (max 2 + 2)</td><td class="k">extra_left, extra_right</td><td class="d">–</td></tr>
+</table>
+
+<h2>5. Gesta</h2>
+<table>
+<tr><th>Nastavení</th><th>Klíč</th><th>Výchozí</th></tr>
+<tr><td>Vzhled plochy (číslice / kolečka / čtverečky)</td><td class="k">gesture_style</td><td class="d">číslice</td></tr>
+<tr><td>Čtverečky koupené (100 000 zablokovaných reklam)</td><td class="k">square_style_owned</td><td class="d">ne (nově)</td></tr>
+<tr><td>Velikost plochy (dp)</td><td class="k">gesture_size</td><td class="d">260</td></tr>
+<tr><td>Poloha a velikost plochy</td><td class="k">gesture_rect</td><td class="d">vpravo dole</td></tr>
+<tr><td>Viditelnost plochy (%)</td><td class="k">gesture_opacity</td><td class="d">100</td></tr>
+<tr><td>Seznam gest (kód → funkce)</td><td class="k">gesture_list</td><td class="d">výchozí gesta</td></tr>
+<tr><td>Strana gest (start 9 vpravo / 7 vlevo)</td><td class="k">gesture_start</td><td class="d">9</td></tr>
+<tr><td>Zabrnění a zvuk po gestu</td><td class="k">gesture_haptic, gesture_sound</td><td class="d">zap.</td></tr>
+</table>
+
+<h2>6. Ukládá se jen v telefonu (není v záloze)</h2>
+<ul>
+  <li>Anonymní karty – záměrně se neukládají vůbec.</li>
+  <li>Náhledy karet (obrázky) – vytvoří se znovu.</li>
+  <li>Stav průvodce: žluté obrysy (<span class="k">live_tutorial</span>), úvodní zpráva (<span class="k">welcome_shown</span>), jednorázové úpravy gest.</li>
+  <li>Seznam stahování (<span class="k">download_list</span>) a dočasné zvýraznění nového tlačítka.</li>
+  <li>Odemykání trezoru PINem / otiskem prstu – je vázané na tento telefon; na novém telefonu se trezor obnoví 12 slovy a PIN se nastaví znovu.</li>
+</ul>
+
+<div class="note"><b>Tip:</b> Nastavení → Export uloží soubor do telefonu nebo ho pošle e-mailem. Na novém telefonu ho stáhneš a v Nastavení → Import vybereš, které části načíst (a jestli je přidat ke stávajícím, nebo nahradit).</div>
+</body>
+</html>

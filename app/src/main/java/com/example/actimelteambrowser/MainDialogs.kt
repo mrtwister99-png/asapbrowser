@@ -116,13 +116,16 @@ internal fun MainActivity.dialogLabel(text: String): TextView {
     return l
 }
 
-// Uvodni zprava po prvnim spusteni: modal o 2 strankach (texty zatim jen zastupne), tecky = strana, prepinani i prejetim prstu. Ukaze se jednou.
+// Uvodni zprava po prvnim spusteni: modal o 2 strankach (uvodni texty), tecky = strana, prepinani i prejetim prstu. Ukaze se jednou.
 @SuppressLint("ClickableViewAccessibility")
 internal fun MainActivity.showWelcomeOnce() {
     if (AppSettings.welcomeShown.get()) return
     AppSettings.welcomeShown.set(true)
     window.decorView.post {
-        val pages = listOf("1. strana", "2. strana")   // TODO: skutecne texty
+        val pages = listOf(
+            "Zdar, jsem rád, že ses dostal k téhle aplikaci! 😃\n\nAť máš představu, o co jde: tohle je jednoduchý, rychlý a CELOUŽIVATELSKY nastavitelný webový prohlížeč, který byl primárně dělaný pro YouTube bez reklam.",
+            "Ve finále se z toho všeho stal propracovaný všestranný pomocník, který je buď super jednoduchý, nebo pro opravdu náročné uživatele.\n\nDoporučil bych věnovat prvních pár chvilek jednoduchému nastavení – čím víc si to nakonfiguruješ podle sebe, tím to budeš mít rychlejší."
+        )
         var page = 0
         showStyledDialog(title = "Úvod", positiveText = null, negativeText = null) { dismiss ->
             val box = LinearLayout(this)
@@ -135,7 +138,7 @@ internal fun MainActivity.showWelcomeOnce() {
             val text = TextView(this)
             text.setTextColor(Color.WHITE)
             text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            text.minHeight = dp(110)
+            text.minHeight = dp(190)
             pager.addView(text, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
             val dotsRow = LinearLayout(this)
@@ -182,7 +185,7 @@ internal fun MainActivity.showWelcomeOnce() {
                 }
                 true
             }
-            next.setOnClickListener { if (page < pages.size - 1) go(1) else { dismiss(); startLiveTutorial() } }
+            next.setOnClickListener { if (page < pages.size - 1) go(1) else { dismiss(); afterWelcome() } }
             render()
             box.addView(pager)
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)

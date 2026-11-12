@@ -143,6 +143,8 @@ internal val GESTURE_GREEN = Color(0xFF00B055)
 /** Dotyk, ktery zacal na tlacitku 6 a pokracuje na ploše (souřadnice v okně; phase 0 = dolů, 1 = pohyb, 2 = zvednuto). */
 class ExternalTouch(val x: Float, val y: Float, val phase: Int, val seq: Long)
 
+private val GESTURE_YELLOW = Color(0xFFFFD600)   // to, co uzivatel prave zadava
+
 @Composable
 fun GestureSurface(
     style: Int,
@@ -346,20 +348,37 @@ fun GestureOverlay(
     externalDown: ExternalTouch? = null,
     rect: GestureRect? = null,
     opacity: Float = 1f,
-    onSurfaceBounds: ((Float, Float, Float, Float) -> Unit)? = null
+    onSurfaceBounds: ((Float, Float, Float, Float) -> Unit)? = null,
+    showHints: Boolean = true                       // nahore seznam gest, ktera jdou dokreslit (v ukazce vypnuto)
 ) {
     var progress by remember { mutableStateOf("") }
     val matched = gestures.firstOrNull { it.code == progress }
+    // gesta, ktera zacinaji tim, co uz je nakreslene (na zacatku vsechna)
+    val possible = gestures.filter { it.code.startsWith(progress) }
 
     @Composable
     fun Content(w: Int, h: Int, align: Alignment.Horizontal) {
         Column(horizontalAlignment = align) {
-            Text(
-                if (matched != null) matched.fn.label else "Nakresli gesto – začni " + Gestures.startText(),
-                color = if (matched != null) GESTURE_GREEN else Color(0xCCFFFFFF),
-                fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp, end = 4.dp)
-            )
+            if (progress.isEmpty()) {
+                Text(
+                    "Nakresli gesto – začni " + Gestures.startText(),
+                    color = Color(0xCCFFFFFF), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp, end = 4.dp)
+                )
+            } else {
+                // co uzivatel prave zadava: zlute nad plochou (kod + funkce, kdyz uz nejaka odpovida)
+                Text(
+                    progress.toCharArray().joinToString(" › "),
+                    color = GESTURE_YELLOW, fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+                Text(
+                    matched?.fn?.label ?: if (possible.isEmpty()) "Takové gesto není" else "…",
+                    color = if (possible.isEmpty() && matched == null) Color(0xFFFF6B6B) else GESTURE_YELLOW,
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp, end = 4.dp)
+                )
+            }
             GestureSurface(
                 style = style,
                 sizeDp = w,
@@ -390,6 +409,42 @@ fun GestureOverlay(
             .background(Color(0x99000000))
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismiss() }
     ) {
+        // napoveda: gesta, ktera jdou z toho, co je uz nakreslene, dokoncit (nahore; kdyz je plocha nahore, tak dole)
+        if (showHints && possible.isNotEmpty()) {
+            val areaTop = rect?.let { it.t / 1000f } ?: 1f
+            Column(
+                Modifier
+                    .align(if (areaTop < 0.45f) Alignment.BottomCenter else Alignment.TopCenter)
+                    .systemBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = (maxHeight.value * 0.42f).dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xCC141414))
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                for (g in possible) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GesturePathPreview(g.code, Modifier.size(30.dp))
+                        Spacer(Modifier.width(10.dp))
+                        // uz nakreslena cast kodu zlute, zbytek bile
+                        Text(
+                            androidx.compose.ui.text.buildAnnotatedString {
+                                pushStyle(androidx.compose.ui.text.SpanStyle(color = GESTURE_YELLOW))
+                                append(codeText(g.code.take(progress.length)))
+                                pop()
+                                val rest = g.code.drop(progress.length)
+                                if (rest.isNotEmpty()) append((if (progress.isNotEmpty()) "-" else "") + codeText(rest))
+                            },
+                            color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(110.dp)
+                        )
+                        Text(g.fn.label, color = Color(0xFFCCCCCC), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
         if (rect == null) {
             // vychozi misto podle tlacitka gest: vlevo (klavesa 7) nebo vpravo (klavesa 9)
             val left = Gestures.startKey() == 7
@@ -856,9 +911,13 @@ fun GestureAreaEditor(
  * Panel, ktery se pri nastaveni gest vysune shora: vzhled plochy, viditelnost, odezva, poloha a seznam gest.
  * Je scrollovaci. onChanged = zmena se projevila (editor se prekresli), onResetArea = vratit polohu a velikost plochy.
  */
+/** Cena vzhledu Ctverecky: pocet zablokovanych reklam. */
+private const val SQUARE_PRICE = 100_000
+
 @Composable
 fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}, onAlignArea: () -> Unit = {}) {
     var style by remember { mutableStateOf(AppSettings.gestureStyle.get()) }
+    var owned by remember { mutableStateOf(AppSettings.squareStyleOwned.get()) }   // Ctverecky koupene
     var opacity by remember { mutableStateOf(AppSettings.gestureOpacity.get()) }
     var hapticOn by remember { mutableStateOf(AppSettings.gestureHaptic.get()) }
     var soundOn by remember { mutableStateOf(AppSettings.gestureSound.get()) }
@@ -926,16 +985,42 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                         StyleCard("Kolečka", "mřížka 3 × 3", style == 1, Modifier.weight(1f)) {
                             style = 1; AppSettings.gestureStyle.set(1); onPreviewStyle(null); onChanged()
                         }
-                        // zamceny vzor: jde ho vybrat jen na zkousku, neulozi se a gesta ho nepouziji
-                        StyleCard("🔒 Čtverečky", "zamčeno, jen náhled", style == 2, Modifier.weight(1f)) {
-                            style = 2; onPreviewStyle(2); onChanged()
+                        // Ctverecky: koupi se za 100 000 zablokovanych reklam; do te doby jen nahled (neulozi se)
+                        StyleCard(if (owned) "Čtverečky" else "🔒 Čtverečky", if (owned) "ostré čtverce" else "zamčeno, jen náhled", style == 2, Modifier.weight(1f)) {
+                            style = 2
+                            if (owned) { AppSettings.gestureStyle.set(2); onPreviewStyle(null) } else onPreviewStyle(2)
+                            onChanged()
                         }
                     }
-                    if (style == 2) {
+                    if (style == 2 && !owned) {
+                        val price = SQUARE_PRICE
+                        val have = AppSettings.totalBlocked.get()
+                        val canBuy = have >= price
+                        val fmt = java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("cs"))
                         Text(
-                            "Čtverečky jsou zamčené: jde je jen vyzkoušet. Neuloží se a gesta je nepoužijí, po zavření nastavení zůstane původní vzhled.",
+                            "Čtverečky jsou zamčené: zatím je jde jen vyzkoušet (neuloží se). Cena: ${fmt.format(price)} zablokovaných reklam – máš ${fmt.format(have)}.",
                             color = MUTED, fontSize = 12.sp
                         )
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (canBuy) Color(0xFFFFD600) else ROW)
+                                .clickable(enabled = canBuy) {
+                                    AppSettings.squareStyleOwned.set(true)
+                                    AppSettings.gestureStyle.set(2)
+                                    owned = true
+                                    onPreviewStyle(null)
+                                    onChanged()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                if (canBuy) "KOUPIT za ${fmt.format(price)} reklam" else "KOUPIT – chybí ${fmt.format(price - have)} reklam",
+                                color = if (canBuy) Color(0xFF1A1A1A) else MUTED, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     Text("VIDITELNOST PLOCHY: $opacity %", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)

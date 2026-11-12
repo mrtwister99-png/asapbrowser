@@ -132,6 +132,7 @@ private fun MainActivity.endDemo() {
     demoTargets.clear()
     if (isWebViewReady()) updateLockIcon(webView.url)   // vrati tecku u zamku podle skutecneho stavu
     demoRunning = false
+    onQuickSetupDemoEnded()
 }
 
 private fun MainActivity.card(): GradientDrawable {
@@ -151,6 +152,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     if (n == 8) { showVpnSoon(); return true }
 
     demoRunning = true
+    if (id == 300 && quickSetupStage == 2) quickSetupStage = 21   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
     val parent = root as ConstraintLayout
     val urlBox = findViewById<View>(R.id.urlContainer)
     val adBtn = findViewById<View>(R.id.btnAdBlock)
@@ -549,7 +551,11 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
                 if (phase == 0) externalDown = e
                 externalTouch.value = e
             }
-            at(0) { say("Gesta: kuličkou otevřeš plochu a prstem nakreslíš tah"); moveTo(target, 600) }
+            // kod gesta "nova karta" podle strany tlacitka gest (vlevo = zrcadlove, zacina 7)
+            val code = com.example.actimelteambrowser.core.settings.Gestures.load()
+                .firstOrNull { it.fn == ButtonFunction.NEW_TAB }?.code ?: "9852"
+            val keys = code.map { it - '0' }
+            at(0) { say("Gesta: kuličkou otevřeš plochu pro gesta"); moveTo(target, 600) }
             at(800) { tap() }
             at(300) {
                 // plocha si ztmavi pozadi sama, ukazkove ztmaveni se odstrani
@@ -559,18 +565,42 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
                 demoGestureOpen = true
                 showGestures { x, y, w, h -> sx = x; sy = y; sw = w; sh = h }
             }
-            at(900) {
+            at(700) {
                 if (sw <= 0f) { endDemo(); return@at }
-                say("Nová karta: 9 → 8 → 5 → 2")
-                fingerTo(keyPt(9), 500)
+                finger.animate().alpha(0f).setDuration(200).start()
+                say("Plocha pro gesta, defaultně jsou nastavené.")
+                // obrys vsech klaves plochy ~4 s problikava zlute
+                val wl = IntArray(2); window.decorView.getLocationOnScreen(wl)
+                for (k in 1..9) {
+                    val c = (k - 1) % 3; val r = (k - 1) / 3
+                    val pad = sw / 3f * 0.09f
+                    val l = wl[0] + sx + c * sw / 3f + pad; val tp = wl[1] + sy + r * sh / 3f + pad
+                    val rect = RectF(l, tp, l + sw / 3f - 2 * pad, tp + sh / 3f - 2 * pad)
+                    val b = IntArray(2); ov.getLocationOnScreen(b)
+                    blinkOutline(ov, RectF(rect.left - b[0], rect.top - b[1], rect.right - b[0], rect.bottom - b[1]), times = 9, stepMs = 220)
+                }
             }
-            at(650) { touch(0, keyPt(9)) }
-            for (k in listOf(8, 5, 2)) {
+            at(4200) { say("Můžeš si přidat / odebrat gesta – je to na tobě 😃") }
+            at(3000) {
+                say("Tahem: 9 → 8 → 5 → 2 = nová karta".let { if (keys.firstOrNull() == 7) "Tahem: " + keys.joinToString(" → ") + " = nová karta" else it })
+                fingerTo(keyPt(keys[0]), 500)
+            }
+            at(650) { touch(0, keyPt(keys[0])) }
+            for (k in keys.drop(1)) {
                 at(250) { fingerTo(keyPt(k), 400) }
                 at(450) { touch(1, keyPt(k)) }
             }
-            at(1100) { touch(2, keyPt(2)) }
-            at(2000) { endDemo() }
+            at(400) { touch(2, keyPt(keys.last())) }
+            // po vyhodnoceni prvniho gesta (1,2 s): na gesta jde i klikat
+            at(2200) { say("Na gesta můžeš i klikat.") }
+            at(900) { fingerTo(keyPt(keys[0]), 400) }
+            for (k in keys) {
+                at(500) { fingerTo(keyPt(k), 300) }
+                at(350) { tap(); touch(0, keyPt(k)) }
+                at(120) { touch(2, keyPt(k)) }
+            }
+            at(1800) { say("Takže je to na tobě, jak ti to je příjemnější.") }
+            at(2600) { endDemo() }
         }
     }
     return true

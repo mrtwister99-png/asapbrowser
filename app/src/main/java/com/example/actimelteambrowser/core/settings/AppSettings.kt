@@ -78,8 +78,8 @@ object AppSettings {
     val adBlockCookies = BoolSetting("adblock_cookies", true)          // auto-odmitnuti cookie list
     val adBlockAutoUpdate = BoolSetting("adblock_auto_update", true)   // stahovani novych seznamu
     val thumbsOn = BoolSetting("thumbs_on", true)                      // ukladat a ukazovat nahledy stranek a ikony webu
-    val tabStripBottom = BoolSetting("tab_strip_bottom", false)        // spodni lista karet (prvnich 5)
-    val tabStripTop = BoolSetting("tab_strip_top", false)              // horni lista karet (dalsi)
+    val tabStripBottom = BoolSetting("tab_strip_bottom", true)         // spodni lista karet (prvnich 5); vychozi zapnuto
+    val tabStripTop = BoolSetting("tab_strip_top", true)               // horni lista karet (dalsi); vychozi zapnuto
     val infoToasts = BoolSetting("info_toasts", true)                  // informacni toasty (chyby se ukazuji vzdy)
     val animationsOn = BoolSetting("animations_on", true)              // animace tlacitek a prechodu
     // Zivy tutorial: cisla tlacitek, na ktera uzivatel jeste neklepl (maji zluty obrys); prazdne = hotovo. Neexportuje se.
@@ -95,6 +95,7 @@ object AppSettings {
     val desktopSites = StringSetting("desktop_sites", "")              // weby, kde se pouziva verze pro pocitac (domeny oddelene carkou)
     val startShowFavorites = BoolSetting("start_show_favorites", false)   // nova karta: false = nejnavstevovanejsi, true = oblibene
     val totalBlocked = IntSetting("total_blocked", 0)                  // kolik reklam AdBlock zablokoval celkem (uvodni stranka)
+    val squareStyleOwned = BoolSetting("square_style_owned", false)    // vzhled gest "Ctverecky" koupeny za 100 000 zablokovanych reklam
     val adBlockExceptions = StringSetting("adblock_exceptions", "")    // weby, kde je AdBlock vypnuty (domeny oddelene carkou)
     val sitePermissions = StringSetting("site_permissions", "")        // povoleni webu (JSON: domena -> {geo, cam, mic})
 
@@ -209,7 +210,7 @@ object AppSettings {
         homeUrl, startupRestoreTabs
     ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
         listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, sitePermissions, totalBlocked, startShowFavorites,
-        thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
+        squareStyleOwned, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
 
     // Vsechna nastaveni pro kodovy export (SettingsCodes)
     val allSettings: List<Setting<*>> get() = all

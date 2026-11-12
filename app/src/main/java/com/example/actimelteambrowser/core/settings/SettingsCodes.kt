@@ -111,6 +111,19 @@ object SettingsCodes {
                 val e = arr.optJSONObject(i) ?: continue
                 sb.append(oneLine(e.optString("url"))).append('|').append(oneLine(e.optString("title"))).append('\n')
             }
+            // doplnky (starsi verze appky je preskoci): m poradi|pripnuta|nahore|barva, g barva|poradi karet|nazev skupiny
+            if (arr != null) for (i in 0 until arr.length()) {
+                val e = arr.optJSONObject(i) ?: continue
+                sb.append("m ").append(i).append('|').append(if (e.optBoolean("pin")) 1 else 0).append('|')
+                    .append(if (e.optBoolean("pt")) 1 else 0).append('|').append(e.optInt("col", 0)).append('\n')
+            }
+            val garr = o.optJSONArray("groups")
+            if (garr != null) for (i in 0 until garr.length()) {
+                val g = garr.optJSONObject(i) ?: continue
+                val m = g.optJSONArray("m") ?: continue
+                val idx = (0 until m.length()).joinToString(",") { m.optInt(it).toString() }
+                sb.append("g ").append(g.optInt("c")).append('|').append(idx).append('|').append(oneLine(g.optString("n"))).append('\n')
+            }
         } catch (e: Exception) {
         noteError(e)
         }
@@ -219,13 +232,28 @@ object SettingsCodes {
         }
         val tabsArr = JSONArray()
         var tabsActive = 0
+        val tabMeta = ArrayList<List<String>>()
+        val groupsArr = JSONArray()
         sec["ka"]?.forEach { l ->
             if (l.startsWith("active=")) tabsActive = l.substring(7).toIntOrNull() ?: 0
+            else if (l.startsWith("m ")) tabMeta.add(l.substring(2).split('|'))
+            else if (l.startsWith("g ")) {
+                val p = l.substring(2).split('|', limit = 3)
+                val idx = p.getOrNull(1)?.split(',')?.mapNotNull { it.trim().toIntOrNull() }.orEmpty()
+                if (idx.size >= 2) groupsArr.put(JSONObject().put("m", JSONArray(idx)).put("c", p[0].toIntOrNull() ?: 0xFFCDA24D.toInt()).put("n", p.getOrNull(2).orEmpty()))
+            }
             else {
                 val p = l.split('|', limit = 2)
                 if (p.isNotEmpty() && isWebUrl(p[0]) && tabsArr.length() < 100)
                     tabsArr.put(JSONObject().put("url", p[0]).put("title", if (p.size > 1) p[1] else ""))
             }
+        }
+
+        // pripnuti a barvy karet
+        for (m in tabMeta) {
+            val e = m.getOrNull(0)?.toIntOrNull()?.let { tabsArr.optJSONObject(it) } ?: continue
+            e.put("pin", m.getOrNull(1) == "1").put("pt", m.getOrNull(2) == "1")
+            m.getOrNull(3)?.toIntOrNull()?.takeIf { it != 0 }?.let { e.put("col", it) }
         }
 
         // 2) pouzit
@@ -278,7 +306,7 @@ object SettingsCodes {
                 }
                 AppSettings.savedTabs.set(JSONObject().put("active", old.optInt("active")).put("tabs", all).toString())
             } else {
-                AppSettings.savedTabs.set(JSONObject().put("active", tabsActive).put("tabs", tabsArr).toString())
+                AppSettings.savedTabs.set(JSONObject().put("active", tabsActive).put("tabs", tabsArr).put("groups", groupsArr).toString())
             }
             AppSettings.tabsImported.set(true)
         }

@@ -21,6 +21,7 @@ internal fun MainActivity.enterGestureConfig() {
     if (gestureConfigMode) return
     if (configMode) exitConfigMode()
     gestureConfigMode = true
+    AppSettings.totalBlocked.set(totalBlocked.get())   // aktualni pocet zablokovanych reklam (cena Ctverecku v panelu)
     setChromeHidden(false)
     hideKeyboard()
     etSearchMain.clearFocus()
@@ -142,7 +143,8 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
     etSearchMain.clearFocus()
     etTopUrl.clearFocus()
     val list = Gestures.load()
-    val style = AppSettings.gestureStyle.get()
+    // Ctverecky jen kdyz jsou koupene (napr. import cizeho nastaveni je neodemkne)
+    val style = AppSettings.gestureStyle.get().let { if (it == 2 && !AppSettings.squareStyleOwned.get()) 0 else it }
     val size = AppSettings.gestureSize.get().coerceIn(180, 340)
     val density = resources.displayMetrics.density
     val bottomDp = ((bottomBar.height - lastSystemBottom) / density).toInt() + 16
@@ -166,7 +168,8 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
             external = externalTouch.value,
             externalDown = externalDown,
             onUnknown = { if (demoBounds == null) AppToast.show(this, "Neznámé gesto") },
-            onSurfaceBounds = demoBounds
+            onSurfaceBounds = demoBounds,
+            showHints = demoBounds == null
         )
     }
     gestureView.visibility = View.VISIBLE

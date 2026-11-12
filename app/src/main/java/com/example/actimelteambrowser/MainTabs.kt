@@ -816,8 +816,18 @@ internal fun MainActivity.updateTabStrips() {
         val topBase = list.drop(5).takeLast(6)
         val base = list.take(6)
         // pripnuta karta zustava v te liste, kde byla pri pripnuti (na svem miste v poradi)
-        bottomList = list.filter { it in base || (it.pinned && !it.pinnedTop && it !in topBase) }
-        topList = list.filter { it in topBase || (it.pinned && it.pinnedTop && it !in base) }
+        val bottomSet = list.filter { it in base || (it.pinned && !it.pinnedTop && it !in topBase) }.toMutableSet()
+        val topSet = list.filter { it in topBase || (it.pinned && it.pinnedTop && it !in base) }.toMutableSet()
+        // skupina, ktera by byla rozdelena mezi spodni a horni listu (nebo by se dole nevesla cela), jde cela nahoru
+        for (g in groups) {
+            val ms = list.filter { it.id in g.members }
+            if (ms.any { it in bottomSet } && ms.any { it !in bottomSet }) {
+                bottomSet.removeAll(ms.toSet())
+                topSet.addAll(ms)
+            }
+        }
+        bottomList = list.filter { it in bottomSet }
+        topList = list.filter { it in topSet }
     }
     else if (wantBottom) { bottomList = list; topList = emptyList() }
     else if (wantTop) { bottomList = emptyList(); topList = list }
