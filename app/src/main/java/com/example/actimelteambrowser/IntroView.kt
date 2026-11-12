@@ -4,6 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.annotation.SuppressLint
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withTranslation
+import androidx.core.graphics.withClip
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -29,14 +33,15 @@ class IntroView(context: Context) : View(context) {
     private val ghostCyan = Paint(Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = PorterDuffColorFilter(Color.rgb(60, 200, 255), PorterDuff.Mode.MULTIPLY)
     }
-    private val full: Bitmap = load("asap_logo_full") ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    private val full: Bitmap = load("asap_logo_full") ?: createBitmap(1, 1)
     private val sede: Bitmap = load("sede_logo") ?: full
     private val pad = 32f * resources.displayMetrics.density   // okraj kolem loga (stejny jako driv na splashi)
 
+    @SuppressLint("DiscouragedApi")   // logo se hleda podle jmena (asap_logo_full / sede_logo)
     private fun load(name: String): Bitmap? = try {
         val id = resources.getIdentifier(name, "drawable", context.packageName)
         if (id == 0) null else BitmapFactory.decodeResource(resources, id)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 
@@ -105,18 +110,17 @@ class IntroView(context: Context) : View(context) {
             val dx = (rnd.nextFloat() * 2f - 1f) * strength * width * 0.07f
             val ghost = strength * width * 0.018f
             val dst = fit(b)
-            canvas.save()
-            canvas.clipRect(0f, y, width.toFloat(), y + h + 1f)
+            canvas.withClip(0f, y, width.toFloat(), y + h + 1f) {
             if (strength > 0.05f) {
                 ghostRed.alpha = (150 * strength).toInt()
                 ghostCyan.alpha = (150 * strength).toInt()
-                canvas.save(); canvas.translate(dx - ghost, 0f); canvas.drawBitmap(b, null, dst, ghostRed); canvas.restore()
-                canvas.save(); canvas.translate(dx + ghost, 0f); canvas.drawBitmap(b, null, dst, ghostCyan); canvas.restore()
+                canvas.withTranslation(dx - ghost, 0f) { drawBitmap(b, null, dst, ghostRed) }
+                canvas.withTranslation(dx + ghost, 0f) { drawBitmap(b, null, dst, ghostCyan) }
             }
             paint.alpha = 255
             canvas.translate(dx, 0f)
             canvas.drawBitmap(b, null, dst, paint)
-            canvas.restore()
+            }
             y += h
         }
     }

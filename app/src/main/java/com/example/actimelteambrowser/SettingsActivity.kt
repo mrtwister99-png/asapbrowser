@@ -10,7 +10,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,20 +20,27 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import com.example.actimelteambrowser.core.settings.AppSettings
-import com.example.actimelteambrowser.core.settings.BackupManager
+import com.example.actimelteambrowser.core.settings.SettingsCodes
+import com.example.actimelteambrowser.core.vault.VaultBackup
+import com.example.actimelteambrowser.core.vault.VaultManager
+import com.example.actimelteambrowser.ui.VaultRestoreDialog
+import com.example.actimelteambrowser.ui.ImportChooserDialog
 import com.example.actimelteambrowser.ui.ExportChooserDialog
 import com.example.actimelteambrowser.ui.Route
 import com.example.actimelteambrowser.ui.SettingsApp
 import java.io.File
 import java.io.FileNotFoundException
 import kotlin.concurrent.thread
+import androidx.core.net.toUri
 
 /** Okno Nastavení (Compose): Záložky, Historie, Export, Import. */
 class SettingsActivity : ComponentActivity() {
 
+    private var exportParts: Set<String> = setOf("nas", "za", "ka", "hi")   // co uzivatel zaskrtl v dialogu Export
+
     // Export: systémový dialog "Uložit jako"
     private val exportLauncher =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
             if (uri != null) doExport(uri)
         }
 
@@ -44,8 +50,34 @@ class SettingsActivity : ComponentActivity() {
             if (uri != null) doImport(uri)
         }
 
+    // Zaloha jen trezoru pred "Restartovat vse": soubor se zapise a teprve potom se smaze vsechno
+    private val vaultKeepLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri == null) {
+                AppToast.show(this, "Smazání zrušeno, záloha trezoru se neuložila", true)
+            } else {
+                thread(name = "vault-keep") {
+                    val ok = runCatching {
+                        val text = SettingsCodes.export(this, setOf("va"))
+                        contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                            ?: throw IllegalStateException("Nelze zapsat do souboru")
+                    }.isSuccess
+                    runOnUiThread {
+                        if (ok) resetEverything() else AppToast.show(this, "Záloha trezoru se nepovedla, nic se nesmazalo", true)
+                    }
+                }
+            }
+        }
+
+    // "Restartovat vse": kdyz je zaskrtnuta zaloha trezoru, nejdriv se ulozi do souboru (vyber mista); zrusene ukladani smazani zastavi
+    private fun resetWithOptionalVaultBackup(keepVault: Boolean) {
+        if (keepVault && VaultManager.isCreated(this)) vaultKeepLauncher.launch("asap-trezor.txt") else resetEverything()
+    }
+
     // true = ukazuje se dialog "Uložit do telefonu / Odeslat na e-mail"
     private var showExportChooser by mutableStateOf(false)
+    private var importPending by mutableStateOf<Pair<String, Set<String>>?>(null)   // nacteny text souboru + casti, ktere obsahuje
+    private var vaultRestore by mutableStateOf<VaultBackup?>(null)   // trezor ze souboru ceka na 12 slov
 
     // true = ASAP Browser je vychozi prohlizec (obnovuje se po navratu z nastaveni Androidu)
     private var defaultBrowser by mutableStateOf(false)
@@ -54,7 +86,7 @@ class SettingsActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { defaultBrowser = isDefaultBrowser() }
 
     private fun isDefaultBrowser(): Boolean {
-        val probe = Intent(Intent.ACTION_VIEW, Uri.parse("http://www.example.com"))
+        val probe = Intent(Intent.ACTION_VIEW, "http://www.example.com".toUri())
         val ri = packageManager.resolveActivity(probe, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
         return ri?.activityInfo?.packageName == packageName
     }
@@ -70,13 +102,22 @@ class SettingsActivity : ComponentActivity() {
                 return
             }
         }
-        try {
-            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-        } catch (e: Exception) {
-            try { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } catch (e2: Exception) {
-                Toast.makeText(this, "Nastavení se nepodařilo otevřít", Toast.LENGTH_SHORT).show()
-            }
+        // nejdriv Vychozi aplikace, kdyz nejdou, obecne Nastaveni; kdyz nejde ani to, toast
+        if (runCatching { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }.isFailure &&
+            runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) }.isFailure
+        ) {
+            AppToast.show(this, "Nastavení se nepodařilo otevřít")
         }
+    }
+
+    override fun onStart() {
+        VaultManager.activityStarted()   // trezor: auto-zamek po 15 min na pozadi
+        super.onStart()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        VaultManager.activityStopped()
     }
 
     override fun onResume() {
@@ -96,6 +137,7 @@ class SettingsActivity : ComponentActivity() {
             START_HISTORY -> Route.History
             START_BUTTONS -> Route.Buttons
             START_FEEDBACK -> Route.Feedback
+            START_VAULT -> Route.Vault
             else -> Route.Main
         }
         // tlacitka se nastavuji na hlavni plose: okno Nastaveni se hned zavre a hlavni okno prejde do konfiguracniho modu
@@ -124,21 +166,37 @@ class SettingsActivity : ComponentActivity() {
                     onOpenUrl = { url -> openUrlInBrowser(url) },
                     onExport = { showExportChooser = true },
                     onImport = { importLauncher.launch(arrayOf("*/*")) },
-                    onResetAll = { resetEverything() },
+                    onResetAll = { keepVault -> resetWithOptionalVaultBackup(keepVault) },
                     onButtonConfig = { openButtonConfig() },
                     onGestureConfig = { openGestureConfig() },
                     isDefaultBrowser = defaultBrowser,
                     onDefaultBrowser = { requestDefaultBrowser() },
                     onClose = { finish() }
                 )
+                importPending?.let { pending ->
+                    ImportChooserDialog(
+                        available = pending.second,
+                        onImport = { parts, merge -> importPending = null; doImportParts(pending.first, parts, merge) },
+                        onDismiss = { importPending = null }
+                    )
+                }
+                vaultRestore?.let { backup ->
+                    VaultRestoreDialog(
+                        backup = backup,
+                        onResult = { msg -> vaultRestore = null; AppToast.show(this, msg, true) },
+                        onDismiss = { vaultRestore = null }
+                    )
+                }
                 if (showExportChooser) {
                     ExportChooserDialog(
-                        onSave = {
+                        onSave = { parts ->
                             showExportChooser = false
+                            exportParts = parts
                             exportLauncher.launch(EXPORT_FILE)
                         },
-                        onEmail = {
+                        onEmail = { parts ->
                             showExportChooser = false
+                            exportParts = parts
                             doExportEmail()
                         },
                         onDismiss = { showExportChooser = false }
@@ -149,6 +207,63 @@ class SettingsActivity : ComponentActivity() {
 
         // funkce tlacitka "Import" rovnou otevre vyber souboru
         if (startKey == START_IMPORT) window.decorView.post { importLauncher.launch(arrayOf("*/*")) }
+        // ukazka prvniho tutorialu (Oblibene / Nastaveni / Hodnoceni): obrazovka se jen ukaze, nic se nemeni
+        intent.getStringExtra(EXTRA_DEMO)?.let { demo -> DemoMarks.rects.clear(); window.decorView.postDelayed({ runDemo(demo) }, 450) }
+    }
+
+    // Konec ukazky: hlavni okno se dozvi, jestli pokracovat (done) nebo ukazku ukoncit (skip)
+    private fun finishDemo(result: String) {
+        setResult(RESULT_OK, Intent().putExtra(EXTRA_DEMO_RESULT, result))
+        finish()
+        @Suppress("DEPRECATION") overridePendingTransition(0, 0)
+    }
+
+    private fun runDemo(demo: String) {
+        if (isFinishing) return
+        val st = DemoStage(this) { finishDemo(DEMO_SKIP) }
+        // zpet behem ukazky = preskocit
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { st.end(); finishDemo(DEMO_SKIP) }
+        })
+        fun mark(k: String): android.graphics.RectF? = DemoMarks.rects[k]
+        val screenH = resources.displayMetrics.heightPixels
+        // sipka zpet: prst na ni klepne a ukazka se vrati do prohlizece
+        fun goBack() {
+            st.at(1300) { st.say("Šipkou zpět se vrátíš do prohlížeče"); mark("back")?.let { st.focus(it); st.moveTo(it, 600) } }
+            st.at(900) { st.tap() }
+            st.at(350) { st.end(); finishDemo(DEMO_DONE) }
+        }
+        when (demo) {
+            DEMO_BOOKMARKS -> {
+                st.at(0) { st.say("Oblíbené: tvoje složky a uložené stránky") }
+                st.at(1800) {
+                    st.say("+ Nová složka: vytvoříš si vlastní složku")
+                    mark("new_folder")?.let { st.moveTo(it, 600); st.blink(it) }
+                }
+                goBack()
+            }
+            DEMO_SETTINGS -> {
+                st.at(0) { st.say("Nastavení: všechno na jednom místě") }
+                // radky se prolinkou zlute shora dolu (jen ty, ktere jsou videt)
+                val rows = listOf("Záložky", "Historie", "Stahování", "Tlačítka", "Gesta", "Export", "Import", "Výchozí prohlížeč", "Tutoriály", "Konfigurace", "O aplikaci", "Trezor hesel")
+                var first = true
+                for (r in rows) {
+                    st.at(if (first) 900 else 420) {
+                        val rect = mark("row:$r") ?: return@at
+                        if (rect.bottom < screenH - 16 * resources.displayMetrics.density) st.blink(rect)
+                    }
+                    first = false
+                }
+                goBack()
+            }
+            DEMO_FEEDBACK -> {
+                st.at(0) { st.say("Hodnocení a chyby: napiš recenzi nebo nahlas chybu") }
+                st.at(1300) { mark("fb_review")?.let { st.moveTo(it, 500); st.blink(it) } }
+                st.at(1300) { mark("fb_bug")?.let { st.moveTo(it, 500); st.blink(it) } }
+                goBack()
+            }
+            else -> { st.end(); finishDemo(DEMO_SKIP) }
+        }
     }
 
     // Zavre Nastaveni a pozada hlavni okno o konfiguracni mod gest (plocha + panel shora)
@@ -166,7 +281,7 @@ class SettingsActivity : ComponentActivity() {
     // Vrátí adresu do hlavního okna. Povoleno jen http/https (ne javascript: apod.)
     private fun openUrlInBrowser(url: String) {
         if (!(url.startsWith("https://") || url.startsWith("http://"))) {
-            Toast.makeText(this, "Tuhle adresu nelze otevřít", Toast.LENGTH_SHORT).show()
+            AppToast.show(this, "Tuhle adresu nelze otevřít")
             return
         }
         setResult(RESULT_OK, Intent().putExtra(EXTRA_URL, url))
@@ -176,14 +291,14 @@ class SettingsActivity : ComponentActivity() {
     private fun doExport(uri: Uri) {
         thread(name = "export") {
             val msg = try {
-                val json = BackupManager.exportJson(this)
+                val json = SettingsCodes.export(this, exportParts)   // kratky textovy export s kody
                 contentResolver.openOutputStream(uri, "wt")?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
                     ?: throw IllegalStateException("Nelze zapsat do souboru")
                 "Export hotový"
             } catch (e: Exception) {
                 "Export selhal: " + (e.message ?: "neznámá chyba")
             }
-            runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+            runOnUiThread { AppToast.show(this, msg, true) }
         }
     }
 
@@ -191,7 +306,7 @@ class SettingsActivity : ComponentActivity() {
     private fun doExportEmail() {
         thread(name = "export-mail") {
             try {
-                val json = BackupManager.exportJson(this)
+                val json = SettingsCodes.export(this, exportParts)
                 val dir = File(cacheDir, ExportFileProvider.DIR)
                 dir.mkdirs()
                 dir.listFiles()?.forEach { it.delete() }   // stare exporty pryc
@@ -200,7 +315,7 @@ class SettingsActivity : ComponentActivity() {
                 val subject = "ASAP Browser – moje nastavení"
                 val body = "Soubor otevři v ASAP Browseru: Nastavení → Import."
                 // 1) rovnou e-mailova aplikace: novy e-mail s prilohou, uzivatel jen vyplni svou adresu a odesle
-                val mail = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
+                val mail = Intent(Intent.ACTION_SENDTO, "mailto:".toUri())
                 mail.putExtra(Intent.EXTRA_STREAM, uri)
                 mail.putExtra(Intent.EXTRA_SUBJECT, subject)
                 mail.putExtra(Intent.EXTRA_TEXT, body)
@@ -208,26 +323,22 @@ class SettingsActivity : ComponentActivity() {
                 mail.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 // 2) zaloha: obecne sdileni, kdyby e-mailova aplikace prilohu neprijala
                 val send = Intent(Intent.ACTION_SEND)
-                send.type = "application/json"
+                send.type = "text/plain"
                 send.putExtra(Intent.EXTRA_STREAM, uri)
                 send.putExtra(Intent.EXTRA_SUBJECT, subject)
                 send.putExtra(Intent.EXTRA_TEXT, body)
                 send.clipData = ClipData.newRawUri("", uri)
                 send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 runOnUiThread {
-                    try {
-                        startActivity(mail)
-                    } catch (e: Exception) {
-                        try {
-                            startActivity(Intent.createChooser(send, "Odeslat nastavení"))
-                        } catch (e2: Exception) {
-                            Toast.makeText(this, "Nenašla se aplikace pro odeslání", Toast.LENGTH_LONG).show()
-                        }
+                    if (runCatching { startActivity(mail) }.isFailure &&
+                        runCatching { startActivity(Intent.createChooser(send, "Odeslat nastavení")) }.isFailure
+                    ) {
+                        AppToast.show(this, "Nenašla se aplikace pro odeslání", true)
                     }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    Toast.makeText(this, "Export selhal: " + (e.message ?: "neznámá chyba"), Toast.LENGTH_LONG).show()
+                    AppToast.show(this, "Export selhal: " + (e.message ?: "neznámá chyba"), true)
                 }
             }
         }
@@ -236,25 +347,46 @@ class SettingsActivity : ComponentActivity() {
     // Smaze VSECHNA data appky (nastaveni, databaze, soubory, cache, cookies) a appku ukonci.
     // Pri dalsim spusteni je appka jako nova. Stazene soubory ve slozce Stazene zustavaji.
     private fun resetEverything() {
-        val ok = try {
+        val ok = runCatching {
             (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).clearApplicationUserData()
-        } catch (e: Exception) {
-            false
-        }
-        if (!ok) Toast.makeText(this, "Smazání se nepovedlo", Toast.LENGTH_LONG).show()
+        }.getOrDefault(false)
+        if (!ok) AppToast.show(this, "Smazání se nepovedlo", true)
     }
 
+    // Soubor s kody: nejdriv se ukaze vyber casti (dialog), starsi JSON se nacte cely hned
     private fun doImport(uri: Uri) {
         thread(name = "import") {
-            val msg = try {
+            val msg: String? = try {
                 val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: throw IllegalStateException("Nelze číst soubor")
                 if (bytes.size > MAX_IMPORT_BYTES) throw IllegalArgumentException("Soubor je příliš velký")
-                BackupManager.importJson(this, String(bytes, Charsets.UTF_8))
+                val t = String(bytes, Charsets.UTF_8)
+                if (SettingsCodes.looksLikeCodes(t)) {
+                    val avail = SettingsCodes.sections(t)
+                    if (avail.isEmpty()) throw IllegalArgumentException("V souboru není nic k načtení")
+                    runOnUiThread { importPending = Pair(t, avail) }
+                    null
+                } else throw IllegalArgumentException("Neplatný soubor")
             } catch (e: Exception) {
                 "Import selhal: " + (e.message ?: "neznámá chyba")
             }
-            runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+            if (msg != null) runOnUiThread { AppToast.show(this, msg, true) }
+        }
+    }
+
+    // Nacte jen vybrane casti textoveho souboru
+    private fun doImportParts(text: String, parts: Set<String>, merge: Set<String>) {
+        // trezor se nacita zvlast: nejdriv se zepta na 12 slov
+        val rest = parts - "va"
+        if ("va" in parts) VaultManager.parseBackup(text)?.let { vaultRestore = it }
+        if (rest.isEmpty()) return
+        thread(name = "import-parts") {
+            val msg = try {
+                SettingsCodes.import(this, text, rest, merge)
+            } catch (e: Exception) {
+                "Import selhal: " + (e.message ?: "neznámá chyba")
+            }
+            runOnUiThread { AppToast.show(this, msg, true) }
         }
     }
 
@@ -266,13 +398,21 @@ class SettingsActivity : ComponentActivity() {
         const val START_EXPORT = "export"
         const val START_IMPORT = "import"
         const val START_FEEDBACK = "feedback"
+        const val START_VAULT = "vault"
         const val EXTRA_URL = "url"
+        const val EXTRA_DEMO = "demo"                 // ukazka prvniho tutorialu (jen se ukaze, nic se nemeni)
+        const val EXTRA_DEMO_RESULT = "demo_result"
+        const val DEMO_BOOKMARKS = "bookmarks"
+        const val DEMO_SETTINGS = "settings"
+        const val DEMO_FEEDBACK = "feedback"
+        const val DEMO_DONE = "done"
+        const val DEMO_SKIP = "skip"
         const val EXTRA_CONFIG_BUTTONS = "config_buttons"
         const val EXTRA_CONFIG_GESTURES = "config_gestures"
         const val EXTRA_PAGE_URL = "page_url"
         const val EXTRA_PAGE_TITLE = "page_title"
         private const val MAX_IMPORT_BYTES = 50 * 1024 * 1024
-        const val EXPORT_FILE = "asap-browser-nastaveni.json"
+        const val EXPORT_FILE = "asap-browser-nastaveni.txt"
     }
 }
 
@@ -322,6 +462,7 @@ class ExportFileProvider : ContentProvider() {
             n.endsWith(".gif") -> "image/gif"
             n.endsWith(".webp") -> "image/webp"
             n.endsWith(".jpg") || n.endsWith(".jpeg") -> "image/jpeg"
+            n.endsWith(".txt") -> "text/plain"
             else -> "application/json"
         }
     }

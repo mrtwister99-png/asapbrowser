@@ -1,99 +1,59 @@
 package com.example.actimelteambrowser
 
+import com.example.actimelteambrowser.data.MostVisitedSite
+import androidx.lifecycle.Lifecycle
+import android.media.MediaPlayer
+import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
+import androidx.core.net.toUri
+import androidx.core.graphics.toColorInt
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
-import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
 import java.io.ByteArrayInputStream
 import com.example.actimelteambrowser.core.engine.RustBridge
 import kotlin.concurrent.thread
 import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
 import com.example.actimelteambrowser.core.settings.AppSettings
+import com.example.actimelteambrowser.core.vault.VaultManager
 import android.content.Intent
 import android.text.Editable
 import android.text.TextWatcher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.ComposeView
 import com.example.actimelteambrowser.data.BookmarksRepository
 import com.example.actimelteambrowser.data.HistoryRepository
 import com.example.actimelteambrowser.data.HistoryVisit
 import com.example.actimelteambrowser.data.Bookmark
 import com.example.actimelteambrowser.ui.SearchSuggestion
-import com.example.actimelteambrowser.ui.ButtonConfigModal
 import com.example.actimelteambrowser.ui.SearchSuggestionsList
-import com.example.actimelteambrowser.ui.buildSearchSuggestions
 import android.graphics.Bitmap
 import android.view.MotionEvent
 import com.example.actimelteambrowser.ui.ExternalTouch
-import com.example.actimelteambrowser.core.settings.Gestures
-import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
 import com.example.actimelteambrowser.core.settings.SiteRules
-import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
-import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.example.actimelteambrowser.ui.StartSite
-import com.example.actimelteambrowser.ui.GestureOverlay
-import com.example.actimelteambrowser.ui.GestureArea
-import com.example.actimelteambrowser.ui.GestureAreaEditor
-import com.example.actimelteambrowser.ui.GesturePanel
-import android.animation.ArgbEvaluator
-import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
-import androidx.constraintlayout.widget.ConstraintLayout
-import android.graphics.Paint
 import com.example.actimelteambrowser.core.settings.ButtonDefaults
 import com.example.actimelteambrowser.core.settings.ButtonFunction
 import android.animation.ValueAnimator
-import android.app.Dialog
-import android.content.res.ColorStateList
-import android.graphics.Typeface
-import android.view.Gravity
 import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
-import android.util.TypedValue
-import android.transition.TransitionManager
-import android.net.Uri
 import android.graphics.BitmapFactory
-import android.text.InputType
 import java.io.File
-import java.io.FileOutputStream
 import androidx.activity.OnBackPressedCallback
-import org.json.JSONArray
-import org.json.JSONObject
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.view.PixelCopy
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
 import com.example.actimelteambrowser.ui.TabTile
-import com.example.actimelteambrowser.ui.TabsScreen
 
 class MainActivity : AppCompatActivity() {
 
@@ -122,8 +82,8 @@ class MainActivity : AppCompatActivity() {
     internal val groups: ArrayList<TabGroup> get() = tabManager.groups
 
     // Pocet reklam zablokovanych celkem (uvodni stranka); do nastaveni se uklada po dvaceti a pri pauze
-    internal val totalBlocked = java.util.concurrent.atomic.AtomicInteger(0)
-    internal val startBlockedTotal = mutableStateOf(0)
+    internal val totalBlocked = AtomicInteger(0)
+    internal val startBlockedTotal = mutableIntStateOf(0)
     internal lateinit var etSearchMain: EditText
     internal lateinit var etTopUrl: EditText
     internal lateinit var bottomBar: View
@@ -146,8 +106,12 @@ class MainActivity : AppCompatActivity() {
     internal val suggestionsCompact = mutableStateOf(false)             // prazdne pole: nejnavstevovanejsi jen 3 radky (scroll)
     @Volatile internal var suggestionToken = 0
     internal var lastRecordedUrl = ""
-    internal var tabCountBg: GradientDrawable? = null   // ramecek ctverecku s poctem karet
+    internal var tabCountBg: GradientDrawable? = null   // ramecek ctverecku s poctem karet (predni karta)
+    internal var tabCountLayer: android.graphics.drawable.Drawable? = null   // cela ikona: zadni karta + predni ctverecek
+    internal val tabStrokePx: Int get() = (1.1f * resources.displayMetrics.density).toInt().coerceAtLeast(1)   // tenka cara jako u ostatnich ikon
     internal var tabsAnimating = false
+    internal val accentState = mutableStateOf(0xFF00B055.toInt())   // hlavni barva plochy: zelena, v anonymnim rezimu modra #006AFF
+    internal var pullView: PullRefreshView? = null                  // kruzek pri tazeni stranky dolu (obnoveni)
     internal val closedUrls = ArrayList<String>()           // naposledy zavrene karty (pro "vratit zavrenou")
     internal val extraViews = HashMap<Int, View>()          // pridana boci tlacitka: cislo (9-12) -> view
     internal var lastImeShift = 0f
@@ -173,6 +137,7 @@ class MainActivity : AppCompatActivity() {
     internal val settingsLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
             settingsOpen = false
+            onDemoSettingsResult(r.data?.getStringExtra(SettingsActivity.EXTRA_DEMO_RESULT))   // ukazka prvniho tutorialu pokracuje
             // po navratu na hlavni plochu se znovu prehraje animace kolecko -> logo (spusti ji onResume)
             introOnResume = true
             // Nastaveni -> Tlacitka: hlavni plocha prejde do konfiguracniho modu
@@ -202,6 +167,9 @@ class MainActivity : AppCompatActivity() {
         gestureView = findViewById(R.id.gestureView)
         etSearchMain = findViewById(R.id.etSearchMain)
         etTopUrl = findViewById(R.id.etTopUrl)
+        setupTopClear()
+        etTopUrl.hint = "Zadej adresu"   // napoveda na nove karte (prazdne pole)
+        etTopUrl.setHintTextColor("#888888".toColorInt())
         bottomBar = findViewById(R.id.bottomBar)
         topBar = findViewById(R.id.topBar)
         progressBar = findViewById(R.id.progressBar)
@@ -220,7 +188,9 @@ class MainActivity : AppCompatActivity() {
             gestureView.setPadding(0, systemBars.top, 0, systemBars.bottom)
             lastSystemBottom = systemBars.bottom
             // web je mezi listami: nahore konci horni lista (status bar + 16 px + 52 dp), dole zacina spodni (nav bar + 16 px + 48 dp)
-            webContainer.setPadding(0, systemBars.top + 16 + dp(52), 0, systemBars.bottom + 16 + dp(48))
+            lastSystemTopPx = systemBars.top
+            updateWebPadding()
+            updateTabStrips()   // lista karet se pri klavesnici schova
             sideBarLeft?.visibility = if (imeVisible || !leftBarOpen) View.INVISIBLE else View.VISIBLE
 
             // bottomBar - kdyz je klavesnice, vysun nad ni
@@ -254,9 +224,14 @@ class MainActivity : AppCompatActivity() {
                 suggestions = if (suggestionsAtTop.value) emptyList() else suggestions.value,
                 pinned = if (suggestionsAtTop.value) null else pinnedPage.value,
                 pinnedAtBottom = true,   // u dolniho pole je aktualni stranka dole = nejblíž poli
+                accent = androidx.compose.ui.graphics.Color(accentState.value),
                 compact = suggestionsCompact.value,
                 onCopy = { copyPinnedUrl(it) },
-                onPinned = { dismissInput() },
+                onPinned = {   // klepnuti na aktualni stranku = znovunacist
+                    dismissInput()
+                    webView.reload()
+                    AppToast.show(this, "Načítám znovu")
+                },
                 onEdit = { editCurrentUrl() }
             ) { picked -> openSuggestion(picked.url) }
         }
@@ -264,15 +239,20 @@ class MainActivity : AppCompatActivity() {
             SearchSuggestionsList(
                 suggestions = if (suggestionsAtTop.value) suggestions.value else emptyList(),
                 pinned = if (suggestionsAtTop.value) pinnedPage.value else null,
+                accent = androidx.compose.ui.graphics.Color(accentState.value),
                 compact = suggestionsCompact.value,
                 onCopy = { copyPinnedUrl(it) },
-                onPinned = { dismissInput() },
+                onPinned = {   // klepnuti na aktualni stranku = znovunacist
+                    dismissInput()
+                    webView.reload()
+                    AppToast.show(this, "Načítám znovu")
+                },
                 onEdit = { editCurrentUrl() }
             ) { picked -> openSuggestion(picked.url) }
         }
         updateButtonVisuals()
         applyAdBlockUi()
-        findViewById<TextView>(R.id.tvVpnState).text = "OFF"
+        findViewById<TextView>(R.id.tvVpnState).setText(R.string.vpn_off)
         setupTabsOverlay()
         setupBackHandling()
         // po spusteni: obnovit posledni karty, nebo zacit jednou novou kartou (podle nastaveni)
@@ -298,9 +278,9 @@ class MainActivity : AppCompatActivity() {
             (t.pendingUrl ?: t.url).takeIf { it.isNotBlank() }?.let { urls.add(it) }
         }
         thread(name = "dns-warmup") {
-            val hosts = urls.mapNotNull { try { Uri.parse(it).host } catch (e: Exception) { null } }.distinct().take(8)
+            val hosts = urls.mapNotNull { runCatching { it.toUri().host }.getOrNull() }.distinct().take(8)
             for (h in hosts) {
-                try { java.net.InetAddress.getAllByName(h) } catch (e: Exception) { }
+                quiet { java.net.InetAddress.getAllByName(h) }
             }
         }
     }
@@ -334,7 +314,7 @@ class MainActivity : AppCompatActivity() {
     // ---------------- UVODNI ANIMACE ----------------
 
     // Hudba k uvodni animaci: res/raw/bez_zastaveni.mp3 (kdyz chybi nebo jsou zvuky vypnute, je ticho)
-    internal var introPlayer: android.media.MediaPlayer? = null
+    internal var introPlayer: MediaPlayer? = null
 
     // ---------------- PRUBEH STAHOVANI NA TLACITKACH ----------------
 
@@ -348,14 +328,22 @@ class MainActivity : AppCompatActivity() {
     private fun setupBars() {
         setupFieldBackgrounds()
         // barva oznaceneho textu v polich (vcetne doplneneho "youtube.com"): #0099FF, lehce pruhledna
-        val selColor = Color.parseColor("#660099FF")
+        val selColor = "#660099FF".toColorInt()
         etSearchMain.highlightColor = selColor
         etTopUrl.highlightColor = selColor
+        // uchyt kurzoru (kapka pod kurzorem) cerne, ne svetle fialove (jen Android 10+)
+        if (Build.VERSION.SDK_INT >= 29) {
+            for (et in listOf(etSearchMain, etTopUrl)) {
+                et.textSelectHandle?.mutate()?.let { d -> d.setTint(Color.BLACK); et.setTextSelectHandle(d) }
+                et.textSelectHandleLeft?.mutate()?.let { d -> d.setTint(Color.BLACK); et.setTextSelectHandleLeft(d) }
+                et.textSelectHandleRight?.mutate()?.let { d -> d.setTint(Color.BLACK); et.setTextSelectHandleRight(d) }
+            }
+        }
         // TOP BAR - 75% viditelna, 1/4 za hranou - klepni pro vysunuti
         topBar.setOnClickListener { toggleTopBar() }
-        findViewById<View>(R.id.urlContainer).setOnClickListener { toggleTopBar() }
-        findViewById<View>(R.id.ivUrlLock).setOnClickListener { showPageInfo() }
-        findViewById<View>(R.id.ivUrlShare).setOnClickListener { showShareDialog() }
+        findViewById<View>(R.id.urlContainer).setOnClickListener { liveTutorialDone(101); toggleTopBar() }
+        findViewById<View>(R.id.ivUrlLock).setOnClickListener { if (!liveTutorialDone(104)) showPageInfo() }
+        findViewById<View>(R.id.ivUrlShare).setOnClickListener { if (!liveTutorialDone(103)) showShareDialog() }
 
         // Enter v hornim poli: stejne jako dole (adresa nebo hledani)
         etTopUrl.setOnEditorActionListener { _, _, _ ->
@@ -370,6 +358,7 @@ class MainActivity : AppCompatActivity() {
         }
         etSearchMain.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
+                liveTutorialDone(102)
                 // zajisti ze je videt nad klavesnici - insets listener to uz posune
                 bottomBar.animate().scaleX(1.02f).scaleY(1.02f).setDuration(150).start()
                 startFreshInput(etSearchMain)
@@ -379,8 +368,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         etTopUrl.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) startFreshInput(etTopUrl) else onInputFocusLost()
+            if (hasFocus) { liveTutorialDone(101); startFreshInput(etTopUrl) } else onInputFocusLost()
+            updateTopClear()
         }
+        // klepnuti do horniho pole = naseptavac se obnovi
+        etTopUrl.setOnClickListener { refreshSuggestionsOnClick(etTopUrl) }
+        etSearchMain.setOnClickListener { refreshSuggestionsOnClick(etSearchMain) }
         etSearchMain.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -396,6 +389,7 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
+                updateTopClear()   // krizek na smazani
                 if (prefillingUrl) return
                 if (s != null && etTopUrl.hasFocus()) autoComplete(etTopUrl, s)
                 mirrorText(etTopUrl, etSearchMain)
@@ -409,19 +403,47 @@ class MainActivity : AppCompatActivity() {
 
         // KARTY: klik = prehled otevrenych karet, drzeni = nova karta
         val density = resources.displayMetrics.density
-        tabCountBg = GradientDrawable().apply {
+        // ikona karet: tenky predni ctverecek s cislem a za nim posunuta zadni karta (stoh karet)
+        val frontCard = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = 6 * density
-            setStroke((2 * density).toInt(), Color.WHITE)
+            cornerRadius = 5 * density
+            setStroke(tabStrokePx, Color.WHITE)
+            setColor("#2A2A2A".toColorInt())   // nepruhledna = zakryje cary zadni karty
+        }
+        tabCountBg = frontCard
+        val backCard = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 5 * density
+            setStroke(tabStrokePx, "#8CFFFFFF".toColorInt())
             setColor(Color.TRANSPARENT)
         }
-        findViewById<TextView>(R.id.tvTabCount).background = tabCountBg
+        val off = (4 * density).toInt()
+        tabCountLayer = android.graphics.drawable.LayerDrawable(arrayOf<android.graphics.drawable.Drawable>(backCard, frontCard)).apply {
+            setLayerInset(0, off, 0, 0, off)
+            setLayerInset(1, 0, off, off, 0)
+        }
+        findViewById<TextView>(R.id.tvTabCount).apply {
+            background = tabCountLayer
+            setPadding(0, off, off, 0)   // cislo na stred predniho ctverecku
+        }
         // vsech 8 tlacitek se nastavuje v Nastaveni -> Tlacitka
         wireButtons()
+        setupNavArrows()   // krok zpet / vpred ve spodnim poli
+    }
+
+    override fun onStart() {
+        VaultManager.activityStarted()   // trezor: auto-zamek po 15 min na pozadi
+        super.onStart()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        VaultManager.activityStopped()
     }
 
     override fun onResume() {
         super.onResume()
+        if (isWebViewReady()) updateTabStrips()   // listy karet se mohly v Nastaveni zapnout / vypnout
         // po importu v Nastaveni nacist ulozena nastaveni znovu
         isAdBlockOn = AppSettings.adBlockOn.get()
         isVpnOn = AppSettings.vpnOn.get()
@@ -444,7 +466,7 @@ class MainActivity : AppCompatActivity() {
             introOnResume = false
             playSettingsIntro()
         }
-        findViewById<TextView>(R.id.tvVpnState).text = "OFF"
+        findViewById<TextView>(R.id.tvVpnState).setText(R.string.vpn_off)
         startDownloadPoll()   // kdyz se behem pauzy neco stahuje, obnovi se plneni tlacitek
         // po importu: nahradit otevrene karty tema ze souboru
         if (AppSettings.tabsImported.get()) {
@@ -519,7 +541,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun hasAndroidPerm(type: String): Boolean =
-        androidPermsFor(type).any { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+        androidPermsFor(type).any { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
 
     internal fun barBtn(): View = findViewById(if (barOrigin == 6) R.id.btnSideRightMain else R.id.btnSideLeftMain)
 
@@ -533,9 +555,9 @@ class MainActivity : AppCompatActivity() {
     // uchyty (velikost) a jde presouvat; shora se vysune scrollovaci panel (styl, viditelnost, odezva, seznam gest).
 
     internal var gestureConfigMode = false
-    internal val gestTick = mutableStateOf(0)        // zmena stylu / viditelnosti -> prekreslit editor
+    internal val gestTick = mutableIntStateOf(0)        // zmena stylu / viditelnosti -> prekreslit editor
     internal val gestPreviewStyle = mutableStateOf<Int?>(null)   // zamceny vzor (Ctverecky): jen nahled v editoru, neuklada se
-    internal val gestResetKey = mutableStateOf(0)     // vraceni vychozi polohy plochy
+    internal val gestResetKey = mutableIntStateOf(0)     // vraceni vychozi polohy plochy
     internal var gestScrim: View? = null
     internal var gestPanel: ComposeView? = null
     internal val gestHidden = HashMap<View, Int>()    // skryte prvky a jejich puvodni viditelnost
@@ -576,7 +598,7 @@ class MainActivity : AppCompatActivity() {
 
     internal fun hostOf(url: String): String? =
         // bez "www.", "m." a "mobile." (m.youtube.com se doplni i na "youtube")
-        try { Uri.parse(url).host?.lowercase()?.removePrefix("www.")?.removePrefix("m.")?.removePrefix("mobile.")?.takeIf { it.contains('.') } } catch (e: Exception) { null }
+        runCatching { url.toUri().host?.lowercase()?.removePrefix("www.")?.removePrefix("m.")?.removePrefix("mobile.")?.takeIf { it.contains('.') } }.getOrNull()
 
     internal fun isWebUrl(url: String): Boolean = url.startsWith("https://") || url.startsWith("http://")
 
@@ -585,7 +607,7 @@ class MainActivity : AppCompatActivity() {
     internal var suggestCacheAt = 0L
     internal var cachedHist: List<HistoryVisit> = emptyList()
     internal var cachedBms: List<Bookmark> = emptyList()
-    internal var cachedTop: List<com.example.actimelteambrowser.data.MostVisitedSite> = emptyList()
+    internal var cachedTop: List<MostVisitedSite> = emptyList()
 
     // ---------------- SKRYVANI LIST PRI POSOUVANI ----------------
 
@@ -612,6 +634,7 @@ class MainActivity : AppCompatActivity() {
         chromeHidden = hidden
         val d = 220L
         topBar.animate().translationY(if (hidden) -(topBar.height + dp(24)).toFloat() else 0f).setDuration(d).start()
+        stripViews().forEach { (v, top) -> v.animate().translationY(if (hidden) (if (top) -(topBar.height + dp(60)).toFloat() else (bottomBar.height + dp(60)).toFloat()) else 0f).setDuration(d).start() }
         bottomBar.animate().translationY(if (hidden) (bottomBar.height + dp(24)).toFloat() else lastImeShift).setDuration(d).start()
         val off = dp(120).toFloat()
         for (n in listOf(5, 6) + extraViews.keys) {
@@ -702,7 +725,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun q(classes: String, ids: String): String {
             if (!isAdBlockOn || !adblockReady) return ""
-            return try { RustBridge.hiddenSelectors(classes, ids) } catch (e: Throwable) { "" }
+            return try { RustBridge.hiddenSelectors(classes, ids) } catch (e: Throwable) { noteError(e); "" }
         }
     }
 
@@ -713,23 +736,24 @@ class MainActivity : AppCompatActivity() {
     // ---------------- KARTY (taby) ----------------
 
     // Postavi WebView karty: nastaveni, anonymni profil, klienti (AdBlock, ikony, oprávnění, scroll)
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "RequiresFeature", "ClickableViewAccessibility")   // profil hlidan pres incognitoProfilesSupported(); dotyk jen sleduje tah
     internal fun buildWebView(tab: BrowserTab): WebView {
         val wv = WebView(this)
         wv.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         wv.settings.javaScriptEnabled = true
         wv.settings.domStorageEnabled = true
         wv.addJavascriptInterface(CosmeticBridge(), "AtbCos")   // kosmeticke filtry (viz injectCosmetic)
+        wv.addJavascriptInterface(VaultBridge(this, tab), "AtbVault")   // trezor hesel: hlaseni odeslaneho prihlaseni (viz MainVault)
         // bez setLayerType: WebView si vykresluje samo, hardwarova vrstva by drzela GPU pamet na kazdou kartu
         if (tab.incognito) {
             // anonymni karta: vlastni profil WebView = oddelene cookies, localStorage a cache od beznych karet
             // (smaze se po zavreni posledni anonymni karty). Musi se nastavit PRED nactenim cehokoliv.
             if (incognitoProfilesSupported()) {
-                try { WebViewCompat.setProfile(wv, INCOGNITO_PROFILE) } catch (e: Exception) { }
+                quiet { WebViewCompat.setProfile(wv, INCOGNITO_PROFILE) }
             }
             wv.settings.cacheMode = WebSettings.LOAD_NO_CACHE
-            wv.settings.saveFormData = false
-            wv.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS   // bez automatickeho vyplnovani
+            @Suppress("DEPRECATION") run { wv.settings.saveFormData = false }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) wv.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS   // bez automatickeho vyplnovani (API 26+)
         }
 
         wv.webViewClient = object : WebViewClient() {
@@ -756,15 +780,15 @@ class MainActivity : AppCompatActivity() {
                     if (wasActive) switchTo(fresh)
                     updateTabCount()
                     refreshTiles()
-                    Toast.makeText(this@MainActivity, "Stránka se zhroutila, načítám znovu", Toast.LENGTH_SHORT).show()
+                    AppToast.show(this@MainActivity, "Stránka se zhroutila, načítám znovu")
                 }
                 return true
             }
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 // jiny web = stara ikona uz neplati (nova prijde pres onReceivedIcon)
-                val oldHost = try { Uri.parse(tab.url).host } catch (e: Exception) { null }
-                val newHost = try { Uri.parse(url).host } catch (e: Exception) { null }
+                val oldHost = runCatching { tab.url.toUri().host }.getOrNull()
+                val newHost = runCatching { url?.toUri()?.host }.getOrNull()
                 if (oldHost != newHost) tab.favicon = null
                 tab.url = url.orEmpty()
                 setChromeHidden(false)   // nova stranka: lisly zase nahore
@@ -789,6 +813,7 @@ class MainActivity : AppCompatActivity() {
                 injectCosmetic(view, url)
             }
             override fun onPageFinished(view: WebView?, url: String?) {
+                if (tab.id == tabs.activeId) finishPullLoading()
                 tab.url = url.orEmpty()
                 tab.title = view?.title.orEmpty()
                 if (tab.id == tabs.activeId) {
@@ -799,12 +824,13 @@ class MainActivity : AppCompatActivity() {
                 injectYoutubeAdBlock(view, url)
                 injectCosmetic(view, url)
                 rejectCookies(view)
+                vaultOnPageFinished(tab, view, url)   // trezor hesel: zachytavani prihlaseni + vyplneni
                 if (!tab.incognito) recordVisit(view, url)   // anonymni karta se do historie nezapisuje
                 // po chvili se ulozi nahled stranky (pro dlazdice nejnavstevovanejsich webu), jen kdyz je karta porad videt
-                val finishedHost = try { Uri.parse(url).host?.removePrefix("www.") } catch (e: Exception) { null }
+                val finishedHost = runCatching { url?.toUri()?.host?.removePrefix("www.") }.getOrNull()
                 if (!tab.incognito && AppSettings.thumbsOn.get() && (finishedHost == null || thumbStale(finishedHost))) view?.postDelayed({
                     if (tab.id == tabs.activeId && tab.url == url.orEmpty() && tabsView.visibility != View.VISIBLE &&
-                        lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+                        lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
                     ) capturePreview(tab) { }
                 }, 3000)
             }
@@ -827,9 +853,10 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
                 if (icon == null) return
                 tab.favicon = icon
+                updateTabStrips()   // ikona v liste karet
                 // ikona se ulozi k webu (jen bezne karty), aby ji ukazaly dlazdice nejnavstevovanejsich
                 if (!tab.incognito) {
-                    val h = try { Uri.parse(view?.url).host?.removePrefix("www.") } catch (e: Exception) { null }
+                    val h = runCatching { view?.url?.toUri()?.host?.removePrefix("www.") }.getOrNull()
                     if (!h.isNullOrBlank()) saveSiteIcon(h, icon)
                 }
             }
@@ -854,7 +881,7 @@ class MainActivity : AppCompatActivity() {
             // web chce polohu
             override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
                 if (origin == null || callback == null) return
-                val host = try { Uri.parse(origin).host.orEmpty() } catch (e: Exception) { "" }
+                val host = try { origin.toUri().host.orEmpty() } catch (e: Exception) { noteError(e); "" }
                 handleSitePermission(host, listOf("geo"), !tab.incognito) { allowed ->
                     callback.invoke(origin, "geo" in allowed, false)
                 }
@@ -872,7 +899,7 @@ class MainActivity : AppCompatActivity() {
                 (root as ViewGroup).addView(holder, ViewGroup.LayoutParams(-1, -1))
                 fullscreenHolder = holder
                 // jako v appce YouTube: video na celou obrazovku se samo otoci na sirku
-                requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 WindowCompat.getInsetsController(window, window.decorView).apply {
                     systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                     hide(WindowInsetsCompat.Type.systemBars())
@@ -881,8 +908,49 @@ class MainActivity : AppCompatActivity() {
             override fun onHideCustomView() { exitFullscreenVideo() }
         }
         // klik do webu schova topBar zase na 75%
-        wv.setOnTouchListener { _, _ ->
+        // tazeni zeshora dolu na vrcholu stranky = znovunacist (pull to refresh)
+        var pullStartY = -1f
+        var pullStartX = 0f
+        var pullArmed = false   // kruzek je zaplneny (haptika se da jen jednou za tah)
+        wv.setOnTouchListener { v, ev ->
             if (isTopBarExpanded) toggleTopBar()
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    pullStartY = if (AppSettings.pullRefreshOn.get() && !v.canScrollVertically(-1) && !tab.startPage) ev.y else -1f
+                    pullStartX = ev.x
+                    pullArmed = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (pullStartY >= 0f && (v.canScrollVertically(-1) || ev.pointerCount > 1)) {
+                        pullStartY = -1f
+                        endPull()
+                    } else if (pullStartY >= 0f) {
+                        val dy = ev.y - pullStartY
+                        if (dy > dp(12) && Math.abs(ev.x - pullStartX) < dy / 2) {
+                            val prog = (dy / dp(AppSettings.pullRefreshDistance.get())).coerceIn(0f, 1f)
+                            updatePull(prog)
+                            if (prog >= 1f && !pullArmed) {
+                                pullArmed = true
+                                pullView?.pop()
+                                if (AppSettings.vibrationOn.get()) v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            } else if (prog < 1f) pullArmed = false
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dy = ev.y - pullStartY
+                    if (pullStartY >= 0f && dy > dp(AppSettings.pullRefreshDistance.get()) && Math.abs(ev.x - pullStartX) < dy / 2 && isWebUrl(wv.url.orEmpty())) {
+                        wv.reload()
+                        AppToast.show(this@MainActivity, "Načítám znovu")
+                        startPullLoading()
+                    } else endPull()
+                    pullStartY = -1f
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
+                    pullStartY = -1f
+                    endPull()
+                }
+            }
             false
         }
         // posouvani dolu schova listy a bocni tlacitka, posun nahoru je vrati (Konfigurace)
@@ -902,18 +970,16 @@ class MainActivity : AppCompatActivity() {
     // ---------------- ANONYMNI PROFIL ----------------
 
     internal fun incognitoProfilesSupported(): Boolean =
-        try { WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) } catch (e: Throwable) { false }
+        runCatching { WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }.getOrDefault(false)
 
     // Jedno vlakno = zapisy se nepredbihaji. previewWritten pamatuje, ktery obrazek je ulozen v p<i>.jpg (jen z tohoto vlakna).
     internal val previewExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     internal val previewWritten = ArrayList<java.lang.ref.WeakReference<Bitmap>?>()
 
     internal fun loadPreview(file: File): Bitmap? =
-        try {
+        runCatching {
             if (file.exists()) BitmapFactory.decodeFile(file.path) else null
-        } catch (e: Exception) {
-            null
-        }
+        }.getOrNull()
 
     // Drzeni hvezdy: nabidne slozky a ulozi aktualni stranku do vybrane
     internal fun addCurrentPageToFolder() = chooseFolderAndSave(webView.url, webView.title.orEmpty())
@@ -946,10 +1012,11 @@ class MainActivity : AppCompatActivity() {
                     gestureConfigMode -> exitGestureConfig()
                     regionView != null -> removeRegionOverlay()
                     configMode -> exitConfigMode()
+                    isFindBarOpen() -> hideFindBar()   // zavrit hledani na strance
                     etSearchMain.hasFocus() || etTopUrl.hasFocus() -> dismissInput()   // 1. zavrit psani/naseptavac
                     customView != null -> exitFullscreenVideo()
-                    gestureView.visibility == View.VISIBLE -> hideGestures()
-                    tabsView.visibility == View.VISIBLE -> hideTabs()
+                    gestureView.isVisible -> hideGestures()
+                    tabsView.isVisible -> hideTabs()
                     webView.canGoBack() -> webView.goBack()
                     tabs.list.size > 1 -> closeTab(tabs.activeId)   // konec historie -> zavrit kartu
                     // jinak nic - appka se zpetnym tlacitkem nikdy nezavre
@@ -959,13 +1026,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun exitFullscreenVideo() {
-        val v = customView ?: return
+        if (customView == null) return
         fullscreenHolder?.let { (root as ViewGroup).removeView(it) }
         fullscreenHolder = null
         customView = null
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
-        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED   // zpet podle telefonu
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED   // zpet podle telefonu
         WindowCompat.getInsetsController(window, window.decorView).show(WindowInsetsCompat.Type.systemBars())
     }
 
@@ -977,10 +1044,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         for (tab in tabs.list) {
-            if (tab.webViewCreated) try { tab.webView.destroy() } catch (e: Exception) { }
+            if (tab.webViewCreated) quiet { tab.webView.destroy() }
         }
         purgeIncognito()
-        introPlayer?.let { try { it.release() } catch (e: Exception) { } }   // hudba uvodni animace
+        introPlayer?.let { quiet { it.release() } }   // hudba uvodni animace
         previewExecutor.shutdown()   // dopise rozdelane nahledy a skonci
         super.onDestroy()
     }

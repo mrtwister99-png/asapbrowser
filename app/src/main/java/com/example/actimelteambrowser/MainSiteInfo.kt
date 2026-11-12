@@ -1,99 +1,24 @@
 package com.example.actimelteambrowser
 
-import android.annotation.SuppressLint
-import android.os.Bundle
+import androidx.core.net.toUri
+import androidx.core.graphics.toColorInt
 import android.view.View
-import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
-import java.io.ByteArrayInputStream
-import com.example.actimelteambrowser.core.engine.RustBridge
-import kotlin.concurrent.thread
-import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
-import com.example.actimelteambrowser.core.settings.AppSettings
 import android.content.Intent
-import android.text.Editable
-import android.text.TextWatcher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import com.example.actimelteambrowser.data.BookmarksRepository
-import com.example.actimelteambrowser.data.HistoryRepository
-import com.example.actimelteambrowser.data.HistoryVisit
-import com.example.actimelteambrowser.data.Bookmark
-import com.example.actimelteambrowser.ui.SearchSuggestion
-import com.example.actimelteambrowser.ui.ButtonConfigModal
-import com.example.actimelteambrowser.ui.SearchSuggestionsList
-import com.example.actimelteambrowser.ui.buildSearchSuggestions
 import android.graphics.Bitmap
-import android.view.MotionEvent
-import com.example.actimelteambrowser.ui.ExternalTouch
-import com.example.actimelteambrowser.core.settings.Gestures
-import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
 import com.example.actimelteambrowser.core.settings.SiteRules
-import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
-import androidx.webkit.ProfileStore
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.example.actimelteambrowser.ui.StartSite
-import com.example.actimelteambrowser.ui.GestureOverlay
-import com.example.actimelteambrowser.ui.GestureArea
-import com.example.actimelteambrowser.ui.GestureAreaEditor
-import com.example.actimelteambrowser.ui.GesturePanel
-import android.animation.ArgbEvaluator
 import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
-import androidx.constraintlayout.widget.ConstraintLayout
-import android.graphics.Paint
-import com.example.actimelteambrowser.core.settings.ButtonDefaults
-import com.example.actimelteambrowser.core.settings.ButtonFunction
-import android.animation.ValueAnimator
-import android.app.Dialog
-import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
 import android.util.TypedValue
-import android.transition.TransitionManager
-import android.net.Uri
-import android.graphics.BitmapFactory
-import android.text.InputType
 import java.io.File
 import java.io.FileOutputStream
-import androidx.activity.OnBackPressedCallback
-import org.json.JSONArray
-import org.json.JSONObject
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.view.PixelCopy
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
-import com.example.actimelteambrowser.ui.TabTile
-import com.example.actimelteambrowser.ui.TabsScreen
 
 // Informace o stránce, oprávnění webů, sdílení a QR kód (rozšíření MainActivity).
 // Rozhodne o zadosti webu: ulozena volba (povolit / zakazat) plati hned, jinak se uzivatel zepta.
@@ -135,7 +60,7 @@ internal fun MainActivity.handleSitePermission(host: String, types: List<String>
 
 // Smaze cookies webu (i nadrazenych domen) a jeho ulozena data; vrati pocet smazanych cookies
 internal fun MainActivity.clearSiteCookies(url: String): Int {
-    val host = try { Uri.parse(url).host } catch (e: Exception) { null } ?: return 0
+    val host = runCatching { url.toUri().host }.getOrNull() ?: return 0
     val cm = CookieManager.getInstance()
     val parts = host.split(".")
     val domains = ArrayList<String>()
@@ -155,7 +80,7 @@ internal fun MainActivity.clearSiteCookies(url: String): Int {
         }
     }
     cm.flush()
-    try { WebStorage.getInstance().deleteOrigin("https://$host"); WebStorage.getInstance().deleteOrigin("http://$host") } catch (e: Exception) { }
+    quiet { WebStorage.getInstance().deleteOrigin("https://$host"); WebStorage.getInstance().deleteOrigin("http://$host") }
     return n
 }
 
@@ -165,28 +90,35 @@ internal fun MainActivity.updateLockIcon(url: String?) {
     if (dot.background == null) {
         val g = GradientDrawable()
         g.shape = GradientDrawable.OVAL
-        g.setColor(Color.parseColor("#CDA24D"))
-        g.setStroke(dp(1), Color.parseColor("#1E1E1E"))
+        g.setColor("#E53935".toColorInt())   // cervena vyplň = na tomto webu je AdBlock vypnuty
+        g.setStroke(dp(1), "#1E1E1E".toColorInt())
         dot.background = g
     }
-    val h = try { if (url != null && isWebUrl(url)) Uri.parse(url).host else null } catch (e: Exception) { null }
+    val h = runCatching { if (url != null && isWebUrl(url)) url.toUri().host else null }.getOrNull()
     dot.visibility = if (SiteRules.adBlockOff(h)) View.VISIBLE else View.GONE
     val iv = findViewById<ImageView>(R.id.ivUrlLock)
     when {
-        url != null && url.startsWith("https://") -> iv.clearColorFilter()                        // zabezpecene
-        url != null && url.startsWith("http://") -> iv.setColorFilter(Color.parseColor("#AC0001")) // nezabezpecene
-        else -> iv.setColorFilter(Color.parseColor("#888888"))                                     // interni / prazdne
+        url != null && url.startsWith("https://") ->                                              // zabezpecene
+            if (tabs.active()?.incognito == true) iv.setColorFilter("#006AFF".toColorInt()) else iv.clearColorFilter()   // anonymni rezim: modry zamek
+        url != null && url.startsWith("http://") -> iv.setColorFilter("#AC0001".toColorInt()) // nezabezpecene
+        else -> iv.setColorFilter("#888888".toColorInt())                                     // interni / prazdne
     }
+    if (104 in liveIds()) iv.setColorFilter("#FFD600".toColorInt())   // zivy tutorial: zamek je zluty, dokud na nej uzivatel neklepne
 }
 
 // Zamek v adresnim radku: informace o aktualni strance + nastaveni pro tento web
-internal fun MainActivity.showPageInfo() {
-    val url = webView.url
+// Cilova tlacitka pro ukazku prvniho tutorialu (naplni se jen v demo rezimu)
+internal val demoTargets = HashMap<String, View>()
+
+// demo = ukazka tutorialu: stejny vzhled jako u uzivatele, ale nic se neuklada ani nemaze (zmeny jsou jen vizualni)
+internal fun MainActivity.showPageInfo(demo: Boolean = false) {
+    val url = if (demo && (webView.url == null || !isWebUrl(webView.url!!))) "https://example.com/" else webView.url
     val tab = tabs.active()
     val secure = url != null && url.startsWith("https://")
     val plainHttp = url != null && url.startsWith("http://")
-    val host = if (url != null && isWebUrl(url)) (try { Uri.parse(url).host } catch (e: Exception) { null }) else null
-    val incognito = tab?.incognito == true
+    val host = if (url != null && isWebUrl(url)) (runCatching { url.toUri().host }.getOrNull()) else null
+    val incognito = !demo && tab?.incognito == true
+    demoTargets.clear()
     showStyledDialog(title = "Informace o stránce", negativeText = "Zavřít") { _ ->
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
@@ -217,6 +149,7 @@ internal fun MainActivity.showPageInfo() {
             val b = styledButton(value, false)
             b.setPadding(dp(14), dp(7), dp(14), dp(7))
             b.setOnClickListener { onClick(b) }
+            if (demo && label == "AdBlock na tomto webu") demoTargets["adblock"] = b
             r.addView(b)
             val rlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             rlp.topMargin = dp(8)
@@ -226,15 +159,15 @@ internal fun MainActivity.showPageInfo() {
         // varovani nahore u nesifrovane stranky
         if (plainHttp) {
             val w = TextView(this)
-            w.text = "Pozor: stránka není šifrovaná (HTTP). Nezadávej na ní hesla ani platební údaje."
-            w.setTextColor(Color.parseColor("#FF8A8A"))
+            w.setText(R.string.http_warning)
+            w.setTextColor("#FF8A8A".toColorInt())
             w.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             w.setTypeface(w.typeface, Typeface.BOLD)
             w.setPadding(dp(12), dp(10), dp(12), dp(10))
             val wb = GradientDrawable()
-            wb.setColor(Color.parseColor("#3A1414"))
+            wb.setColor("#3A1414".toColorInt())
             wb.cornerRadius = dp(12).toFloat()
-            wb.setStroke(dp(1), Color.parseColor("#AC0001"))
+            wb.setStroke(dp(1), "#AC0001".toColorInt())
             w.background = wb
             box.addView(w)
         }
@@ -242,34 +175,47 @@ internal fun MainActivity.showPageInfo() {
         row("Název", webView.title.orEmpty().ifBlank { "—" })
         row("Adresa", url ?: "—")
         when {
-            secure -> row("Zabezpečení", "HTTPS – spojení je šifrované", Color.parseColor("#00B055"))
-            plainHttp -> row("Zabezpečení", "HTTP – spojení NENÍ šifrované", Color.parseColor("#FF5A5A"))
+            secure -> row("Zabezpečení", "HTTPS – spojení je šifrované", "#00B055".toColorInt())
+            plainHttp -> row("Zabezpečení", "HTTP – spojení NENÍ šifrované", "#FF5A5A".toColorInt())
             else -> row("Zabezpečení", "Interní stránka")
         }
         val cert = webView.certificate
         if (secure && cert != null) {
             val issuer = cert.issuedBy?.let { it.cName ?: it.oName }.orEmpty()
             if (issuer.isNotBlank()) row("Certifikát vydal", issuer)
-            if (android.os.Build.VERSION.SDK_INT >= 29) {
+            if (Build.VERSION.SDK_INT >= 29) {
                 val until = cert.validNotAfterDate
-                if (until != null) row("Certifikát platí do", java.text.SimpleDateFormat("d. M. yyyy", java.util.Locale("cs")).format(until))
+                if (until != null) row("Certifikát platí do", java.text.SimpleDateFormat("d. M. yyyy", java.util.Locale.forLanguageTag("cs")).format(until))
             }
         }
         row("Režim", (if (tab?.desktop == true) "Verze pro počítač" else "Mobilní verze") + (if (incognito) " · anonymní karta" else ""))
 
         // AdBlock: zablokovano + vyjimka pro tento web
         val n = tab?.blocked?.get() ?: 0
-        if (!isAdBlockOn) {
+        if (!isAdBlockOn && !demo) {
             row("AdBlock", "Vypnutý (celkově)")
         } else {
             row("AdBlock – zablokováno na stránce", n.toString())
             if (host != null && !incognito) {
                 fun lbl() = if (SiteRules.adBlockOff(host)) "Vypnutý" else "Zapnutý"
-                actionRow("AdBlock na tomto webu", lbl()) { tv ->
-                    SiteRules.setAdBlockOff(host, !SiteRules.adBlockOff(host))
-                    tv.text = lbl()
-                    updateLockIcon(webView.url)
-                    webView.reload()
+                var demoOff = false
+                actionRow("AdBlock na tomto webu", if (demo) "Zapnutý" else lbl()) { tv ->
+                    if (demo) {   // jen vizualne: text tlacitka, tecka u zamku a toast; nic se neuklada
+                        demoOff = !demoOff
+                        tv.text = if (demoOff) "Vypnutý" else "Zapnutý"
+                        findViewById<View>(R.id.vUrlLockDot).visibility = if (demoOff) View.VISIBLE else View.GONE
+                        AppToast.show(this, if (demoOff) "AdBlock na tomto webu vypnut" else "AdBlock na tomto webu zapnut")
+                        return@actionRow
+                    }
+                    runCatching {
+                        SiteRules.setAdBlockOff(host, !SiteRules.adBlockOff(host))
+                        tv.text = lbl()
+                        updateLockIcon(webView.url)
+                        AppToast.show(this, if (SiteRules.adBlockOff(host)) "AdBlock na tomto webu vypnut" else "AdBlock na tomto webu zapnut")
+                        webView.reload()
+                    }.onFailure {
+                        AppToast.show(this, "Nastavení webu se nepodařilo uložit")
+                    }
                 }
             }
         }
@@ -282,7 +228,8 @@ internal fun MainActivity.showPageInfo() {
             box.addView(head, hlp)
             for ((type, name) in listOf("geo" to "Poloha", "cam" to "Kamera", "mic" to "Mikrofon")) {
                 fun lbl() = when (SiteRules.perm(host, type)) { 1 -> "Povoleno"; 0 -> "Zakázáno"; else -> "Zeptat se" }
-                actionRow(name, lbl()) { tv ->
+                actionRow(name, if (demo) "Zeptat se" else lbl()) { tv ->
+                    if (demo) return@actionRow
                     // zeptat se -> povoleno -> zakazano -> zeptat se
                     val next = when (SiteRules.perm(host, type)) { -1 -> 1; 1 -> 0; else -> -1 }
                     SiteRules.setPerm(host, type, next)
@@ -290,9 +237,11 @@ internal fun MainActivity.showPageInfo() {
                 }
             }
             val clear = styledButton("Smazat cookies tohoto webu", false)
+            if (demo) demoTargets["cookies"] = clear
             clear.setOnClickListener {
+                if (demo) { AppToast.show(this, "Smazáno cookies: 12"); return@setOnClickListener }
                 val count = if (url != null) clearSiteCookies(url) else 0
-                Toast.makeText(this, if (count > 0) "Smazáno cookies: $count" else "Tento web nemá žádné cookies", Toast.LENGTH_SHORT).show()
+                AppToast.show(this, if (count > 0) "Smazáno cookies: $count" else "Tento web nemá žádné cookies")
                 webView.reload()
             }
             val clp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -329,10 +278,11 @@ internal fun MainActivity.qrFile(url: String): File {
 }
 
 // Pravy symbol v adresnim radku: Sdilet - uzivatel si prepne, jestli posila/kopiruje odkaz, nebo QR kod
-internal fun MainActivity.showShareDialog() {
-    val url = webView.url
+internal fun MainActivity.showShareDialog(demo: Boolean = false) {
+    val url = if (demo && (webView.url == null || !isWebUrl(webView.url!!))) "https://example.com/" else webView.url
+    demoTargets.clear()
     if (url == null || !isWebUrl(url)) {
-        Toast.makeText(this, "Není co sdílet", Toast.LENGTH_SHORT).show()
+        AppToast.show(this, "Není co sdílet")
         return
     }
     var qrMode = false
@@ -343,7 +293,7 @@ internal fun MainActivity.showShareDialog() {
             if (!qrMode) {
                 shareText(url, "Sdílet odkaz")
             } else {
-                try {
+                runCatching {
                     val uri = ExportFileProvider.uriFor(this, qrFile(url).name)
                     val send = Intent(Intent.ACTION_SEND)
                     send.type = "image/png"
@@ -351,8 +301,8 @@ internal fun MainActivity.showShareDialog() {
                     send.clipData = android.content.ClipData.newRawUri("", uri)
                     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     startActivity(Intent.createChooser(send, "Sdílet QR kód"))
-                } catch (e: Exception) {
-                    Toast.makeText(this, "QR kód se nepodařilo vytvořit", Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                    AppToast.show(this, "QR kód se nepodařilo vytvořit")
                 }
             }
             true
@@ -395,16 +345,16 @@ internal fun MainActivity.showShareDialog() {
         fun restyle(tv: TextView, active: Boolean) {
             val bg = GradientDrawable()
             bg.cornerRadius = dp(14).toFloat()
-            bg.setColor(if (active) Color.parseColor("#00B055") else Color.parseColor("#2A2A2A"))
+            bg.setColor(if (active) "#00B055".toColorInt() else "#2A2A2A".toColorInt())
             tv.background = bg
-            tv.setTextColor(if (active) Color.parseColor("#06281D") else Color.parseColor("#CCCCCC"))
+            tv.setTextColor(if (active) "#06281D".toColorInt() else "#CCCCCC".toColorInt())
         }
         fun setMode(qr: Boolean) {
             if (qr && ivQr.drawable == null) {
-                try {
+                runCatching {
                     ivQr.setImageBitmap(makeQr(url))
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Adresa je moc dlouhá pro QR kód", Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                    AppToast.show(this, "Adresa je moc dlouhá pro QR kód")
                     return
                 }
             }
@@ -419,18 +369,20 @@ internal fun MainActivity.showShareDialog() {
 
         // kopirovat to, co je prave vybrane (odkaz nebo obrazek QR)
         val copy = styledButton("Kopírovat", false)
+        if (demo) demoTargets["copy"] = copy
         copy.setOnClickListener {
-            val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            if (demo) { AppToast.show(this, "Adresa zkopírována"); return@setOnClickListener }   // ukazka: schranka se nemeni
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             if (!qrMode) {
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("url", url))
-                Toast.makeText(this, "Adresa zkopírována", Toast.LENGTH_SHORT).show()
+                AppToast.show(this, "Adresa zkopírována")
             } else {
-                try {
+                runCatching {
                     val uri = ExportFileProvider.uriFor(this, qrFile(url).name)
                     cm.setPrimaryClip(android.content.ClipData.newUri(contentResolver, "QR", uri))
-                    Toast.makeText(this, "QR kód zkopírován", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "QR kód se nepodařilo zkopírovat", Toast.LENGTH_SHORT).show()
+                    AppToast.show(this, "QR kód zkopírován")
+                }.onFailure {
+                    AppToast.show(this, "QR kód se nepodařilo zkopírovat")
                 }
             }
         }
@@ -442,6 +394,7 @@ internal fun MainActivity.showShareDialog() {
 }
 
 // Vykresli QR (zxing); vyhodi vyjimku, kdyz se adresa nevejde
+@Suppress("UnusedReceiverParameter")
 internal fun MainActivity.makeQr(text: String): Bitmap {
     val hints = HashMap<com.google.zxing.EncodeHintType, Any>()
     hints[com.google.zxing.EncodeHintType.CHARACTER_SET] = "UTF-8"

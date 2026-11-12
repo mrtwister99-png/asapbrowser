@@ -4,7 +4,7 @@ package com.example.actimelteambrowser
  * Složka v přehledu karet: skupina karet (jejich id) s barvou. V přehledu se ukáže jako jedna dlaždice
  * na místě své první karty. Složka s méně než 2 kartami zaniká (viz TabManager.prune).
  */
-class TabGroup(val id: Long, val members: MutableList<Long>, var color: Int = 0xFFCDA24D.toInt())
+class TabGroup(val id: Long, val members: MutableList<Long>, var color: Int = 0xFFCDA24D.toInt(), var name: String = "")
 
 /**
  * Čistá logika složek a pořadí karet: žádný Android, žádný WebView, jen id karet.

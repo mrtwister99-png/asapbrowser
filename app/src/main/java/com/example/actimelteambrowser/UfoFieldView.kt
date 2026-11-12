@@ -22,6 +22,11 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import androidx.core.graphics.toColorInt
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
+import androidx.core.graphics.withRotation
 
 /**
  * Pozadi "UFO Random Field": pohled z orbitalni stanice na roj 28 UFO (3 vrstvy hloubky) nad nocni mlhovinou a
@@ -90,7 +95,7 @@ class UfoFieldView(context: Context) : View(context) {
 
     // ---------------------------------------------------------------- konstanty
 
-    private fun hex(s: String) = Color.parseColor(s)
+    private fun hex(s: String) = s.toColorInt()
 
     private val layers = arrayOf(
         LayerCfg(5f, 0.45f, 0.3f, hex("#46584c"), hex("#5d7263"), hex("#232e27"), 0.5f),
@@ -211,11 +216,17 @@ class UfoFieldView(context: Context) : View(context) {
 
     fun touchUp() { mouseActive = false }
 
+    override fun performClick(): Boolean {
+        super.performClick()   // pristupnost
+        return true
+    }
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> touchDown(e.x, e.y)
             MotionEvent.ACTION_MOVE -> touchMove(e.x, e.y)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touchUp()
+            MotionEvent.ACTION_UP -> { touchUp(); isSoundEffectsEnabled = false; performClick() }   // performClick kvuli pristupnosti
+            MotionEvent.ACTION_CANCEL -> touchUp()
         }
         return true
     }
@@ -252,7 +263,7 @@ class UfoFieldView(context: Context) : View(context) {
     private fun spawnBurst(x: Float, y: Float) {
         val count = rand(50f, 71f).toInt()
         val list = ArrayList<Particle>(count)
-        for (i in 0 until count) {
+        repeat(count) {
             val ang = rnd.nextFloat() * 2f * PI.toFloat()
             val spd = rand(35f, 330f)
             val maxLife = rand(0.85f, 1.8f)
@@ -269,7 +280,7 @@ class UfoFieldView(context: Context) : View(context) {
 
     // Nocni pozadi: mlhoviny, slabe svisle cary a jemna sit tecek (predkresleno, driftuje pomalu)
     private fun buildBackground(bw: Float, bh: Float, s: Float): Bitmap {
-        val bmp = Bitmap.createBitmap(max(1, (bw * s).toInt()), max(1, (bh * s).toInt()), Bitmap.Config.ARGB_8888)
+        val bmp = createBitmap(max(1, (bw * s).toInt()), max(1, (bh * s).toInt()), Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.scale(s, s)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -585,8 +596,7 @@ class UfoFieldView(context: Context) : View(context) {
         canvas.drawColor(colBase)
         if (w > 0f && h > 0f) {
             step(dt, t, now / 1_000_000L)
-            canvas.save()
-            canvas.scale(density, density)
+            canvas.withScale(density, density) {
             bg?.let {
                 val panX = -bgPad + driftX * 20f
                 val panY = -bgPad + driftY * 16f
@@ -598,7 +608,7 @@ class UfoFieldView(context: Context) : View(context) {
             for (b in bursts) drawBurst(canvas, b, t)
             if (mouseActive) drawDangerZone(canvas, t)
             vignette?.let { canvas.drawRect(0f, 0f, w, h, it) }
-            canvas.restore()
+            }
         }
         if (running) postInvalidateOnAnimation()
     }
@@ -646,12 +656,11 @@ class UfoFieldView(context: Context) : View(context) {
         // rozmazana stopa pri panice
         if (panicking) {
             for (k in 2 downTo 1) {
-                c.save()
-                c.translate(-u.jx * k * 1.8f, -u.jy * k * 1.8f)
-                oval.set(-s, s * 0.16f - s * 0.3f, s, s * 0.16f + s * 0.3f)
-                stroke.color = withAlpha(blink, 0.2f / k * ga); stroke.strokeWidth = 1.1f
-                c.drawOval(oval, stroke)
-                c.restore()
+                c.withTranslation(-u.jx * k * 1.8f, -u.jy * k * 1.8f) {
+                    oval.set(-s, s * 0.16f - s * 0.3f, s, s * 0.16f + s * 0.3f)
+                    stroke.color = withAlpha(blink, 0.2f / k * ga); stroke.strokeWidth = 1.1f
+                    c.drawOval(oval, stroke)
+                }
             }
         }
 
@@ -692,12 +701,11 @@ class UfoFieldView(context: Context) : View(context) {
             fill.shader = null
             if (u.layer == 2) {
                 fill.color = withAlpha(Color.WHITE, 0.5f * ga)
-                c.save()
-                c.translate(-s * 0.17f, -s * 0.3f)
-                c.rotate(Math.toDegrees(-0.5).toFloat())
-                oval.set(-s * 0.16f, -s * 0.09f, s * 0.16f, s * 0.09f)
-                c.drawOval(oval, fill)
-                c.restore()
+                c.withTranslation(-s * 0.17f, -s * 0.3f) {
+                    c.rotate(Math.toDegrees(-0.5).toFloat())
+                    oval.set(-s * 0.16f, -s * 0.09f, s * 0.16f, s * 0.09f)
+                    c.drawOval(oval, fill)
+                }
             }
             // prstenec
             oval.set(-s, s * 0.16f - s * 0.3f, s, s * 0.16f + s * 0.3f)
@@ -807,14 +815,13 @@ class UfoFieldView(context: Context) : View(context) {
         c.restore()
         val ringCols = intArrayOf(rgba(0, 255, 150, 0.9f), rgba(0, 191, 255, 0.8f), rgba(224, 64, 251, 0.8f))
         for (k in 0 until 3) {
-            c.save()
-            c.rotate(Math.toDegrees((p.spin * (if (k % 2 == 1) -1.4f else 1f) + t * 0.6f + k * 1.1f).toDouble()).toFloat())
-            c.scale(1f, 0.62f)
-            val rr = r * (0.92f - k * 0.2f)
-            oval.set(-rr, -rr, rr, rr)
-            stroke.color = ringCols[k]; stroke.strokeWidth = 2f - k * 0.5f
-            c.drawArc(oval, 0f, 270f, false, stroke)
-            c.restore()
+            c.withRotation(Math.toDegrees((p.spin * (if (k % 2 == 1) -1.4f else 1f) + t * 0.6f + k * 1.1f).toDouble()).toFloat()) {
+                c.scale(1f, 0.62f)
+                val rr = r * (0.92f - k * 0.2f)
+                oval.set(-rr, -rr, rr, rr)
+                stroke.color = ringCols[k]; stroke.strokeWidth = 2f - k * 0.5f
+                c.drawArc(oval, 0f, 270f, false, stroke)
+            }
         }
         for (i in 0 until 10) {
             val a = p.spin * 1.7f + i / 10f * 2f * PI.toFloat()

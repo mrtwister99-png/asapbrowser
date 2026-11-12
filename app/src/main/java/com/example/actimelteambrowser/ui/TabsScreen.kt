@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.demoMark
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,6 +11,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -36,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,6 +60,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
+import com.example.actimelteambrowser.AppToast
 import com.example.actimelteambrowser.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -57,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,15 +90,21 @@ data class TabTile(
     val incognito: Boolean = false,
     val folder: Boolean = false,
     val members: List<TabTile> = emptyList(),
-    val folderColor: Int = 0xFFCDA24D.toInt()   // barva slozky (jediné, co se u slozky da menit)
+    val folderColor: Int = 0xFFCDA24D.toInt(),  // barva slozky
+    val folderName: String = ""                 // nazev slozky (prazdny = "Složka")
 )
+
+/** Titulek slozky: nazev (nebo "Složka") a pocet karet. */
+private fun folderTitle(t: TabTile) = "${t.folderName.ifBlank { "Složka" }} (${t.members.size})"
 
 private val BG = Color(0xFF0A0A0A)
 private val PANEL = Color(0xFF1E1E1E)
 private val ROW = Color(0xFF2A2A2A)
 private val GREEN = Color(0xFF00B055)
+private val BLUE = Color(0xFF006AFF)   // hlavni barva v anonymnim rezimu
 private val RED = Color(0xFFAC0001)
 private val CARAMEL = Color(0xFFCDA24D)
+private val YELLOW = Color(0xFFFFD600)
 private val MUTED = Color(0xFF888888)
 /** Barvy slozek na vyber. */
 private val FOLDER_COLORS = listOf(
@@ -120,10 +141,16 @@ fun TabsScreen(
     onCloseMany: (List<Long>) -> Unit,
     onExtract: (List<Long>) -> Unit,
     onFolderColor: (Long, Int) -> Unit,           // (složka, nová barva)
+    onFolderRename: (Long, String) -> Unit,       // (složka, nový název)
     onNew: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onDeleteDragged: ((Long) -> Unit)? = null     // karta pusteno na "Smazat kartu": smaze hned (toast s Vratit zpet)
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val gridState = rememberLazyGridState()
+    val accent = if (incognito) BLUE else GREEN   // zelena, v anonymnim rezimu modra
+    val onAccent = if (incognito) Color.White else Color(0xFF06281D)
     val scope = rememberCoroutineScope()
     val headerPx = with(LocalDensity.current) { HEADER_H.toPx() }
 
@@ -133,12 +160,38 @@ fun TabsScreen(
     val openFolderNow by rememberUpdatedState(openFolder)
     val shown = openFolder?.members ?: tiles
 
+    // tazeni panelu slozky dolu = zavrit (jako v Chromu)
+    var sheetDrag by remember { mutableFloatStateOf(0f) }
+    var sheetDragging by remember { mutableStateOf(false) }
+    val sheetOffset by animateFloatAsState(sheetDrag, if (sheetDragging) snap() else tween(180), label = "sheetDrag")
+    val closePx = with(LocalDensity.current) { 110.dp.toPx() }
+    LaunchedEffect(openFolderId) { sheetDrag = 0f }
+
     // oznacovani vice karet
     val selected = remember { mutableStateListOf<Long>() }
     var selectMode by remember { mutableStateOf(false) }
     var confirmIds by remember { mutableStateOf<List<Long>?>(null) }
+    var deleteGroupId by remember { mutableStateOf<Long?>(null) }   // skupina pretazena na "Smazat skupinu karet" (ceka na potvrzeni)
+    var gridW by remember { mutableFloatStateOf(0f) }               // sirka mrizky (pravy dolni roh = Smazat kartu)
+    var gridH by remember { mutableFloatStateOf(0f) }               // vyska mrizky: prst pod ni = nad dolnim tlacitkem
     fun endSelect() { selected.clear(); selectMode = false }
     var colorPickFor by remember { mutableStateOf<Long?>(null) }
+    var renameFor by remember { mutableStateOf<Long?>(null) }
+    // po vytvoreni nove slozky (pusteni karty na kartu) se hned nabidne zadani nazvu
+    var awaitNewFolder by remember { mutableStateOf(false) }
+    var knownFolderIds by remember { mutableStateOf<Set<Long>?>(null) }
+    LaunchedEffect(tiles) {
+        val ids = tiles.filter { it.folder }.map { it.id }.toSet()
+        if (awaitNewFolder) {
+            val created = ids - (knownFolderIds ?: emptySet())
+            if (created.isNotEmpty()) {
+                renameFor = created.first()
+                awaitNewFolder = false
+            }
+        }
+        knownFolderIds = ids
+    }
+    val backgroundGridState = rememberLazyGridState()   // prehled karet za otevrenou slozkou (jen nahled)
 
     // vyjmuti karet ze slozky: kdyz by ve slozce zbyla jen 1 karta, slozka se nejdriv zmensi a vybledne (zanikne)
     var dissolving by remember { mutableStateOf(false) }
@@ -177,6 +230,29 @@ fun TabsScreen(
     BackHandler(enabled = selectMode || openFolder != null) {
         if (selectMode) endSelect() else openFolderId = null
     }
+    // uchopitelna cast panelu (drzadlo + hlavicka): tah dolu zavre slozku, kratky tah se vrati
+    val sheetDragMod = Modifier.pointerInput(Unit) {
+        detectVerticalDragGestures(
+            onDragStart = { sheetDragging = openFolderNow != null && !selectMode },
+            onDragEnd = {
+                if (sheetDragging && sheetDrag > closePx) {
+                    endSelect()
+                    openFolderId = null
+                } else {
+                    sheetDragging = false
+                    sheetDrag = 0f
+                }
+                sheetDragging = false
+            },
+            onDragCancel = { sheetDragging = false; sheetDrag = 0f },
+            onVerticalDrag = { change, amount ->
+                if (sheetDragging) {
+                    change.consume()
+                    sheetDrag = (sheetDrag + amount).coerceAtLeast(0f)
+                }
+            }
+        )
+    }
 
     // --- pretahovani karet (drzeni za hlavicku + tah) ---
     var draggingId by remember { mutableStateOf<Long?>(null) }
@@ -194,242 +270,479 @@ fun TabsScreen(
             p.y >= it.offset.y && p.y < it.offset.y + it.size.height
     }
 
-    Column(
+    Box(
         Modifier
             .fillMaxSize()
             .background(BG)
             // pohlti klepnuti, aby neprosla do stranky pod prehledem
             .pointerInput(Unit) { detectTapGestures { } }
     ) {
-        // prepinac: bezne karty / anonymni karty (druha skupina je skryta)
-        Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ModeChip("Běžné ($normalCount)", !incognito, Modifier.weight(1f)) {
-                endSelect(); openFolderId = null; onToggleIncognito(false)
-            }
-            ModeChip("🕶 Anonymní ($incognitoCount)", incognito, Modifier.weight(1f)) {
-                endSelect(); openFolderId = null; onToggleIncognito(true)
-            }
-        }
-
-        // uzka listu: zpet ze slozky / pocet oznacenych
-        if (openFolder != null || selectMode) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val dropOut = openFolder != null && draggingId != null && finger.y < 0f
-                Text(
-                    when {
-                        dropOut -> "Pusť sem pro vyjmutí"
-                        openFolder != null -> "‹  Složka (${openFolder.members.size})"
-                        else -> "Označeno: ${selected.size}"
-                    },
-                    color = if (dropOut) CARAMEL else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (openFolder != null) Modifier.clickable { endSelect(); openFolderId = null } else Modifier)
-                )
-                if (openFolder != null && !selectMode) {
-                    // barva slozky
-                    Box(
-                        Modifier.size(40.dp).clickable { colorPickFor = openFolder.id },
-                        contentAlignment = Alignment.Center
-                    ) { Box(Modifier.size(18.dp).clip(CircleShape).background(Color(openFolder.folderColor)).border(1.dp, Color.White, CircleShape)) }
+        // otevrena slozka = jako v Chrome: za ni je videt (ztmaveny) prehled karet, klepnutim mimo se slozka zavre
+        if (openFolder != null) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ModeChip("Běžné ($normalCount)", !incognito, Modifier.weight(1f)) {}
+                    ModeChip("🕶 Anonymní ($incognitoCount)", incognito, Modifier.weight(1f), blue = true) {}
                 }
-                if (selectMode) {
-                    if (openFolder != null) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    state = backgroundGridState,
+                    userScrollEnabled = false,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(tiles, key = { it.id }) { tile ->
+                        TabTileCard(
+                            tile = tile, selectMode = false, selected = false, mergeHit = false,
+                            onClick = {}, onClose = {}, onSave = {}, onColor = {}
+                        )
+                    }
+                }
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xB3000000))
+                    .pointerInput(Unit) { detectTapGestures { endSelect(); openFolderId = null } }
+            )
+        }
+        Column(
+            if (openFolder != null) {
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.82f)
+                    .graphicsLayer { translationY = sheetOffset }
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(Color(0xFF141414))
+            } else Modifier.fillMaxSize()
+        ) {
+            // prepinac: bezne karty / anonymni karty (druha skupina je skryta); ve slozce je videt az za ni
+            if (openFolder == null) Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ModeChip("Běžné ($normalCount)", !incognito, Modifier.weight(1f).demoMark("tabs_normal")) {
+                    endSelect(); openFolderId = null; onToggleIncognito(false)
+                }
+                ModeChip("🕶 Anonymní ($incognitoCount)", incognito, Modifier.weight(1f).demoMark("tabs_incog"), blue = true) {
+                    endSelect(); openFolderId = null; onToggleIncognito(true)
+                }
+            }
+
+            // drzadlo panelu slozky (za nej jde panel stahnout dolu)
+            if (openFolder != null) {
+                Box(sheetDragMod.fillMaxWidth().height(22.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.width(40.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF555555)))
+                }
+            }
+            // uzka listu: zpet ze slozky / pocet oznacenych
+            if (openFolder != null || selectMode) {
+                Row(
+                    sheetDragMod.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val dropOut = openFolder != null && draggingId != null && finger.y < 0f
+                    if (openFolder != null && !selectMode && !dropOut) {
+                        // zpet ze slozky
+                        Box(
+                            Modifier.size(40.dp).clickable { endSelect(); openFolderId = null },
+                            contentAlignment = Alignment.Center
+                        ) { Image(painterResource(R.drawable.ic_back_chevron), contentDescription = "Zpět", modifier = Modifier.size(22.dp)) }
+                    }
+                    Text(
+                        when {
+                            dropOut -> "Pusť sem pro vyjmutí"
+                            openFolder != null -> folderTitle(openFolder)
+                            else -> "Označeno: ${selected.size}"
+                        },
+                        color = if (dropOut) CARAMEL else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            // klepnuti na nazev = prejmenovat slozku
+                            .then(if (openFolder != null && !selectMode) Modifier.clickable { renameFor = openFolder.id } else Modifier)
+                    )
+                    if (openFolder != null && !selectMode && !dropOut) {
+                        // ikona upravy nazvu (stejna jako "Upravit adresu" v naseptavaci)
+                        Image(
+                            painter = painterResource(R.drawable.ic_edit_url),
+                            contentDescription = "Přejmenovat složku",
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { renameFor = openFolder.id }
+                                .padding(9.dp)
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (openFolder != null && !selectMode) {
+                        // barva slozky
+                        Box(
+                            Modifier.size(40.dp).clickable { colorPickFor = openFolder.id },
+                            contentAlignment = Alignment.Center
+                        ) { Box(Modifier.size(18.dp).clip(CircleShape).background(Color(openFolder.folderColor)).border(1.dp, Color.White, CircleShape)) }
+                    }
+                    if (selectMode) {
+                        if (openFolder != null) {
+                            Text(
+                                "Vyjmout (${selected.size})", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(ROW)
+                                    .clickable(enabled = selected.isNotEmpty()) {
+                                        requestExtract(selected.toList())
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 9.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
                         Text(
-                            "Vyjmout (${selected.size})", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            "Vše", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(ROW)
-                                .clickable(enabled = selected.isNotEmpty()) {
-                                    requestExtract(selected.toList())
-                                }
+                                .clickable { selected.clear(); selected.addAll(shown.map { it.id }); AppToast.show(ctx, "Označeno: ${selected.size}") }   // oznacit vse
                                 .padding(horizontal = 14.dp, vertical = 9.dp)
                         )
                         Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Zrušit", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(ROW)
+                                .clickable { endSelect() }
+                                .padding(horizontal = 14.dp, vertical = 9.dp)
+                        )
                     }
-                    Text(
-                        "Zrušit", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(ROW)
-                            .clickable { endSelect() }
-                            .padding(horizontal = 14.dp, vertical = 9.dp)
-                    )
                 }
             }
-        }
 
-        if (tiles.isEmpty()) {
-            Text(
-                if (incognito) "Žádné anonymní karty. Klepni na + NOVÁ KARTA." else "Žádné běžné karty. Klepni na + NOVÁ KARTA.",
-                color = MUTED, fontSize = 14.sp, modifier = Modifier.padding(16.dp)
-            )
-        }
+            if (tiles.isEmpty()) {
+                Text(
+                    if (incognito) "Žádné anonymní karty. Klepni na + NOVÁ KARTA." else "Žádné běžné karty. Klepni na + NOVÁ KARTA.",
+                    color = MUTED, fontSize = 14.sp, modifier = Modifier.padding(16.dp)
+                )
+            }
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            state = gridState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .graphicsLayer {
-                    // zanik slozky po vyjmuti: mrizka se zmensi a vybledne
-                    alpha = vanish
-                    scaleX = 0.6f + 0.4f * vanish
-                    scaleY = 0.6f + 0.4f * vanish
-                }
-                .pointerInput(Unit) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { pos ->
-                            val h = hit(pos) ?: return@detectDragGesturesAfterLongPress
-                            val key = h.key as? Long ?: return@detectDragGesturesAfterLongPress
-                            val inHeader = pos.y < h.offset.y + headerPx
-                            justDragged = true
-                            if (selectMode || !inHeader) {
-                                // drzeni za telo (nebo uz oznacujeme): oznacit / odznacit kartu
-                                if (!selectMode) selectMode = true
-                                toggleSel(key)
-                                return@detectDragGesturesAfterLongPress
-                            }
-                            // drzeni za hlavicku: karta se chyta a tahne
-                            draggingId = key
-                            finger = pos
-                            grab = Offset(pos.x - h.offset.x, pos.y - h.offset.y)
-                            lastTarget = null
-                            mergeTarget = null
-                        },
-                        onDrag = { change, amount ->
-                            change.consume()
-                            val id = draggingId
-                            if (id != null) {
-                                finger += amount
-                                val under = hit(finger)
-                                val underKey = under?.key as? Long
-                                if (under == null || underKey == null || underKey == id) {
-                                    lastTarget = null
-                                    mergeTarget = null
-                                } else {
-                                    val overHeader = finger.y < under.offset.y + headerPx
-                                    // na hlavicku jine karty (slozky) jde pustit jen obycejnou kartu v hlavnim prehledu
-                                    val canMerge = openFolderNow == null && id >= 0
-                                    if (overHeader && canMerge) {
-                                        mergeTarget = underKey
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                state = gridState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onSizeChanged { gridH = it.height.toFloat(); gridW = it.width.toFloat() }
+                    .graphicsLayer {
+                        // zanik slozky po vyjmuti: mrizka se zmensi a vybledne
+                        alpha = vanish
+                        scaleX = 0.6f + 0.4f * vanish
+                        scaleY = 0.6f + 0.4f * vanish
+                    }
+                    .pointerInput(Unit) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { pos ->
+                                val h = hit(pos) ?: return@detectDragGesturesAfterLongPress
+                                val key = h.key as? Long ?: return@detectDragGesturesAfterLongPress
+                                val inHeader = pos.y < h.offset.y + headerPx
+                                justDragged = true
+                                if (selectMode || !inHeader) {
+                                    // drzeni za telo (nebo uz oznacujeme): oznacit / odznacit kartu
+                                    if (!selectMode) selectMode = true
+                                    toggleSel(key)
+                                    return@detectDragGesturesAfterLongPress
+                                }
+                                // drzeni za hlavicku: karta se chyta a tahne
+                                draggingId = key
+                                finger = pos
+                                grab = Offset(pos.x - h.offset.x, pos.y - h.offset.y)
+                                lastTarget = null
+                                mergeTarget = null
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                val id = draggingId
+                                if (id != null) {
+                                    finger += amount
+                                    val under = hit(finger)
+                                    val underKey = under?.key as? Long
+                                    if (under == null || underKey == null || underKey == id) {
                                         lastTarget = null
-                                    } else {
                                         mergeTarget = null
-                                        if (underKey != lastTarget) {
-                                            lastTarget = underKey
-                                            val f = openFolderNow
-                                            if (f != null) onMoveInFolderNow(f.id, id, underKey) else onMoveNow(id, underKey)
+                                    } else {
+                                        val overHeader = finger.y < under.offset.y + headerPx
+                                        // na hlavicku jine karty (slozky) jde pustit jen obycejnou kartu v hlavnim prehledu
+                                        val canMerge = openFolderNow == null && id >= 0
+                                        if (overHeader && canMerge) {
+                                            mergeTarget = underKey
+                                            lastTarget = null
+                                        } else {
+                                            mergeTarget = null
+                                            if (underKey != lastTarget) {
+                                                lastTarget = underKey
+                                                val f = openFolderNow
+                                                if (f != null) onMoveInFolderNow(f.id, id, underKey) else onMoveNow(id, underKey)
+                                            }
                                         }
                                     }
                                 }
+                            },
+                            onDragEnd = {
+                                val id = draggingId
+                                val mt = mergeTarget
+                                val outOfFolder = openFolderNow != null && finger.y < 0f   // pusteno nad mrizkou = vyjmout ze slozky
+                                val toDelete = id != null && id < 0 && openFolderNow == null && finger.y > gridH   // skupina pusteno na dolni tlacitko
+                                val toDeleteCard = id != null && id >= 0 && openFolderNow == null && mt == null && finger.y > gridH && finger.x > gridW / 2f   // karta pusteno na "Smazat kartu"
+                                draggingId = null
+                                mergeTarget = null
+                                if (id != null && toDeleteCard) (onDeleteDragged ?: onClose).invoke(id)
+                                else if (id != null && toDelete) deleteGroupId = id
+                                else if (id != null && outOfFolder) requestExtractNow(listOf(id))
+                                else if (id != null && mt != null) {
+                                    if (mt >= 0) awaitNewFolder = true   // vznikne nova slozka
+                                    onMergeNow(id, mt)
+                                    AppToast.show(ctx, if (mt >= 0) "Složka vytvořena" else "Karta přidána do složky")
+                                }
+                                scope.launch {
+                                    delay(250)
+                                    justDragged = false
+                                }
+                            },
+                            onDragCancel = {
+                                draggingId = null
+                                mergeTarget = null
+                                scope.launch {
+                                    delay(250)
+                                    justDragged = false
+                                }
                             }
-                        },
-                        onDragEnd = {
-                            val id = draggingId
-                            val mt = mergeTarget
-                            val outOfFolder = openFolderNow != null && finger.y < 0f   // pusteno nad mrizkou = vyjmout ze slozky
-                            draggingId = null
-                            mergeTarget = null
-                            if (id != null && outOfFolder) requestExtractNow(listOf(id))
-                            else if (id != null && mt != null) onMergeNow(id, mt)
-                            scope.launch {
-                                delay(250)
-                                justDragged = false
-                            }
-                        },
-                        onDragCancel = {
-                            draggingId = null
-                            mergeTarget = null
-                            scope.launch {
-                                delay(250)
-                                justDragged = false
-                            }
-                        }
-                    )
-                },
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(shown, key = { it.id }) { tile ->
-                val dragged = tile.id == draggingId
-                val itemModifier = if (dragged) {
-                    // taha se prstem: poloha se pocita z aktualniho rozlozeni mrizky
-                    Modifier
-                        .zIndex(1f)
-                        .graphicsLayer {
-                            val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == tile.id }
-                            if (info != null) {
-                                translationX = finger.x - grab.x - info.offset.x
-                                translationY = finger.y - grab.y - info.offset.y
-                            }
-                            scaleX = 1.05f
-                            scaleY = 1.05f
-                            alpha = 0.92f
-                        }
-                } else {
-                    Modifier.animateItem()
-                }
-                TabTileCard(
-                    tile = tile,
-                    selectMode = selectMode,
-                    selected = tile.id in selected,
-                    mergeHit = tile.id == mergeTarget,
-                    onClick = {
-                        if (!justDragged) {
-                            if (selectMode) toggleSel(tile.id)
-                            else if (tile.folder) openFolderId = tile.id
-                            else onSelect(tile.id)
-                        }
+                        )
                     },
-                    onClose = { id -> if (tile.folder) confirmIds = listOf(tile.id) else onClose(id) },
-                    onSave = onSave,
-                    onColor = { colorPickFor = tile.id },
-                    modifier = itemModifier
-                )
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(shown, key = { it.id }) { tile ->
+                    val dragged = tile.id == draggingId
+                    val itemModifier = if (dragged) {
+                        // taha se prstem: poloha se pocita z aktualniho rozlozeni mrizky
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer {
+                                val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == tile.id }
+                                if (info != null) {
+                                    translationX = finger.x - grab.x - info.offset.x
+                                    translationY = finger.y - grab.y - info.offset.y
+                                }
+                                scaleX = 1.05f
+                                scaleY = 1.05f
+                                alpha = 0.92f
+                            }
+                    } else {
+                        Modifier.animateItem()
+                    }
+                    TabTileCard(
+                        tile = tile,
+                        selectMode = selectMode,
+                        selected = tile.id in selected,
+                        mergeHit = tile.id == mergeTarget,
+                        onClick = {
+                            if (!justDragged) {
+                                if (selectMode) toggleSel(tile.id)
+                                else if (tile.folder) openFolderId = tile.id
+                                else onSelect(tile.id)
+                            }
+                        },
+                        onClose = { id -> if (tile.folder) confirmIds = listOf(tile.id) else onClose(id) },
+                        onSave = onSave,
+                        onColor = { colorPickFor = tile.id },
+                        onRename = { renameFor = tile.id },
+                        modifier = itemModifier
+                    )
+                }
+            }
+
+            // stitek "Vytvorit slozku" / "Pridat do slozky": zluty a uplne nahore (nad pretahovanou kartou)
+            val mt = mergeTarget
+            if (mt != null && draggingId != null) {
+                val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == mt }
+                if (info != null) {
+                    val tw = with(LocalDensity.current) { info.size.width.toDp() }
+                    Box(
+                        Modifier
+                            .zIndex(10f)
+                            .offset { androidx.compose.ui.unit.IntOffset(info.offset.x, info.offset.y + info.size.height - 56.dp.roundToPx()) }
+                            .width(tw),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (mt < 0) "Přidat do složky" else "Vytvořit složku",
+                            color = Color(0xFF1A1A1A), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(YELLOW)
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                        )
+                    }
+                }
+            }
+            }   // konec Boxu s mrizkou
+
+            if (selectMode) {
+                // oznacovani: tlacitko se zmeni na cervene "Zavrit" s kosem
+                Row(
+                    Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selected.isEmpty()) ROW else RED)
+                        .clickable(enabled = selected.isNotEmpty()) { confirmIds = selected.toList() },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(painterResource(R.drawable.ic_close_all_tabs), contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        if (selected.isEmpty()) "Označ karty" else "Zavřít (${selected.size})",
+                        color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            } else if (draggingId.let { it != null && it < 0 } && openFolder == null) {
+                // taha se skupina karet: tlacitko "Nova karta" se zmeni na cervene "Smazat skupinu karet" (pusteni na nej = dotaz)
+                val over = finger.y > gridH
+                Row(
+                    Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (over) Color(0xFFE53935) else RED)
+                        .then(if (over) Modifier.border(2.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(painterResource(R.drawable.ic_close_all_tabs), contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Smazat skupinu karet", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            } else if (draggingId.let { it != null && it >= 0 } && openFolder == null) {
+                // taha se karta: "Nova karta" se zmeni na dve tlacitka - vlevo co se stane po pusteni na kartu, vpravo Smazat kartu
+                val mtNow = mergeTarget
+                val overDel = finger.y > gridH && finger.x > gridW / 2f
+                LaunchedEffect(overDel) { if (overDel) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
+                val delScale by animateFloatAsState(if (overDel) 1.07f else 1f, tween(120), label = "delScale")
+                Row(
+                    Modifier.padding(16.dp).fillMaxWidth().height(54.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .weight(1f).fillMaxHeight()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (mtNow != null) YELLOW else ROW),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (mtNow != null && mtNow < 0) "Přidat do složky" else "+ Vytvořit složku",
+                            color = if (mtNow != null) Color(0xFF1A1A1A) else MUTED, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Row(
+                        Modifier
+                            .weight(1f).fillMaxHeight()
+                            .graphicsLayer { scaleX = delScale; scaleY = delScale }
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (overDel) Color(0xFFE53935) else RED)
+                            .then(if (overDel) Modifier.border(2.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(painterResource(R.drawable.ic_close_all_tabs), contentDescription = null, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Smazat kartu", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                Box(
+                    Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(accent)
+                        .clickable(onClick = onNew),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+ NOVÁ KARTA", color = onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
+    }
 
-        if (selectMode) {
-            // oznacovani: tlacitko se zmeni na cervene "Zavrit" s kosem
-            Row(
+    // prejmenovani slozky
+    val renameId = renameFor
+    if (renameId != null) {
+        // kurzor na konci stavajiciho nazvu
+        var field by remember(renameId) {
+            val cur = tiles.firstOrNull { it.id == renameId }?.folderName.orEmpty()
+            mutableStateOf(TextFieldValue(cur, TextRange(cur.length)))
+        }
+        val text = field.text
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(renameId) { focus.requestFocus() }
+        Dialog(onDismissRequest = { renameFor = null }) {
+            Column(
                 Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-                    .height(54.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (selected.isEmpty()) ROW else RED)
-                    .clickable(enabled = selected.isNotEmpty()) { confirmIds = selected.toList() },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(PANEL)
+                    .padding(22.dp)
             ) {
-                Image(painterResource(R.drawable.ic_close_all_tabs), contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    if (selected.isEmpty()) "Označ karty" else "Zavřít (${selected.size})",
-                    color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
-                )
-            }
-        } else {
-            Box(
-                Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-                    .height(54.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(GREEN)
-                    .clickable(onClick = onNew),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("+ NOVÁ KARTA", color = Color(0xFF06281D), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Název složky", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(ROW)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    BasicTextField(
+                        value = field,
+                        onValueChange = { if (it.text.length <= 40) field = it },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold),
+                        cursorBrush = SolidColor(accent),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                    )
+                    if (text.isEmpty()) Text("Složka", color = MUTED, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(18.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                    Text(
+                        "Zrušit", color = Color(0xFFCCCCCC), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(ROW)
+                            .clickable { renameFor = null }
+                            .padding(horizontal = 18.dp, vertical = 10.dp)
+                    )
+                    Text(
+                        "Uložit", color = onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(accent)
+                            .clickable {
+                                onFolderRename(renameId, text)
+                                renameFor = null
+                            }
+                            .padding(horizontal = 18.dp, vertical = 10.dp)
+                    )
+                }
             }
         }
     }
@@ -469,44 +782,29 @@ fun TabsScreen(
     }
 
     // potvrzeni zavreni oznacenych karet / slozky
+    // potvrzeni smazani skupiny (po pretazeni skupiny na cervene tlacitko)
+    val delId = deleteGroupId
+    if (delId != null) {
+        val group = tiles.firstOrNull { it.id == delId }
+        ConfirmDialog(
+            title = "Smazat skupinu",
+            // pocet karet, ktere se smazou spolu se skupinou
+            text = "Opravdu chcete smazat skupinu ${group?.folderName?.ifBlank { "Složka" } ?: "Složka"}? Smaže se ${kartyText(group?.members?.size ?: 0)}.",
+            onNo = { deleteGroupId = null },
+            onYes = { onCloseMany(listOf(delId)); deleteGroupId = null }
+        )
+    }
+
     val ids = confirmIds
     if (ids != null) {
         val count = ids.sumOf { id -> if (id < 0) (tiles.firstOrNull { it.id == id }?.members?.size ?: 0) else 1 }
-        Dialog(onDismissRequest = { confirmIds = null }) {
-            Column(
-                Modifier
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(PANEL)
-                    .padding(22.dp)
-            ) {
-                Text("Zavřít karty", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                Text("Opravdu chcete zavřít ${kartyText(count)}?", color = Color(0xFFCCCCCC), fontSize = 15.sp)
-                Spacer(Modifier.height(18.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                    Text(
-                        "Zrušit", color = Color(0xFFCCCCCC), fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(ROW)
-                            .clickable { confirmIds = null }
-                            .padding(horizontal = 18.dp, vertical = 10.dp)
-                    )
-                    Text(
-                        "Zavřít", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(RED)
-                            .clickable {
-                                onCloseMany(ids)
-                                confirmIds = null
-                                endSelect()
-                            }
-                            .padding(horizontal = 18.dp, vertical = 10.dp)
-                    )
-                }
-            }
-        }
+        ConfirmDialog(
+            title = "Zavřít karty",
+            text = "Opravdu chcete zavřít ${kartyText(count)}?",
+            noLabel = "Zrušit", yesLabel = "Zavřít",
+            onNo = { confirmIds = null },
+            onYes = { onCloseMany(ids); confirmIds = null; endSelect() }
+        )
     }
 }
 
@@ -520,20 +818,24 @@ private fun TabTileCard(
     onClose: (Long) -> Unit,
     onSave: (Long) -> Unit,
     onColor: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRename: () -> Unit = {}
 ) {
     val shape = RoundedCornerShape(16.dp)
     val folderColor = Color(tile.folderColor)
+    val accent = if (tile.incognito) BLUE else GREEN
     val borderMod = when {
-        mergeHit -> Modifier.border(3.dp, CARAMEL, shape)
-        selected -> Modifier.border(3.dp, GREEN, shape)
+        mergeHit -> Modifier.border(3.dp, YELLOW, shape)
+        selected -> Modifier.border(3.dp, accent, shape)
         tile.folder -> Modifier.border(if (tile.active) 3.dp else 2.dp, folderColor, shape)
-        tile.active -> Modifier.border(2.dp, GREEN, shape)
+        tile.active -> Modifier.border(2.dp, accent, shape)
         else -> Modifier
     }
+    val stretch by animateFloatAsState(if (mergeHit && tile.folder) 1.05f else 1f, tween(160), label = "folderStretch")   // cil-slozka se jemne roztahne
     Column(
         modifier
             .fillMaxWidth()
+            .graphicsLayer { scaleX = stretch; scaleY = stretch }
             .clip(shape)
             .background(PANEL)
             .then(borderMod)
@@ -547,19 +849,23 @@ private fun TabTileCard(
                 .padding(start = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val title = if (tile.folder) "Složka (${tile.members.size})"
+            val title = if (tile.folder) folderTitle(tile)
             else (if (tile.incognito) "🕶 " else "") + tile.title.ifBlank { prettyUrl(tile.url).ifBlank { "Nová karta" } }
             Text(
                 title,
                 color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    // klepnuti na nazev slozky = prejmenovat
+                    .then(if (tile.folder && !selectMode) Modifier.clickable { onRename() } else Modifier)
             )
             if (!selectMode) {
                 if (!tile.folder) {
                     Box(
                         Modifier.size(40.dp).clickable { onSave(tile.id) },
                         contentAlignment = Alignment.Center
-                    ) { Text("★", color = GREEN, fontSize = 16.sp) }
+                    ) { Text("★", color = accent, fontSize = 16.sp) }
                 } else {
                     // barva slozky: klepnuti otevre vyber
                     Box(
@@ -606,22 +912,10 @@ private fun TabTileCard(
                         .padding(8.dp)
                         .size(26.dp)
                         .clip(CircleShape)
-                        .background(if (selected) GREEN else Color(0x99000000))
+                        .background(if (selected) accent else Color(0x99000000))
                         .border(2.dp, Color.White, CircleShape),
                     contentAlignment = Alignment.Center
                 ) { if (selected) Text("✓", color = Color(0xFF06281D), fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-            }
-            if (mergeHit) {
-                Text(
-                    if (tile.folder) "Přidat do složky" else "Vytvořit složku",
-                    color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 10.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xCC000000))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
             }
         }
     }
@@ -669,18 +963,18 @@ private fun FolderBody(members: List<TabTile>) {
 }
 
 @Composable
-private fun ModeChip(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ModeChip(text: String, selected: Boolean, modifier: Modifier, blue: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) GREEN else ROW)
+            .background(if (selected) (if (blue) BLUE else GREEN) else ROW)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text,
-            color = if (selected) Color(0xFF06281D) else Color.White,
+            color = if (selected) (if (blue) Color.White else Color(0xFF06281D)) else Color.White,
             fontSize = 14.sp, fontWeight = FontWeight.Bold
         )
     }
@@ -725,7 +1019,13 @@ fun StartPage(
                     .background(Color(0xFF00B055))
                     .clickable(onClick = onNormal),
                 contentAlignment = Alignment.Center
-            ) { Text("Normální surfování", color = Color(0xFF06281D), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            ) {
+                // ikonka surfu nad textem
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(painter = painterResource(R.drawable.ic_surf), contentDescription = null, modifier = Modifier.size(28.dp))
+                    Text("Normální surfování", color = Color(0xFF06281D), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
             Box(
                 Modifier
                     .weight(1f)
@@ -734,7 +1034,13 @@ fun StartPage(
                     .background(Color(0xFF1E6BFF))
                     .clickable(onClick = onIncognito),
                 contentAlignment = Alignment.Center
-            ) { Text("Anonymní", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            ) {
+                // ikonka anonymu (stejna jako v tutorialech) nad textem
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(painter = painterResource(R.drawable.ic_incognito), contentDescription = null, modifier = Modifier.size(26.dp))
+                    Text("Anonymní", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
 
         // pocitadlo zablokovanych reklam (40 % sirky) + prepinac Nejnavstevovanejsi / Oblibene
@@ -752,7 +1058,7 @@ fun StartPage(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     java.text.NumberFormat.getInstance(java.util.Locale("cs")).format(blockedTotal),
-                    color = GREEN, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                    color = Color(0xFFFFC107), fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1   // zlata
                 )
             }
             Column(Modifier.weight(0.6f).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -767,10 +1073,16 @@ fun StartPage(
                             .clickable { onShowFavorites(fav) },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            label, color = if (on) Color(0xFF06281D) else Color.White,
-                            fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // ikonka pred nazvem: hodiny (nejnavstevovanejsi) / zluta hvezdicka (oblibene)
+                            if (fav) Text("★", color = Color(0xFFFFC107), fontSize = 16.sp)
+                            else Text("🕒", fontSize = 14.sp)
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                label, color = if (on) Color(0xFF06281D) else Color.White,
+                                fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                            )
+                        }
                     }
                 }
             }

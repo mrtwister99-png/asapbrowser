@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.demoMark
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -186,7 +187,7 @@ internal fun FolderListScreen(onOpenFolder: (BookmarkFolder) -> Unit, onBack: ()
                 }
             }
         }
-        BigButton("+ NOVÁ SLOŽKA", ACCENT, Color(0xFF06281D)) { showNew = true }
+        BigButton("+ NOVÁ SLOŽKA", ACCENT, Color(0xFF06281D), Modifier.demoMark("new_folder")) { showNew = true }
     }
 
     renameTarget?.let { target ->
@@ -532,22 +533,9 @@ internal fun FolderDetailScreen(
                 val key = "b" + b.id
                 val dragged = dragKey == key
                 val hovered = hoverKey == key
-                val rowModifier = if (dragged) {
-                    Modifier
-                        .zIndex(1f)
-                        .graphicsLayer {
-                            val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
-                            if (info != null) translationY = fingerY - grabY - info.offset
-                            scaleX = 1.03f
-                            scaleY = 1.03f
-                            alpha = 0.92f
-                        }
-                        .background(Color(0xFF2F2F2F))
-                } else {
-                    Modifier.animateItem()
-                }
+                val content: @Composable () -> Unit = {
                 Row(
-                    rowModifier
+                    Modifier
                         .fillMaxWidth()
                         .then(
                             if (hovered) Modifier
@@ -559,7 +547,7 @@ internal fun FolderDetailScreen(
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SiteThumb(b.url)
+                    SiteIconLite(b.url)   // ve slozce bez nahledu stranky (rychle), jen ikona webu
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -581,6 +569,26 @@ internal fun FolderDetailScreen(
                         },
                         contentAlignment = Alignment.Center
                     ) { Text("✕", color = MUTED, fontSize = 16.sp) }
+                }
+                }
+                if (dragged) {
+                    // zalozka se za prstem nese (nahore) a v seznamu zustava pulprusvitne misto, kam dopadne
+                    Box(Modifier.zIndex(1f)) {
+                        Box(Modifier.alpha(0.5f)) { content() }
+                        Box(
+                            Modifier
+                                .graphicsLayer {
+                                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
+                                    if (info != null) translationY = fingerY - grabY - info.offset
+                                    scaleX = 1.03f
+                                    scaleY = 1.03f
+                                    alpha = 0.92f
+                                }
+                                .background(Color(0xFF2F2F2F))
+                        ) { content() }
+                    }
+                } else {
+                    Box(Modifier.animateItem()) { content() }
                 }
             }
         }

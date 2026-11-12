@@ -17,6 +17,8 @@ class BrowserTab(val id: Long, webViewFactory: () -> WebView) {
     var title: String = ""                        // titulek stránky
     var incognito: Boolean = false                // anonymni karta (bez historie, neuklada se)
     var startPage: Boolean = false                // nova karta ukazuje uvodni stranku (normalni / anonymni + nejnavstevovanejsi)
+    var pinnedTop: Boolean = false                // pripnuta karta zustava v horni (true) / spodni (false) liste, kde byla pri pripnuti
+    var pinned: Boolean = false                   // pripnuta karta: v liste je vzdy videt
     var desktop: Boolean = false                  // verze pro pocitac (jiny user-agent)
     @Volatile var pendingUrl: String? = null      // obnovena karta, ktera se nacte az pri prvnim zobrazeni
     var preview: Bitmap? = null                   // náhled (screenshot) pro dlaždici

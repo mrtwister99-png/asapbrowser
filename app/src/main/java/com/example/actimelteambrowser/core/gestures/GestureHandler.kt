@@ -1,5 +1,7 @@
 package com.example.actimelteambrowser.core.gestures
 
+import android.annotation.SuppressLint
+import com.example.actimelteambrowser.quiet
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -9,22 +11,6 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.view.GestureDetector
-import android.view.MotionEvent
-
-class GestureHandler(
-    private val onSwipeBack: () -> Unit,
-    private val onSwipeForward: () -> Unit
-) : GestureDetector.SimpleOnGestureListener() {
-
-    override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-        if (e1 == null) return false
-        val diffX = e2.x - e1.x
-        if (diffX > 150) onSwipeBack()
-        if (diffX < -150) onSwipeForward()
-        return true
-    }
-}
 
 /**
  * Odezva po úspěšně dokončeném gestu podle nastavení: drobné zabrnění a/nebo zvuk (orb.mp3).
@@ -35,7 +21,7 @@ fun gestureTick(context: Context) {
     AppSettings.init(context)
     if (AppSettings.gestureSound.get()) playGestureSound(context)
     if (!AppSettings.gestureHaptic.get() || !AppSettings.vibrationOn.get()) return
-    try {
+    quiet {
         val vib: Vibrator? = if (Build.VERSION.SDK_INT >= 31) {
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
         } else {
@@ -47,8 +33,6 @@ fun gestureTick(context: Context) {
             Build.VERSION.SDK_INT >= 26 -> vib.vibrate(VibrationEffect.createOneShot(20, 100))
             else -> vib.vibrate(20)
         }
-    } catch (e: Exception) {
-        // vibrace je jen bonus, nesmí nikdy shodit appku
     }
 }
 
@@ -61,10 +45,11 @@ private fun playGestureSound(context: Context) = playRawSound(context, "orb")
 /**
  * Prehraje zvuk z res/raw/<name>.mp3 (kratky, jednorazovy). Kdyz soubor chybi, pouzije se systemove kliknuti.
  */
+@SuppressLint("DiscouragedApi")   // nazev zvuku je dynamicky (res/raw/<name>)
 fun playRawSound(context: Context, name: String) {
     AppSettings.init(context)
     if (!AppSettings.soundsOn.get()) return   // zvuky vypnute v Konfiguraci
-    try {
+    quiet {
         val resId = context.resources.getIdentifier(name, "raw", context.packageName)
         if (resId == 0) {
             (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.playSoundEffect(AudioManager.FX_KEY_CLICK)
@@ -78,7 +63,5 @@ fun playRawSound(context: Context, name: String) {
         mp.setOnCompletionListener { it.release() }
         mp.setOnErrorListener { player, _, _ -> player.release(); true }
         mp.start()
-    } catch (e: Exception) {
-        // zvuk je jen bonus, nesmí nikdy shodit appku
     }
 }

@@ -1,109 +1,48 @@
 package com.example.actimelteambrowser
 
+import androidx.core.graphics.drawable.toDrawable
+import androidx.appcompat.content.res.AppCompatResources
+import android.view.animation.LinearInterpolator
+import android.os.SystemClock
+import android.graphics.RectF
+import android.content.ClipboardManager
+import android.content.ClipData
+import android.animation.PropertyValuesHolder
+import androidx.core.graphics.createBitmap
 import android.annotation.SuppressLint
-import android.os.Bundle
+import androidx.core.graphics.toColorInt
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
-import java.io.ByteArrayInputStream
-import com.example.actimelteambrowser.core.engine.RustBridge
 import kotlin.concurrent.thread
-import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
-import com.example.actimelteambrowser.core.settings.AppSettings
-import android.content.Intent
 import android.text.Editable
-import android.text.TextWatcher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import com.example.actimelteambrowser.data.BookmarksRepository
-import com.example.actimelteambrowser.data.HistoryRepository
 import com.example.actimelteambrowser.data.HistoryVisit
 import com.example.actimelteambrowser.data.Bookmark
 import com.example.actimelteambrowser.ui.SearchSuggestion
-import com.example.actimelteambrowser.ui.ButtonConfigModal
-import com.example.actimelteambrowser.ui.SearchSuggestionsList
 import com.example.actimelteambrowser.ui.buildSearchSuggestions
-import android.graphics.Bitmap
 import android.view.MotionEvent
-import com.example.actimelteambrowser.ui.ExternalTouch
-import com.example.actimelteambrowser.core.settings.Gestures
-import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
-import com.example.actimelteambrowser.core.settings.SiteRules
 import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
-import androidx.webkit.ProfileStore
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.example.actimelteambrowser.ui.StartSite
-import com.example.actimelteambrowser.ui.GestureOverlay
-import com.example.actimelteambrowser.ui.GestureArea
-import com.example.actimelteambrowser.ui.GestureAreaEditor
-import com.example.actimelteambrowser.ui.GesturePanel
-import android.animation.ArgbEvaluator
 import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
 import androidx.constraintlayout.widget.ConstraintLayout
 import android.graphics.Paint
-import com.example.actimelteambrowser.core.settings.ButtonDefaults
-import com.example.actimelteambrowser.core.settings.ButtonFunction
 import android.animation.ValueAnimator
-import android.app.Dialog
-import android.content.res.ColorStateList
-import android.graphics.Typeface
-import android.view.Gravity
-import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
-import android.util.TypedValue
 import android.transition.TransitionManager
-import android.net.Uri
-import android.graphics.BitmapFactory
-import android.text.InputType
-import java.io.File
-import java.io.FileOutputStream
-import androidx.activity.OnBackPressedCallback
-import org.json.JSONArray
-import org.json.JSONObject
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.view.PixelCopy
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
-import com.example.actimelteambrowser.ui.TabTile
-import com.example.actimelteambrowser.ui.TabsScreen
 
 // Adresní pole, našeptávač, klávesnice a zadávání adresy (rozšíření MainActivity).
 // Klepnuti do pole (dole i nahore): pole se vycisti, otevre se klavesnice a ukazou se navrhy
 // Pozadi poli: spodni #D9D9D9, horni tmave; obrys (zelena) se kresli jen pri psani a pulzuje
 internal fun MainActivity.setupFieldBackgrounds() {
     val sb = GradientDrawable()
-    sb.setColor(Color.parseColor("#D9D9D9"))
+    sb.setColor("#D9D9D9".toColorInt())
     sb.cornerRadius = dp(28).toFloat()
     val ub = GradientDrawable()
-    ub.setColor(Color.parseColor("#7D7C7C"))
+    ub.setColor("#7D7C7C".toColorInt())
     ub.cornerRadius = dp(20).toFloat()
     searchBg = sb
     urlBg = ub
@@ -118,7 +57,7 @@ internal fun MainActivity.startOutlinePulse(top: Boolean) {
     searchBg?.setStroke(0, Color.TRANSPARENT)
     urlBg?.setStroke(0, Color.TRANSPARENT)
     val target = if (top) urlBg else searchBg
-    val green = Color.parseColor("#00B055")
+    val green = accentState.value   // zelena, v anonymnim rezimu modra
     val base = dp(2)
     val a = ValueAnimator.ofFloat(1f, 2f)
     a.duration = 900
@@ -147,8 +86,9 @@ internal fun MainActivity.startFreshInput(field: EditText) {
     findViewById<View>(R.id.btnBookmarks).visibility = View.GONE
     suggestionsAtTop.value = (field === etTopUrl)
     lastTypedLen = 0
-    // dolni pole ukaze adresu aktualni stranky (kurzor na konci, jde upravit); horni pole zacina prazdne
-    if (!(field === etSearchMain && prefillCurrentUrl(field))) field.setText("")
+    // horni pole ukaze adresu aktualni stranky (kurzor na konci, jde upravit); dolni pole zacina prazdne (psani od nuly)
+    if (field === etTopUrl && prefillCurrentUrl(field)) field.selectAll()   // cela adresa oznacena = jde jednim klepnutim prepsat
+    else field.setText("")
     updateSuggestions("")
     field.post { showKeyboard(field) }
 }
@@ -179,6 +119,7 @@ internal fun MainActivity.onInputFocusLost() {
     etSearchMain.postDelayed({
         if (!etSearchMain.hasFocus() && !etTopUrl.hasFocus()) {
             suggestions.value = emptyList()
+            pinnedPage.value = null   // zeleny radek aktualni stranky musi zmizet taky (drive zustaval na obrazovce)
             stopOutlinePulse()
             TransitionManager.beginDelayedTransition(bottomBar as ViewGroup)
             findViewById<View>(R.id.btnBookmarks).visibility = View.VISIBLE
@@ -197,8 +138,7 @@ internal fun MainActivity.submitInput(raw: String) {
         if (q.startsWith("http")) q else "https://$q"
     } else SearchEngines.searchUrl(q)
     webView.loadUrl(url)
-    etSearchMain.clearFocus()
-    etTopUrl.clearFocus()
+    releaseInputFocus()
     hideKeyboard()
 }
 
@@ -245,17 +185,16 @@ internal fun MainActivity.recordVisit(view: WebView?, url: String?) {
     lastRecordedUrl = u
     val title = view.title.orEmpty()
     thread(name = "history-write") {
-        try {
+        quiet {
             historyRepo.recordVisit(u, title)
-        } catch (e: Exception) {
         }
     }
 }
 
 // Nasepavac: dotaz do historie/zalozek bezi na pozadi, vysledek se ukaze nad spodni listou
 internal fun MainActivity.copyPinnedUrl(s: SearchSuggestion) {
-    val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    cm.setPrimaryClip(android.content.ClipData.newPlainText("url", s.url))
+    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("url", s.url))
     // potvrzeni ("Zkopirovano") se ukaze primo na zelenem radku
 }
 
@@ -273,7 +212,7 @@ internal fun MainActivity.updateSuggestions(query: String) {
         thread(name = "suggestions") {
             val result = try {
                 // historie, zalozky a nejnavstevovanejsi se ctou z DB jen jednou za 15 s (a pri prazdnem poli)
-                val now = android.os.SystemClock.uptimeMillis()
+                val now = SystemClock.uptimeMillis()
                 if (empty || now - suggestCacheAt > 15000) {
                     cachedHist = historyRepo.recent(300)
                     cachedBms = bookmarksRepo.allBookmarks()
@@ -283,6 +222,7 @@ internal fun MainActivity.updateSuggestions(query: String) {
                 }
                 buildSearchSuggestions(query, cachedHist, cachedBms, cachedTop)
             } catch (e: Exception) {
+                noteError(e)
                 emptyList()
             }
             runOnUiThread {
@@ -298,35 +238,229 @@ internal fun MainActivity.updateSuggestions(query: String) {
 internal fun MainActivity.openSuggestion(url: String) {
     if (!isWebUrl(url)) return
     webView.loadUrl(url)
-    etSearchMain.clearFocus()
-    etTopUrl.clearFocus()
+    releaseInputFocus()
     hideKeyboard()
     suggestions.value = emptyList()
+    pinnedPage.value = null
 }
 
 internal fun MainActivity.showKeyboard(target: View = etSearchMain) {
-    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT)
+    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    @Suppress("DEPRECATION") imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT)
 }
 
 internal fun MainActivity.hideKeyboard() {
-    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     imm.hideSoftInputFromWindow(etSearchMain.windowToken, 0)
+}
+
+// Focus z poli pryc: predat ho korenovemu layoutu. Pouhe clearFocus() ho Androidu necha prehodit na prvni
+// editovatelne pole (druhe pole), cimz se naseptavac hned znovu otevrel.
+internal fun MainActivity.releaseInputFocus() {
+    root.isFocusableInTouchMode = true
+    root.requestFocus()
+    etSearchMain.clearFocus()
+    etTopUrl.clearFocus()
 }
 
 // Zavre naseptavac + klavesnici (pole ztrati focus, onInputFocusLost vrati adresu)
 internal fun MainActivity.dismissInput() {
     suggestionToken++                       // zahodi rozpracovany dotaz do historie
-    etSearchMain.clearFocus()
-    etTopUrl.clearFocus()
+    releaseInputFocus()
     hideKeyboard()
     suggestions.value = emptyList()
+    pinnedPage.value = null
 }
 
+// Klepnuti do horniho pole, ktere uz ma focus: naseptavac se znovu nacte (i z DB) a ukaze
+internal fun MainActivity.refreshSuggestionsOnClick(field: EditText) {
+    if (!field.hasFocus()) return
+    suggestionsAtTop.value = (field === etTopUrl)
+    suggestCacheAt = 0L   // vynuti nove nacteni historie/zalozek
+    updateSuggestions(field.text.toString())
+}
+
+@Suppress("UnusedReceiverParameter")
 internal fun MainActivity.isTouchInside(v: View, ev: MotionEvent): Boolean {
     if (v.visibility != View.VISIBLE) return false
     val loc = IntArray(2)
     v.getLocationOnScreen(loc)              // pocita i s posunem nad klavesnici
     return ev.rawX >= loc[0] && ev.rawX <= loc[0] + v.width &&
         ev.rawY >= loc[1] && ev.rawY <= loc[1] + v.height
+}
+
+
+// Kruzek pri tazeni stranky dolu: plni se podle toho, jak daleko jsi pretahl (1 = pusteni obnovi stranku)
+class PullRefreshView(context: Context) : View(context) {
+    var progress = 0f
+        set(value) { field = value; invalidate() }
+    var color = 0xFF00B055.toInt()
+    var loading = false           // po pusteni: krouzek se toci, dokud se stranka nenacte
+        set(value) { field = value; invalidate() }
+    var loadStartedAt = 0L
+    private var spinner: ObjectAnimator? = null
+
+    fun startSpin() {
+        loading = true
+        loadStartedAt = SystemClock.uptimeMillis()
+        spinner?.cancel()
+        spinner = ObjectAnimator.ofFloat(this, ROTATION, 0f, 360f).apply {
+            duration = 800
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            start()
+        }
+    }
+
+    fun stopSpin() {
+        loading = false
+        spinner?.cancel()
+        spinner = null
+        rotation = 0f
+    }
+
+    // kratke "cuknuti": krouzek se zvetsi a vrati se (je zaplneny = pripraveno)
+    fun pop() {
+        val up = ObjectAnimator.ofPropertyValuesHolder(
+            this,
+            PropertyValuesHolder.ofFloat(SCALE_X, 1f, 1.3f, 1f),
+            PropertyValuesHolder.ofFloat(SCALE_Y, 1f, 1.3f, 1f)
+        )
+        up.duration = 220
+        up.start()
+    }
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xE61E1E1E.toInt() }
+    private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 3f * resources.displayMetrics.density
+    }
+    private val rect = RectF()
+    override fun onDraw(canvas: Canvas) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val r = minOf(width, height) / 2f
+        canvas.drawCircle(cx, cy, r, bg)
+        val pad = r * 0.38f
+        rect.set(cx - r + pad, cy - r + pad, cx + r - pad, cy + r - pad)
+        arc.color = color
+        canvas.drawArc(rect, -90f, if (loading) 270f else 360f * progress, false, arc)
+    }
+}
+
+internal fun MainActivity.updatePull(p: Float) {
+    var v = pullView
+    if (v == null) {
+        v = PullRefreshView(this)
+        v.elevation = dp(15).toFloat()
+        val lp = ConstraintLayout.LayoutParams(dp(40), dp(40))
+        lp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+        lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+        lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+        (root as ViewGroup).addView(v, lp)
+        pullView = v
+    }
+    v.animate().cancel()
+    v.stopSpin()
+    v.color = accentState.value
+    v.visibility = View.VISIBLE
+    v.alpha = p
+    v.translationY = (topBar.height + dp(10)).toFloat() + dp(24) * p
+    v.progress = p
+}
+
+internal fun MainActivity.endPull(force: Boolean = false) {
+    val v = pullView ?: return
+    if (v.loading && !force) return   // behem nacitani se krouzek neschovava
+    if (v.visibility != View.VISIBLE) return
+    v.loading = false
+    v.animate().alpha(0f).setDuration(150).withEndAction { v.stopSpin(); v.visibility = View.GONE }.start()
+}
+
+// Po pusteni: krouzek zustane a toci se, dokud se stranka nenacte (nejdele 15 s)
+internal fun MainActivity.startPullLoading() {
+    val v = pullView ?: return
+    v.animate().cancel()
+    v.alpha = 1f
+    v.visibility = View.VISIBLE
+    v.color = accentState.value
+    v.startSpin()
+    v.postDelayed({ if (v.loading) endPull(true) }, 15000)
+}
+
+// Stranka se nacetla: krouzek se schova (kratka prodleva, aby bylo videt aspon jedno otoceni)
+internal fun MainActivity.finishPullLoading() {
+    val v = pullView ?: return
+    if (!v.loading) return
+    val wait = (500L - (SystemClock.uptimeMillis() - v.loadStartedAt)).coerceAtLeast(0L)
+    v.postDelayed({ endPull(true) }, wait)
+}
+
+// Hlavni barva plochy: zelena, v anonymnim rezimu modra #006AFF (lupa, obrys pole, naseptavac, AdBlock, animace)
+internal fun MainActivity.applyAccent(incognito: Boolean) {
+    val c = if (incognito) 0xFF006AFF.toInt() else 0xFF00B055.toInt()
+    if (accentState.value == c) return
+    accentState.value = c
+    val d = AppCompatResources.getDrawable(this, R.drawable.ic_search)?.mutate()
+    d?.setTint(c)
+    etSearchMain.setCompoundDrawablesRelativeWithIntrinsicBounds(d, null, null, null)
+    applyAdBlockUi()
+}
+
+
+// Maly krizek na konci horniho pole (jen kdyz pole ma focus a neco obsahuje): klepnuti smaze text
+internal fun MainActivity.updateTopClear() {
+    val show = etTopUrl.hasFocus() && etTopUrl.text.isNotEmpty()
+    if (!show) {
+        etTopUrl.setCompoundDrawablesRelativeWithIntrinsicBounds(null, null, null, null)
+        return
+    }
+    // ikona kopirovani adresy na zacatku pole
+    val cs = dp(22)
+    val cbmp = createBitmap(cs, cs)
+    val cc = Canvas(cbmp)
+    val cp = Paint(Paint.ANTI_ALIAS_FLAG)
+    cp.style = Paint.Style.STROKE
+    cp.color = "#CCCCCC".toColorInt()
+    cp.strokeWidth = dp(2).toFloat() * 0.8f
+    cc.drawRoundRect(cs * 0.12f, cs * 0.12f, cs * 0.62f, cs * 0.62f, dp(3).toFloat(), dp(3).toFloat(), cp)
+    cc.drawRoundRect(cs * 0.38f, cs * 0.38f, cs * 0.88f, cs * 0.88f, dp(3).toFloat(), dp(3).toFloat(), cp)
+    val size = dp(22)
+    val bmp = createBitmap(size, size)
+    val c = Canvas(bmp)
+    val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    p.color = "#888888".toColorInt()
+    c.drawCircle(size / 2f, size / 2f, size / 2f, p)
+    p.color = Color.WHITE
+    p.strokeWidth = dp(2).toFloat()
+    p.strokeCap = Paint.Cap.ROUND
+    val m = size * 0.32f
+    c.drawLine(m, m, size - m, size - m, p)
+    c.drawLine(size - m, m, m, size - m, p)
+    etTopUrl.setCompoundDrawablesRelativeWithIntrinsicBounds(cbmp.toDrawable(resources), null, bmp.toDrawable(resources), null)
+    etTopUrl.compoundDrawablePadding = dp(6)
+}
+
+@SuppressLint("ClickableViewAccessibility")   // tap na ikony v poli, klik na pole zustava
+internal fun MainActivity.setupTopClear() {
+    etTopUrl.setOnTouchListener { v, ev ->
+        // ikona kopirovani (zacatek pole): zkopiruje adresu z pole
+        if (ev.actionMasked == MotionEvent.ACTION_UP && etTopUrl.compoundDrawablesRelative[0] != null) {
+            val cw = etTopUrl.compoundDrawablesRelative[0].bounds.width() + dp(14)
+            if (ev.x <= v.paddingLeft + cw) {
+                val t = etTopUrl.text.toString()
+                if (t.isNotBlank()) copyToClipboard("url", t, "Adresa zkopírována")
+                return@setOnTouchListener true
+            }
+        }
+        if (ev.actionMasked == MotionEvent.ACTION_UP && etTopUrl.compoundDrawablesRelative[2] != null) {
+            val w = etTopUrl.compoundDrawablesRelative[2].bounds.width() + dp(14)
+            if (ev.x >= v.width - v.paddingRight - w) {
+                etTopUrl.setText("")
+                v.performClick()
+                return@setOnTouchListener true
+            }
+        }
+        false
+    }
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tlacitko Zpet ve vsech obrazovkach (sipka): obrysova silna sipka doleva se zaoblenymi konci, tenka linka jako ostatni ikony -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M15.15 2.15L5.3 12L15.15 21.85A1.2 1.2 0 0 0 16.85 20.15L8.7 12L16.85 3.85A1.2 1.2 0 0 0 15.15 2.15Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

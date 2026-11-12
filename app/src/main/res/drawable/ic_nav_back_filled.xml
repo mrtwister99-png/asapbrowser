@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Krok zpet ve spodni liste (sipkaback): hrot doleva s vydutou zadni hranou + kolecko. Plna verze (zelene vyplneni pri klepnuti, barvi se tintem). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M14.5 4.2L1.8 12L14.5 19.8Q9.6 12 14.5 4.2Z"
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M15.6 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z"
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.3" />
+</vector>

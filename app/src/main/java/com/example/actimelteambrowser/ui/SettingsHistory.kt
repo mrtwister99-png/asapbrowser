@@ -227,6 +227,33 @@ private object SiteAssets {
     fun icon(ctx: android.content.Context, host: String): android.graphics.Bitmap? = if (!AppSettings.thumbsOn.get()) null else decode(java.io.File(java.io.File(ctx.filesDir, "site_icons"), name(host) + ".png"))
 }
 
+/**
+ * Nejlehci varianta pro dlouhe seznamy: jen mala ikona webu (bez nacitani velkeho nahledu stranky), jinak prvni pismeno.
+ * Ikona se nacte na pozadi, a to jen jednou pro kazdy host.
+ */
+@Composable
+internal fun SiteIconLite(url: String) {
+    val ctx = LocalContext.current
+    val host = remember(url) { try { android.net.Uri.parse(url).host?.removePrefix("www.").orEmpty() } catch (e: Exception) { "" } }
+    val icon by produceState<android.graphics.Bitmap?>(null, host) {
+        value = if (host.isBlank()) null else withContext(Dispatchers.IO) { SiteAssets.icon(ctx, host) }
+    }
+    Box(
+        Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(ROW),
+        contentAlignment = Alignment.Center
+    ) {
+        val ic = icon
+        if (ic != null) {
+            Image(bitmap = ic.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(26.dp))
+        } else {
+            Text(
+                prettyUrl(url).firstOrNull()?.uppercase() ?: "•",
+                color = ACCENT, fontSize = 20.sp, fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
 /** Maly nahled stranky s ikonou webu v rohu; bez nahledu jen ikona, bez ikony prvni pismeno adresy. */
 @Composable
 internal fun SiteThumb(url: String) {

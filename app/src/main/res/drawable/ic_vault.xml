@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trezor hesel: tenke linky ve stylu ostatnich ikon (0.8) - telo trezoru, panty, kolecko zamku s ryskami a madlo -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- telo -->
+    <path
+        android:pathData="M6.2 3.5H17.8a2.7 2.7 0 0 1 2.7 2.7V16.8a2.7 2.7 0 0 1 -2.7 2.7H6.2a2.7 2.7 0 0 1 -2.7 -2.7V6.2a2.7 2.7 0 0 1 2.7 -2.7Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- vnitrni dvirka -->
+    <path
+        android:pathData="M7.4 5.6H16.6a1.3 1.3 0 0 1 1.3 1.3V16.1a1.3 1.3 0 0 1 -1.3 1.3H7.4a1.3 1.3 0 0 1 -1.3 -1.3V6.9a1.3 1.3 0 0 1 1.3 -1.3Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#8CFFFFFF"
+        android:strokeWidth="0.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- panty -->
+    <path
+        android:pathData="M3.5 8.2H2.9M3.5 14.8H2.9"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="round" />
+    <!-- kolecko zamku -->
+    <path
+        android:pathData="M9.2 11.5a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.8" />
+    <!-- stred + rysky -->
+    <path
+        android:pathData="M11.4 11.5a0.6 0.6 0 1 0 1.2 0a0.6 0.6 0 1 0 -1.2 0Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M12 7.9V8.5M12 14.5V15.1M8.4 11.5H9M15 11.5H15.6"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.6"
+        android:strokeLineCap="round" />
+    <!-- madlo -->
+    <path
+        android:pathData="M16.1 9.9V13.1"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="round" />
+    <!-- nozicky -->
+    <path
+        android:pathData="M6.5 19.5V20.5M17.5 19.5V20.5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="round" />
+</vector>

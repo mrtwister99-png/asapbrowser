@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import androidx.core.database.sqlite.transaction
 
 /**
  * Databáze záložek a historie (čisté SQLite z Androidu, bez Room/KSP).
@@ -57,10 +58,6 @@ class BrowserDb private constructor(context: Context) :
 
     fun deleteVisitById(id: Long) {
         writableDatabase.delete("history_visits", "id = ?", arrayOf(id.toString()))
-    }
-
-    fun deleteHistoryByUrl(url: String) {
-        writableDatabase.delete("history_visits", "url = ?", arrayOf(url))
     }
 
     fun deleteAllHistory() {
@@ -205,24 +202,19 @@ class BrowserDb private constructor(context: Context) :
     /** Ulozi poradi zalozek ve slozce (podle seznamu ID). Jedna transakce. */
     fun reorderBookmarks(orderedIds: List<Long>) {
         val db = writableDatabase
-        db.beginTransaction()
-        try {
+        db.transaction {
             for ((index, id) in orderedIds.withIndex()) {
                 val v = ContentValues()
                 v.put("sortOrder", index)
                 db.update("bookmarks", v, "id = ?", arrayOf(id.toString()))
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
     }
 
     /** Vytvori podslozku v dane slozce a vlozi do ni zadane zalozky. Vraci ID nove slozky. */
     fun createFolderWithBookmarks(parentId: Long, name: String, bookmarkIds: List<Long>): Long {
         val db = writableDatabase
-        db.beginTransaction()
-        try {
+        return db.transaction {
             val order = count("SELECT COUNT(*) FROM bookmark_folders WHERE parentId = ?", arrayOf(parentId.toString()))
             val fv = ContentValues()
             fv.put("name", name)
@@ -236,18 +228,14 @@ class BrowserDb private constructor(context: Context) :
                 v.put("sortOrder", index)
                 db.update("bookmarks", v, "id = ?", arrayOf(id.toString()))
             }
-            db.setTransactionSuccessful()
-            return newId
-        } finally {
-            db.endTransaction()
+            newId
         }
     }
 
     /** Smaze slozku, vsechny jeji podslozky i zalozky v nich (jedna transakce). */
     fun deleteFolder(folderId: Long) {
         val db = writableDatabase
-        db.beginTransaction()
-        try {
+        db.transaction {
             // sebrat slozku a vsechny potomky
             val ids = ArrayList<Long>()
             ids.add(folderId)
@@ -265,9 +253,6 @@ class BrowserDb private constructor(context: Context) :
                 db.delete("bookmarks", "folderId = ?", arrayOf(id.toString()))
                 db.delete("bookmark_folders", "id = ?", arrayOf(id.toString()))
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
     }
 
@@ -290,8 +275,7 @@ class BrowserDb private constructor(context: Context) :
     /** Nahradí všechny složky a záložky. Vše v jedné transakci - při chybě se nic nezmění. */
     fun replaceBookmarks(folders: List<BookmarkFolder>, bookmarks: List<Bookmark>) {
         val db = writableDatabase
-        db.beginTransaction()
-        try {
+        db.transaction {
             db.delete("bookmarks", null, null)
             db.delete("bookmark_folders", null, null)
             for (f in folders) {
@@ -312,17 +296,13 @@ class BrowserDb private constructor(context: Context) :
                 v.put("sortOrder", b.sortOrder)
                 db.insertOrThrow("bookmarks", null, v)
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
     }
 
     /** Nahradí celou historii. Vše v jedné transakci. */
     fun replaceHistory(visits: List<HistoryVisit>) {
         val db = writableDatabase
-        db.beginTransaction()
-        try {
+        db.transaction {
             db.delete("history_visits", null, null)
             for (h in visits) {
                 val v = ContentValues()
@@ -331,9 +311,6 @@ class BrowserDb private constructor(context: Context) :
                 v.put("visitedAt", h.visitedAt)
                 db.insertOrThrow("history_visits", null, v)
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
     }
 

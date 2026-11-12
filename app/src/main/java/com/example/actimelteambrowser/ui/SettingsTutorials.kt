@@ -133,6 +133,12 @@ private val DANGER = Color(0xFFB91C1C)
 
 // ---------------------------------------------------------------- TUTORIÁLY
 
+// ", gesto 9-8-7-5-2" podle aktualnich gest (u gest vlevo zrcadlove); prazdne, kdyz funkce nema gesto
+private fun gestureHint(fn: ButtonFunction): String {
+    val code = Gestures.load().firstOrNull { it.fn == fn }?.code ?: return ""
+    return ", aktuálně gesto " + code.toCharArray().joinToString("-")
+}
+
 // Druh ukázkové animace nad postupem
 private enum class DemoKind { TAP_HOLD, GESTURE, FOLDER, ICON }
 
@@ -146,7 +152,8 @@ private class Tutorial(
 )
 
 // Seznam tutoriálů: nová funkce = jeden záznam sem (texty držet v souladu s docs/FUNKCE.md)
-private val TUTORIALS = listOf(
+// get(): texty se skladaji pri kazdem zobrazeni (gesto v tutorialu se bere z aktualnich gest)
+private val TUTORIALS get() = listOf(
     Tutorial(
         title = "Tlačítka: klepnutí a držení",
         subtitle = "Každé tlačítko umí dvě věci",
@@ -167,7 +174,7 @@ private val TUTORIALS = listOf(
             "Gesta ovládáš kuličkou. Je na tlačítku, které má funkci „Gesta“ (ve výchozím stavu tlačítko 6).",
             "Polož prst na kuličku a bez zvednutí táhni po ploše 3×3. Políčka jsou očíslovaná 1–9: 1 vlevo nahoře, 9 vpravo dole.",
             "Po zvednutí prstu se gesto vyhodnotí a spustí se jeho funkce. Telefon zabrní a ozve se zvuk (vypnout jde v Konfiguraci).",
-            "Výchozí gesta: 9-8-7-4-1 nová karta, 9-8-7-4-7 zavřít kartu, 9-8-5-4 zpět, 9-8-5-6 vpřed.",
+            "Výchozí gesta: 9-8-5-2 nová karta, 9-8-7-4-7 zavřít kartu, 9-8-5-4 zpět, 9-8-5-6 vpřed.",
             "Vlastní gesta, velikost a polohu plochy upravíš v Nastavení → Gesta."
         ),
         tip = "Gesta nejdou dát na tlačítka 7 a 8 a nesmí být na stejném tlačítku jako Boční lišta."
@@ -190,7 +197,7 @@ private val TUTORIALS = listOf(
         demo = DemoKind.ICON,
         icon = ButtonFunction.NEW_INCOGNITO,
         steps = listOf(
-            "Otevři novou kartu a zvol Anonymní. Funguje i funkce „Nové anonymní okno“, ve výchozím stavu gesto 9-8-7-5-2.",
+            "Otevři novou kartu a zvol Anonymní. Funguje i funkce „Nové anonymní okno“" + gestureHint(ButtonFunction.NEW_INCOGNITO) + ".",
             "Anonymní karta má vlastní cookies a úložiště, neukládá historii ani náhledy a nejde z ní udělat screenshot.",
             "Po zavření poslední anonymní karty se její data smažou. Po zavření appky se anonymní karty neobnoví."
         ),
@@ -420,11 +427,11 @@ private fun TapHoldDemo() {
     }
 }
 
-// Ukazka 2: gesto 9-8-7-4-1 (vychozi "Nova karta") na plose 3x3
+// Ukazka 2: gesto 9-8-5-2 (vychozi "Nova karta") na plose 3x3
 @Composable
 private fun GestureDemo() {
     val clock = demoClock(4600)
-    val code = "98741"
+    val code = "9852"
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Canvas(Modifier.size(150.dp)) {
             val t = clock.value

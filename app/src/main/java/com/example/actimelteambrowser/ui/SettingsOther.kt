@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.AppToast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -136,10 +137,15 @@ private val DANGER = Color(0xFFB91C1C)
 internal fun OtherSettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     var animations by remember { mutableStateOf(AppSettings.animationsOn.get()) }
+    var infoToasts by remember { mutableStateOf(AppSettings.infoToasts.get()) }
+    var stripBottom by remember { mutableStateOf(AppSettings.tabStripBottom.get()) }
+    var stripTop by remember { mutableStateOf(AppSettings.tabStripTop.get()) }
     var intro by remember { mutableStateOf(AppSettings.introOn.get()) }
     var sounds by remember { mutableStateOf(AppSettings.soundsOn.get()) }
     var vibration by remember { mutableStateOf(AppSettings.vibrationOn.get()) }
     var hideBars by remember { mutableStateOf(AppSettings.hideBarsOnScroll.get()) }
+    var pullOn by remember { mutableStateOf(AppSettings.pullRefreshOn.get()) }
+    var pullDist by remember { mutableStateOf(AppSettings.pullRefreshDistance.get().coerceIn(60, 240)) }
     var thumbsOn by remember { mutableStateOf(AppSettings.thumbsOn.get()) }
     var sizeTick by remember { mutableStateOf(0) }
     // misto, ktere zabiraji ulozene nahledy a ikony webu
@@ -170,6 +176,18 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
                 intro = it; AppSettings.introOn.set(it)
             }
 
+            SwitchRow("Zobrazovat informační toasty", "Krátké zprávy vpravo nahoře (uloženo, přidáno…). Chyby se ukazují vždy", infoToasts) {
+                infoToasts = it; AppSettings.infoToasts.set(it)
+            }
+
+            Text("LIŠTY KARET", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            SwitchRow("Spodní lišta karet", "Barevné dlaždice s ikonami webů nad spodním polem (první 5 karet)", stripBottom) {
+                stripBottom = it; AppSettings.tabStripBottom.set(it)
+            }
+            SwitchRow("Horní lišta karet", "Dlaždice karet pod horním polem (karty od šesté). Jde mít jen jednu z lišt", stripTop) {
+                stripTop = it; AppSettings.tabStripTop.set(it)
+            }
+
             Text("ZVUKY A VIBRACE", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             SwitchRow("Zvuky", "Gesta, screenshot", sounds) { sounds = it; AppSettings.soundsOn.set(it) }
             SwitchRow("Vibrace", "Odezva při držení tlačítek a po gestu", vibration) { vibration = it; AppSettings.vibrationOn.set(it) }
@@ -177,6 +195,38 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
             Text("PROCHÁZENÍ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             SwitchRow("Skrývat lišty při posouvání", "Horní, dolní lišta i boční tlačítka se schovají, když čteš", hideBars) {
                 hideBars = it; AppSettings.hideBarsOnScroll.set(it)
+            }
+            SwitchRow("Obnovit stránku tažením dolů", "Na vrcholu stránky přetáhni prstem dolů, kroužek se zaplní a stránka se načte znovu", pullOn) {
+                pullOn = it; AppSettings.pullRefreshOn.set(it)
+            }
+            if (pullOn) {
+                Text("CITLIVOST TAŽENÍ: $pullDist dp (méně = citlivější)", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Slider(
+                    value = pullDist.toFloat(),
+                    onValueChange = { pullDist = it.toInt() },
+                    valueRange = 60f..240f,
+                    onValueChangeFinished = { AppSettings.pullRefreshDistance.set(pullDist) }
+                )
+                // nahled: prst (tecka) se tahne dolu o nastavenou vzdalenost az ke kruzku
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Canvas(Modifier.width(60.dp).height((pullDist + 32).dp)) {
+                        val cx = size.width / 2f
+                        val r = 20.dp.toPx()
+                        val start = 6.dp.toPx()
+                        val end = start + pullDist.dp.toPx()
+                        drawCircle(Color.White, 4.dp.toPx(), Offset(cx, start))
+                        drawLine(ACCENT, Offset(cx, start), Offset(cx, end), 2.dp.toPx(), StrokeCap.Round)
+                        drawCircle(Color(0xFF2A2A2A), r, Offset(cx, end))
+                        drawCircle(ACCENT, r * 0.62f, Offset(cx, end), style = Stroke(width = 3.dp.toPx()))
+                    }
+                    Text(
+                        "Tak daleko ($pullDist dp) přetáhneš prst dolů, než se kroužek zaplní a stránka se načte znovu.",
+                        color = MUTED, fontSize = 12.sp, modifier = Modifier.padding(start = 10.dp, top = 4.dp)
+                    )
+                }
             }
 
             SwitchRow("Ukládat náhledy a ikony webů", usage, thumbsOn) {
@@ -210,7 +260,7 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
             Box(
                 Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable {
                     AppSettings.desktopSites.set("")
-                    android.widget.Toast.makeText(ctx, "Weby s verzí pro počítač zapomenuty", android.widget.Toast.LENGTH_SHORT).show()
+                    AppToast.show(ctx, "Weby s verzí pro počítač zapomenuty")
                 },
                 contentAlignment = Alignment.Center
             ) { Text("Zapomenout weby s verzí pro počítač", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
@@ -229,7 +279,7 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
                     java.io.File(ctx.filesDir, "site_thumbs").deleteRecursively()
                     java.io.File(ctx.filesDir, "site_icons").deleteRecursively()
                     sizeTick++
-                    android.widget.Toast.makeText(ctx, "Náhledy a ikony smazány", android.widget.Toast.LENGTH_SHORT).show()
+                    AppToast.show(ctx, "Náhledy a ikony smazány")
                 }) { Text("Smazat", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { clearStep = false }) { Text("Zrušit") } }

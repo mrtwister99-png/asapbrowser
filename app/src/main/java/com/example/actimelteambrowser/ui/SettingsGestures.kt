@@ -153,7 +153,8 @@ fun GestureSurface(
     onProgress: ((String) -> Unit)? = null,
     instant: (String) -> Boolean = { false },       // true = gesto je jednoznacne, vyhodnotit hned po zvednuti
     external: ExternalTouch? = null,                 // pokracovani dotyku z tlacitka 6
-    externalDown: ExternalTouch? = null              // misto, kde dotyk zacal (aby se nezratila klavesa 9)
+    externalDown: ExternalTouch? = null,             // misto, kde dotyk zacal (aby se nezratila klavesa 9)
+    onBounds: ((Float, Float, Float, Float) -> Unit)? = null   // poloha a velikost plochy v okne (x, y, sirka, vyska v px) - pro ukazku
 ) {
     val density = LocalDensity.current
     val sizePx = with(density) { sizeDp.dp.toPx() }
@@ -245,7 +246,10 @@ fun GestureSurface(
     Canvas(
         modifier
             .size(sizeDp.dp, heightDp.dp)
-            .onGloballyPositioned { origin = it.positionInWindow() }
+            .onGloballyPositioned {
+                origin = it.positionInWindow()
+                onBounds?.invoke(it.positionInWindow().x, it.positionInWindow().y, sizePx, heightPx)
+            }
             .pointerInput(sizePx, heightPx, style) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
@@ -341,7 +345,8 @@ fun GestureOverlay(
     external: ExternalTouch? = null,
     externalDown: ExternalTouch? = null,
     rect: GestureRect? = null,
-    opacity: Float = 1f
+    opacity: Float = 1f,
+    onSurfaceBounds: ((Float, Float, Float, Float) -> Unit)? = null
 ) {
     var progress by remember { mutableStateOf("") }
     val matched = gestures.firstOrNull { it.code == progress }
@@ -350,7 +355,7 @@ fun GestureOverlay(
     fun Content(w: Int, h: Int, align: Alignment.Horizontal) {
         Column(horizontalAlignment = align) {
             Text(
-                if (matched != null) matched.fn.label else "Nakresli gesto – začni vpravo dole (9)",
+                if (matched != null) matched.fn.label else "Nakresli gesto – začni " + Gestures.startText(),
                 color = if (matched != null) GESTURE_GREEN else Color(0xCCFFFFFF),
                 fontSize = 14.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 8.dp, end = 4.dp)
@@ -367,6 +372,7 @@ fun GestureOverlay(
                 instant = { c -> gestures.any { it.code == c } && gestures.none { it.code != c && it.code.startsWith(c) } },
                 external = external,
                 externalDown = externalDown,
+                onBounds = onSurfaceBounds,
                 onComplete = { c ->
                     // jedna klavesa (napr. jen klepnuti na tlacitko 6) neni gesto - plocha zustane otevrena
                     if (c.length >= 2) {
@@ -385,8 +391,14 @@ fun GestureOverlay(
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismiss() }
     ) {
         if (rect == null) {
-            Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = bottomOffsetDp.dp)) {
-                Content(sizeDp, sizeDp, Alignment.End)
+            // vychozi misto podle tlacitka gest: vlevo (klavesa 7) nebo vpravo (klavesa 9)
+            val left = Gestures.startKey() == 7
+            Box(
+                Modifier
+                    .align(if (left) Alignment.BottomStart else Alignment.BottomEnd)
+                    .padding(start = 12.dp, end = 12.dp, bottom = bottomOffsetDp.dp)
+            ) {
+                Content(sizeDp, sizeDp, if (left) Alignment.Start else Alignment.End)
             }
         } else {
             val area = areaDp(rect, maxWidth.value, maxHeight.value)
@@ -400,13 +412,38 @@ fun GestureOverlay(
 
 private fun codeText(code: String): String = code.toCharArray().joinToString("-")
 
+/** Maly nahled drahy gesta na mrizce 3x3: velka zelena tecka = start, bila = konec, cara = prejezd mezi klavesami. */
 @Composable
-internal fun StyleCard(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun GesturePathPreview(code: String, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val cell = size.width / 3f
+        fun pt(k: Char): Offset {
+            val i = k - '1'
+            return Offset((i % 3 + 0.5f) * cell, (i / 3 + 0.5f) * cell)
+        }
+        for (i in 0..8) drawCircle(Color.White.copy(alpha = 0.3f), radius = 1.5.dp.toPx(), center = pt('1' + i))
+        val pts = code.filter { it in '1'..'9' }.map { pt(it) }
+        for (i in 1 until pts.size) {
+            drawLine(GESTURE_GREEN, pts[i - 1], pts[i], strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+        }
+        if (pts.isNotEmpty()) {
+            drawCircle(GESTURE_GREEN, radius = 4.dp.toPx(), center = pts.first())
+            drawCircle(Color.White, radius = 2.5.dp.toPx(), center = pts.last())
+        }
+    }
+}
+
+@Composable
+internal fun StyleCard(
+    title: String, subtitle: String, selected: Boolean, modifier: Modifier,
+    accent: Color = ACCENT, fill: Color = Color(0xFF14382A),   // barva obrysu a vyplne vybrane karty
+    onClick: () -> Unit
+) {
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) Color(0xFF14382A) else ROW)
-            .then(if (selected) Modifier.border(2.dp, ACCENT, RoundedCornerShape(16.dp)) else Modifier)
+            .background(if (selected) fill else ROW)
+            .then(if (selected) Modifier.border(2.dp, accent, RoundedCornerShape(16.dp)) else Modifier)
             .clickable(onClick = onClick)
             .padding(14.dp)
     ) {
@@ -471,8 +508,8 @@ internal fun GesturesScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "Gesto se spouští tlačítkem 6 (kulička). Zobrazí se průhledná plocha vpravo dole; " +
-                    "kód zadáš přejetím i klepáním, 9 je v pravém dolním rohu.",
+                "Gesto se spouští tlačítkem s funkcí Gesta (kulička). Zobrazí se průhledná plocha u tlačítka; " +
+                    "kód zadáš přejetím i klepáním, začínáš ${Gestures.startText()}.",
                 color = MUTED, fontSize = 13.sp
             )
 
@@ -558,6 +595,7 @@ internal fun GesturesScreen(onBack: () -> Unit) {
                         }
                         Text(codeText(g.code), color = ACCENT, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
+                    GesturePathPreview(g.code, Modifier.padding(end = 6.dp).size(38.dp))
                     Box(
                         Modifier.size(44.dp).clickable {
                             gestures.removeAt(index)
@@ -629,7 +667,7 @@ internal fun GesturesScreen(onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (error.isNotEmpty()) error else "Nakresli kód aspoň ze 2 kláves (9 je vpravo dole).",
+                    if (error.isNotEmpty()) error else "Nakresli kód aspoň ze 2 kláves (start: " + Gestures.startText() + ").",
                     color = if (error.isNotEmpty()) Color(0xFFFF6B6B) else MUTED, fontSize = 13.sp
                 )
                 Spacer(Modifier.height(12.dp))
@@ -703,14 +741,20 @@ fun GestureAreaEditor(
         val minPx = with(density) { 150.dp.toPx() }
         val handleR = with(density) { 11.dp.toPx() }
         val hitR = with(density) { 34.dp.toPx() }
+        val snapPx = with(density) { 16.dp.toPx() }   // plocha se pri presouvani prichyti k okraji, kdyz je blize nez 16 dp
 
         // vychozi umisteni = jako drive: vpravo dole, ctvercova plocha
         fun initial(): FloatArray {
             val saved = GestureArea.parse(AppSettings.gestureRect.get())
             if (saved != null) return floatArrayOf(saved.l / 1000f * wPx, saved.t / 1000f * hPx, saved.r / 1000f * wPx, saved.b / 1000f * hPx)
             val s = with(density) { defaultSizeDp.dp.toPx() }
-            val right = wPx - with(density) { 12.dp.toPx() }
             val bottom = hPx - with(density) { bottomOffsetDp.dp.toPx() }
+            if (Gestures.startKey() == 7) {
+                // tlacitko gest vlevo: plocha vlevo dole (klavesa 7 u tlacitka)
+                val left = with(density) { 12.dp.toPx() }
+                return floatArrayOf(left, (bottom - s).coerceAtLeast(0f), (left + s).coerceAtMost(wPx), bottom)
+            }
+            val right = wPx - with(density) { 12.dp.toPx() }
             return floatArrayOf((right - s).coerceAtLeast(0f), (bottom - s).coerceAtLeast(0f), right, bottom)
         }
 
@@ -736,7 +780,9 @@ fun GestureAreaEditor(
         Canvas(
             Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                // klic resetKey: po "Zarovnat" / "Vratit vychozi" se vytvori novy stav plochy, a tak se musi znovu spustit i zpracovani dotyku
+                // (jinak by drzelo stary stav a plocha by nesla ovladat)
+                .pointerInput(resetKey, wPx, hPx) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         // ktery uchyt je pod prstem: hx, hy = -1 (vlevo/nahore), 0 (stred), 1 (vpravo/dole); 0,0 = posun celeho
@@ -754,15 +800,23 @@ fun GestureAreaEditor(
                             if (down.position.x in rl..rr && down.position.y in rt..rb) { hx = 0; hy = 0 } else return@awaitEachGesture
                         }
                         down.consume()
+                        val moveW = rr - rl
+                        val moveH = rb - rt
+                        var rawL = rl   // skutecna poloha prstu (bez prichyceni), aby se plocha od okraje dala odtahnout
+                        var rawT = rt
                         do {
                             val event = awaitPointerEvent()
                             val ch = event.changes.firstOrNull() ?: break
                             val dx = ch.positionChange().x
                             val dy = ch.positionChange().y
                             if (hx == 0 && hy == 0) {
-                                val mx = dx.coerceIn(-rl, wPx - rr)
-                                val my = dy.coerceIn(-rt, hPx - rb)
-                                rl += mx; rr += mx; rt += my; rb += my
+                                rawL = (rawL + dx).coerceIn(0f, wPx - moveW)
+                                rawT = (rawT + dy).coerceIn(0f, hPx - moveH)
+                                var nl = rawL
+                                var nt = rawT
+                                if (nl < snapPx) nl = 0f else if (wPx - moveW - nl < snapPx) nl = wPx - moveW
+                                if (nt < snapPx) nt = 0f else if (hPx - moveH - nt < snapPx) nt = hPx - moveH
+                                rl = nl; rr = nl + moveW; rt = nt; rb = nt + moveH
                             } else {
                                 if (hx == -1) rl = (rl + dx).coerceIn(0f, rr - minPx)
                                 if (hx == 1) rr = (rr + dx).coerceIn(rl + minPx, wPx)
@@ -803,7 +857,7 @@ fun GestureAreaEditor(
  * Je scrollovaci. onChanged = zmena se projevila (editor se prekresli), onResetArea = vratit polohu a velikost plochy.
  */
 @Composable
-fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}) {
+fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}, onAlignArea: () -> Unit = {}) {
     var style by remember { mutableStateOf(AppSettings.gestureStyle.get()) }
     var opacity by remember { mutableStateOf(AppSettings.gestureOpacity.get()) }
     var hapticOn by remember { mutableStateOf(AppSettings.gestureHaptic.get()) }
@@ -830,7 +884,7 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                     .background(Color(0xF71E1E1E))
                     .border(1.dp, Color(0xFF3A3A3A), RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
             ) {
-                // pevna hlavicka: nazev + zelene prerusovane tlacitko
+                // pevna hlavicka: nazev + zluto-oranzove tlacitko ulozit a zavrit
                 Row(
                     Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 40.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -845,16 +899,17 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0x2200B055))
+                            .background(Color(0xE61E1E1E))
                             .drawBehind {
+                                // plny zlutooranzovy obrys + zluty text (stejne jako "Uložit a zavřít nastavení" u tlacitek)
                                 drawRoundRect(
-                                    color = GESTURE_GREEN, cornerRadius = CornerRadius(14.dp.toPx()),
-                                    style = Stroke(width = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 9f)))
+                                    color = Color(0xFFFFA000), cornerRadius = CornerRadius(14.dp.toPx()),
+                                    style = Stroke(width = 2.dp.toPx())
                                 )
                             }
                             .clickable(onClick = onClose)
                             .padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) { Text("Uložit a zavřít nastavení", color = GESTURE_GREEN, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text("Uložit a zavřít nastavení", color = Color(0xFFFFD600), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
                 }
                 if (!minimized) Column(
                     Modifier
@@ -896,6 +951,10 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                         "Tahej za bílé body na okrajích a rozích plochy (velikost) nebo za její vnitřek (poloha).",
                         color = Color(0xFFCCCCCC), fontSize = 13.sp
                     )
+                    Box(
+                        Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { onAlignArea() },
+                        contentAlignment = Alignment.Center
+                    ) { Text("Zarovnat k tlačítku", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                     Box(
                         Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { onResetArea() },
                         contentAlignment = Alignment.Center
@@ -939,6 +998,7 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                                 }
                                 Text(codeText(g.code), color = ACCENT, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
+                            GesturePathPreview(g.code, Modifier.padding(end = 6.dp).size(38.dp))
                             Box(
                                 Modifier.size(44.dp).clickable { gestures.removeAt(index); persist() },
                                 contentAlignment = Alignment.Center
@@ -994,7 +1054,7 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        if (error.isNotEmpty()) error else "Nakresli kód aspoň ze 2 kláves (9 je vpravo dole).",
+                        if (error.isNotEmpty()) error else "Nakresli kód aspoň ze 2 kláves (start: " + Gestures.startText() + ").",
                         color = if (error.isNotEmpty()) Color(0xFFFF6B6B) else MUTED, fontSize = 13.sp
                     )
                     Spacer(Modifier.height(12.dp))

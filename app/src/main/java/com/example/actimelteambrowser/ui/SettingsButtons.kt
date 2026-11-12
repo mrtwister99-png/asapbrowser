@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.AppToast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -226,7 +227,7 @@ internal fun ButtonsConfigScreen(onBack: () -> Unit) {
     }
 
     fun warnNeedSettings() {
-        android.widget.Toast.makeText(ctx, "Aspoň jedno tlačítko musí otevírat Nastavení", android.widget.Toast.LENGTH_LONG).show()
+        AppToast.show(ctx, "Aspoň jedno tlačítko musí otevírat Nastavení", true)
     }
 
     // Prirazeni funkce; odmitne, kdyby se tim ztratila posledni cesta do Nastaveni
@@ -241,7 +242,7 @@ internal fun ButtonsConfigScreen(onBack: () -> Unit) {
         val pair = setOf(ButtonFunction.LEFT_BAR.key, ButtonFunction.GESTURES.key)
         val otherKey = if (long) tapKeys[n - 1] else longKeys[n - 1]
         if (fn.key in pair && otherKey in pair && otherKey != fn.key) {
-            android.widget.Toast.makeText(ctx, "Boční lišta a Gesta nemohou být na jednom tlačítku zároveň (klepnutí + držení)", android.widget.Toast.LENGTH_LONG).show()
+            AppToast.show(ctx, "Boční lišta a Gesta nemohou být na jednom tlačítku zároveň (klepnutí + držení)", true)
             return
         }
         // Gesta (kulicka) i Bocni lista mohou byt jen 1x: pri prirazeni se z puvodniho mista odeberou
@@ -257,7 +258,7 @@ internal fun ButtonsConfigScreen(onBack: () -> Unit) {
             }
             if (movedFrom != 0) {
                 val what = if (fn == ButtonFunction.GESTURES) "Gesta" else "Boční lišta"
-                android.widget.Toast.makeText(ctx, "$what přesunuta z tlačítka $movedFrom (tam teď není žádná funkce)", android.widget.Toast.LENGTH_LONG).show()
+                AppToast.show(ctx, "$what přesunuta z tlačítka $movedFrom (tam teď není žádná funkce)", true)
             }
         }
         if (long) { AppSettings.buttonLong[n - 1].set(fn.key); longKeys[n - 1] = fn.key }
@@ -403,7 +404,7 @@ internal fun ButtonsConfigScreen(onBack: () -> Unit) {
                             .clip(RoundedCornerShape(22.dp))
                             .background(Color(0xFFD9D9D9)),
                         contentAlignment = Alignment.CenterStart
-                    ) { Text("  Hledat nebo zadat URL", color = Color(0xFF888888), fontSize = 12.sp) }
+                    ) { Text("  Hledat", color = Color(0xFF888888), fontSize = 12.sp) }
                     Nb(2)
                     Spacer(Modifier.width(4.dp))
                     Nb(3)
@@ -513,7 +514,7 @@ internal fun ButtonsConfigScreen(onBack: () -> Unit) {
                     .clip(RoundedCornerShape(16.dp))
                     .background(ACCENT)
                     .clickable {
-                        android.widget.Toast.makeText(ctx, "Uloženo", android.widget.Toast.LENGTH_SHORT).show()
+                        AppToast.show(ctx, "Uloženo")
                         onBack()
                     },
                 contentAlignment = Alignment.Center
@@ -575,9 +576,16 @@ internal fun ButtonsConfigScreen(onBack: () -> Unit) {
                 LazyColumn(Modifier.heightIn(max = 420.dp)) {
                     // "Zadna funkce" nahore, pak skupiny
                     // Gesta a Bocni lista (max 1x) jsou uplne nahore; zelene jsou, dokud nejsou nikde pouzita
-                    val specials = listOf(ButtonFunction.GESTURES, ButtonFunction.LEFT_BAR).filter { it.allowedOn(selected) }
+                    // Gesta a Boční lišta nejdou dát na jedno tlačítko spolu (klepnutí + držení): druhá z nich se v nabídce vůbec nenabízí
+                    val otherKeyHere = if (which) tapKeys[selected - 1] else longKeys[selected - 1]
+                    val blocked = when (otherKeyHere) {
+                        ButtonFunction.LEFT_BAR.key -> ButtonFunction.GESTURES
+                        ButtonFunction.GESTURES.key -> ButtonFunction.LEFT_BAR
+                        else -> null
+                    }
+                    val specials = listOf(ButtonFunction.GESTURES, ButtonFunction.LEFT_BAR).filter { it.allowedOn(selected) && it != blocked }
                     val groups = ButtonFunction.values()
-                        .filter { it != ButtonFunction.NONE && it !in specials && it.allowedOn(selected) }
+                        .filter { it != ButtonFunction.NONE && it !in specials && it != blocked && it.allowedOn(selected) }
                         .groupBy { it.group }
                     items(specials, key = { "s-" + it.key }) { fn ->
                         val free = (0 until 12).none { tapKeys[it] == fn.key || longKeys[it] == fn.key }
@@ -682,22 +690,12 @@ internal fun FunctionChoice(fn: ButtonFunction, isCurrent: Boolean, highlight: B
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) {
-            if (highlight && fn == ButtonFunction.GESTURES) {
-                // bile kolecko a kolem nej maly ohnostroj
+            if (fn == ButtonFunction.GESTURES) {
+                // bile kolecko se zelenou teckou uvnitr (vzdy stejne, bez ohnostroje)
                 Canvas(Modifier.size(34.dp)) {
                     val c = Offset(size.width / 2f, size.height / 2f)
-                    drawCircle(Color.White, radius = size.width * 0.17f, center = c)
-                    for (k in 0 until 8) {
-                        val a = Math.toRadians(k * 45.0 + 22.5)
-                        val dx = kotlin.math.cos(a).toFloat()
-                        val dy = kotlin.math.sin(a).toFloat()
-                        drawLine(
-                            Color.White,
-                            Offset(c.x + dx * size.width * 0.28f, c.y + dy * size.width * 0.28f),
-                            Offset(c.x + dx * size.width * 0.42f, c.y + dy * size.width * 0.42f),
-                            strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round
-                        )
-                    }
+                    drawCircle(Color.White, radius = size.width * 0.3f, center = c)
+                    drawCircle(GESTURE_GREEN, radius = size.width * 0.12f, center = c)
                 }
             } else {
                 GlyphIcon(fn, 22.dp)
@@ -723,16 +721,17 @@ internal fun FunctionChoice(fn: ButtonFunction, isCurrent: Boolean, highlight: B
  * onChanged se zavola po kazde zmene (hlavni okno obnovi tlacitka), onRemoved po odebrani pridaneho tlacitka.
  */
 @Composable
-fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDismiss: () -> Unit) {
+fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDismiss: () -> Unit, onSaved: () -> Unit = onDismiss) {
     val ctx = LocalContext.current
     var tick by remember { mutableStateOf(0) }
     val version = tick   // cteni = prekresleni po zmene
     var picking by remember { mutableStateOf<Boolean?>(null) }   // null = nic, false = klepnuti, true = drzeni
+    var confirm by remember { mutableStateOf(0) }                // 1 = smazat tlacitko, 2 = obnovit funkce
 
     fun fnOf(long: Boolean): ButtonFunction =
         ButtonFunction.fromKey((if (long) AppSettings.buttonLong[n - 1] else AppSettings.buttonTap[n - 1]).get())
 
-    fun toast(text: String) = android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_LONG).show()
+    fun toast(text: String) = AppToast.show(ctx, text, true)
 
     fun assign(long: Boolean, fn: ButtonFunction) {
         if (n == 4) return   // tlacitko 4 (Nastaveni) je pevne
@@ -759,7 +758,16 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                 toast("$what přesunuta z tlačítka $movedFrom (tam teď není žádná funkce)")
             }
         }
-        if (long) AppSettings.buttonLong[n - 1].set(fn.key) else AppSettings.buttonTap[n - 1].set(fn.key)
+        // Gesta = tlacitko ma jen gesto (bez klepnuti a drzeni): obe pozice maji Gesta; zmena funkce je zase uvolni
+        val curHere = (if (long) AppSettings.buttonLong[n - 1] else AppSettings.buttonTap[n - 1]).get()
+        if (fn == ButtonFunction.GESTURES) {
+            AppSettings.buttonTap[n - 1].set(fn.key); AppSettings.buttonLong[n - 1].set(fn.key)
+        } else if (curHere == ButtonFunction.GESTURES.key) {
+            AppSettings.buttonTap[n - 1].set(ButtonFunction.NONE.key); AppSettings.buttonLong[n - 1].set(ButtonFunction.NONE.key)
+            if (long) AppSettings.buttonLong[n - 1].set(fn.key) else AppSettings.buttonTap[n - 1].set(fn.key)
+        } else {
+            if (long) AppSettings.buttonLong[n - 1].set(fn.key) else AppSettings.buttonTap[n - 1].set(fn.key)
+        }
         tick++
         onChanged()
     }
@@ -789,12 +797,15 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
     val isSide = n == 5 || n == 6 || n >= 9
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // okoli se nezatmavuje: uzivatel vidi zmeny tlacitka na plose hned
+        (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)
+            ?.window?.setDimAmount(0f)
         androidx.compose.material3.MaterialTheme(
             colorScheme = androidx.compose.material3.darkColorScheme(primary = ACCENT, background = BG, surface = PANEL)
         ) {
             Column(
                 Modifier
-                    .fillMaxWidth(0.92f)
+                    .fillMaxWidth(0.62f)   // uzsi okno: vejde se mezi boční tlačítka
                     .heightIn(max = 620.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(PANEL)
@@ -802,10 +813,46 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    "Tlačítko $n – ${ButtonDefaults.name(n)}",
-                    color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold
-                )
+                // hlavicka: nazev + vpravo [X smazat (jen pridana)] [obnovit] [hotovo]
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Tlačítko $n", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (n >= 9) {
+                        Box(
+                            Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFE53935)).clickable { confirm = 1 },
+                            contentAlignment = Alignment.Center
+                        ) { Text("X", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+                    }
+                    if (n != 4) {
+                        Box(
+                            Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(ROW).clickable { confirm = 2 },   // ctverec jako X a hotovo
+                            contentAlignment = Alignment.Center
+                        ) { Text("↻", color = Color(0xFF4FC3F7), fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    }
+                    Box(
+                        Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(ACCENT).clickable(onClick = onSaved),
+                        contentAlignment = Alignment.Center
+                    ) { Text("✓", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                }
+                // nahled: jak tlacitko vypada na plose (ikona klepnuti vlevo, ikona drzeni vpravo)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+                    for (fn in (if (tapFn == ButtonFunction.GESTURES) listOf(tapFn) else listOf(tapFn, longFn))) {
+                        Box(
+                            Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1E1E))
+                                .border(2.dp, Color(0xFF3A3A3A), RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (fn == ButtonFunction.GESTURES) {
+                                Canvas(Modifier.size(34.dp)) {
+                                    val c = Offset(size.width / 2f, size.height / 2f)
+                                    drawCircle(Color.White, radius = size.width * 0.4f, center = c)
+                                    drawCircle(ACCENT, radius = size.width * 0.14f, center = c)
+                                }
+                            } else if (fn != ButtonFunction.NONE) {
+                                GlyphIcon(fn, 26.dp)
+                            }
+                        }
+                    }
+                }
                 if (n in 5..8) {
                     var shown by remember(version) { mutableStateOf(AppSettings.buttonEnabled[n - 1].get()) }
                     Row(
@@ -826,8 +873,13 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                         })
                     }
                 }
-                FunctionRow("Klepnutí", tapFn, fixed = n == 4) { picking = false }
-                FunctionRow("Držení", longFn, fixed = n == 4) { picking = true }
+                if (tapFn == ButtonFunction.GESTURES) {
+                    // tlacitko Gest: jen gesto, bez klepnuti a drzeni
+                    FunctionRow("Funkce", tapFn, fixed = false) { picking = false }
+                } else {
+                    FunctionRow("Klepnutí", tapFn, fixed = n == 4) { picking = false }
+                    FunctionRow("Držení", longFn, fixed = n == 4) { picking = true }
+                }
                 if (isSide) {
                     var retract by remember(version) { mutableStateOf(AppSettings.buttonRetract[n - 1].get()) }
                     Text("ZASUNUTÍ ZA OKRAJ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -839,7 +891,6 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                             retract = 70; AppSettings.buttonRetract[n - 1].set(70); onChanged()
                         }
                     }
-                    Text("Boční tlačítka jsou trvale zasunutá. Tady se zobrazují celá, zasunou se po uložení nastavení.", color = MUTED, fontSize = 12.sp)
                 }
                 if (n == 4) {
                     Text("Tlačítko Nastavení je pevné: nejde na něm nic měnit.", color = MUTED, fontSize = 12.sp)
@@ -848,7 +899,7 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                     Text("Na tlačítku Domů jde vybrat funkce z Navigace a stránky a Gesta.", color = MUTED, fontSize = 12.sp)
                 }
                 if (n == 2 || n == 3) {
-                    Text("Na tomto tlačítku jde vybrat funkce ze skupiny Záložky, historie, hledání (nebo vrátit původní funkci).", color = MUTED, fontSize = 12.sp)
+                    Text("Na tomto tlačítku jde vybrat funkce ze skupiny Záložky, historie, hledání a Gesta (nebo vrátit původní funkci).", color = MUTED, fontSize = 12.sp)
                 }
                 if (n in 7..8) {
                     Text("Tlačítka 7 a 8 mají jen funkce zap/vyp.", color = MUTED, fontSize = 12.sp)
@@ -856,23 +907,19 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                 if (n == 5 || n == 6) {
                     Text("Funkci „Boční lišta“ lze dát jen na tlačítko 5 nebo 6.", color = MUTED, fontSize = 12.sp)
                 }
-                if (n >= 9) {
-                    Box(
-                        Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).background(DANGER).clickable { removeThis() },
-                        contentAlignment = Alignment.Center
-                    ) { Text("Odebrat toto tlačítko", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                }
-                if (n != 4) {
-                    Box(
-                        Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { resetThis() },
-                        contentAlignment = Alignment.Center
-                    ) { Text("Obnovit výchozí funkce tlačítka", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                }
-                Box(
-                    Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(ACCENT).clickable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center
-                ) { Text("Hotovo", color = Color(0xFF06281D), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
             }
+        }
+
+        // potvrzeni smazani / obnoveni
+        if (confirm != 0) {
+            val isDel = confirm == 1
+            ConfirmDialog(
+                title = if (isDel) "Opravdu chceš smazat tlačítko?" else "Obnovit funkce tlačítka?",
+                text = "",
+                yesColor = if (isDel) DANGER else ACCENT,
+                onNo = { confirm = 0 },
+                onYes = { confirm = 0; if (isDel) removeThis() else resetThis() }
+            )
         }
 
         // vyber funkce (druhe okno nad prvnim)
@@ -892,9 +939,16 @@ fun ButtonConfigModal(n: Int, onChanged: () -> Unit, onRemoved: () -> Unit, onDi
                     FunctionSearchField(query) { query = it }
                     LazyColumn(Modifier.heightIn(max = 380.dp)) {
                         // Gesta a Bocni lista (max 1x) nahore; zelene, dokud nejsou nikde pouzita
-                        val specials = listOf(ButtonFunction.GESTURES, ButtonFunction.LEFT_BAR).filter { it.allowedOn(n) && it.matches(query) }
+                        // Gesta a Boční lišta nejdou na jedno tlačítko spolu (klepnutí + držení): druhá z nich se v nabídce nenabízí
+                        val otherKeyHere = (if (which) AppSettings.buttonTap[n - 1] else AppSettings.buttonLong[n - 1]).get()
+                        val blocked = when (otherKeyHere) {
+                            ButtonFunction.LEFT_BAR.key -> ButtonFunction.GESTURES
+                            ButtonFunction.GESTURES.key -> ButtonFunction.LEFT_BAR
+                            else -> null
+                        }
+                        val specials = listOf(ButtonFunction.GESTURES, ButtonFunction.LEFT_BAR).filter { it.allowedOn(n) && it.matches(query) && it != blocked }
                         val groups = ButtonFunction.values()
-                            .filter { it != ButtonFunction.NONE && it !in specials && it.allowedOn(n) && it.matches(query) }
+                            .filter { it != ButtonFunction.NONE && it !in specials && it != blocked && it.allowedOn(n) && it.matches(query) }
                             .groupBy { it.group }
                         items(specials, key = { "s-" + it.key }) { fn ->
                             val free = (1..12).none { AppSettings.buttonTap[it - 1].get() == fn.key || AppSettings.buttonLong[it - 1].get() == fn.key }

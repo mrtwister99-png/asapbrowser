@@ -21,7 +21,7 @@ object ListUpdater {
     fun read(context: Context, name: String): String {
         val local = File(context.filesDir, name)
         if (local.exists() && local.length() > 100_000) {
-            return try { local.readText() } catch (e: Exception) { readAsset(context, name) }
+            return runCatching { local.readText() }.getOrElse { readAsset(context, name) }
         }
         return readAsset(context, name)
     }

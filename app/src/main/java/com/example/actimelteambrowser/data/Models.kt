@@ -1,5 +1,10 @@
 package com.example.actimelteambrowser.data
 
+import com.example.actimelteambrowser.core.settings.AppSettings
+import android.content.Context
+import android.app.DownloadManager
+import com.example.actimelteambrowser.quiet
+
 /** Jeden záznam návštěvy stránky (jedno otevření = jeden řádek). */
 data class HistoryVisit(
     val id: Long,
@@ -52,13 +57,12 @@ data class DlItem(
 object DownloadsStore {
     private fun load(): MutableList<Pair<Long, String>> {
         val out = ArrayList<Pair<Long, String>>()
-        try {
-            val arr = org.json.JSONArray(com.example.actimelteambrowser.core.settings.AppSettings.downloadList.get().ifBlank { "[]" })
+        quiet {
+            val arr = org.json.JSONArray(AppSettings.downloadList.get().ifBlank { "[]" })
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 out.add(o.getLong("id") to o.optString("name"))
             }
-        } catch (e: Exception) {
         }
         return out
     }
@@ -66,41 +70,40 @@ object DownloadsStore {
     private fun save(list: List<Pair<Long, String>>) {
         val arr = org.json.JSONArray()
         for ((id, name) in list.takeLast(100)) arr.put(org.json.JSONObject().put("id", id).put("name", name))
-        com.example.actimelteambrowser.core.settings.AppSettings.downloadList.set(arr.toString())
+        AppSettings.downloadList.set(arr.toString())
     }
 
-    fun track(context: android.content.Context, id: Long, name: String) {
-        com.example.actimelteambrowser.core.settings.AppSettings.init(context)
+    fun track(context: Context, id: Long, name: String) {
+        AppSettings.init(context)
         val l = load(); l.add(id to name); save(l)
     }
 
-    fun forget(context: android.content.Context, id: Long) {
-        com.example.actimelteambrowser.core.settings.AppSettings.init(context)
+    fun forget(context: Context, id: Long) {
+        AppSettings.init(context)
         save(load().filter { it.first != id })
     }
 
     /** Stahovani od nejnovejsiho. Zaznamy, ktere uz system nezna (smazane jinde), se z nasi evidence odstrani. */
-    fun query(context: android.content.Context): List<DlItem> {
-        com.example.actimelteambrowser.core.settings.AppSettings.init(context)
+    fun query(context: Context): List<DlItem> {
+        AppSettings.init(context)
         val tracked = load()
         if (tracked.isEmpty()) return emptyList()
-        val dm = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val byId = HashMap<Long, DlItem>()
-        try {
-            val q = android.app.DownloadManager.Query().setFilterById(*tracked.map { it.first }.toLongArray())
+        quiet {
+            val q = DownloadManager.Query().setFilterById(*tracked.map { it.first }.toLongArray())
             dm.query(q).use { c ->
-                val iId = c.getColumnIndex(android.app.DownloadManager.COLUMN_ID)
-                val iSt = c.getColumnIndex(android.app.DownloadManager.COLUMN_STATUS)
-                val iDone = c.getColumnIndex(android.app.DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                val iTot = c.getColumnIndex(android.app.DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                val iMime = c.getColumnIndex(android.app.DownloadManager.COLUMN_MEDIA_TYPE)
+                val iId = c.getColumnIndex(DownloadManager.COLUMN_ID)
+                val iSt = c.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                val iDone = c.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                val iTot = c.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                val iMime = c.getColumnIndex(DownloadManager.COLUMN_MEDIA_TYPE)
                 while (c.moveToNext()) {
                     val id = c.getLong(iId)
                     val name = tracked.firstOrNull { it.first == id }?.second ?: ""
                     byId[id] = DlItem(id, name, c.getInt(iSt), c.getLong(iDone), c.getLong(iTot), c.getString(iMime))
                 }
             }
-        } catch (e: Exception) {
         }
         val known = tracked.filter { byId.containsKey(it.first) }
         if (known.size != tracked.size) save(known)

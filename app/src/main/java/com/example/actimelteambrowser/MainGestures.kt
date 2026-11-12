@@ -1,99 +1,20 @@
 package com.example.actimelteambrowser
 
-import android.annotation.SuppressLint
-import android.os.Bundle
 import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.webkit.*
-import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.toColorInt
+import kotlin.math.roundToInt
 import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
-import java.io.ByteArrayInputStream
-import com.example.actimelteambrowser.core.engine.RustBridge
-import kotlin.concurrent.thread
-import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
 import com.example.actimelteambrowser.core.settings.AppSettings
-import android.content.Intent
-import android.text.Editable
-import android.text.TextWatcher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
-import com.example.actimelteambrowser.data.BookmarksRepository
-import com.example.actimelteambrowser.data.HistoryRepository
-import com.example.actimelteambrowser.data.HistoryVisit
-import com.example.actimelteambrowser.data.Bookmark
-import com.example.actimelteambrowser.ui.SearchSuggestion
-import com.example.actimelteambrowser.ui.ButtonConfigModal
-import com.example.actimelteambrowser.ui.SearchSuggestionsList
-import com.example.actimelteambrowser.ui.buildSearchSuggestions
-import android.graphics.Bitmap
-import android.view.MotionEvent
-import com.example.actimelteambrowser.ui.ExternalTouch
 import com.example.actimelteambrowser.core.settings.Gestures
 import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
-import com.example.actimelteambrowser.core.settings.SiteRules
-import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
-import androidx.webkit.ProfileStore
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.example.actimelteambrowser.ui.StartSite
 import com.example.actimelteambrowser.ui.GestureOverlay
 import com.example.actimelteambrowser.ui.GestureArea
 import com.example.actimelteambrowser.ui.GestureAreaEditor
 import com.example.actimelteambrowser.ui.GesturePanel
-import android.animation.ArgbEvaluator
-import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
 import androidx.constraintlayout.widget.ConstraintLayout
-import android.graphics.Paint
-import com.example.actimelteambrowser.core.settings.ButtonDefaults
 import com.example.actimelteambrowser.core.settings.ButtonFunction
-import android.animation.ValueAnimator
-import android.app.Dialog
-import android.content.res.ColorStateList
-import android.graphics.Typeface
-import android.view.Gravity
-import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
-import android.util.TypedValue
-import android.transition.TransitionManager
-import android.net.Uri
-import android.graphics.BitmapFactory
-import android.text.InputType
-import java.io.File
-import java.io.FileOutputStream
-import androidx.activity.OnBackPressedCallback
-import org.json.JSONArray
-import org.json.JSONObject
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Rect
-import android.graphics.drawable.GradientDrawable
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.view.PixelCopy
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
-import com.example.actimelteambrowser.ui.TabTile
-import com.example.actimelteambrowser.ui.TabsScreen
 
 // Gesta: plocha, kulička a konfigurační mód gest (rozšíření MainActivity).
 internal fun MainActivity.enterGestureConfig() {
@@ -112,7 +33,7 @@ internal fun MainActivity.enterGestureConfig() {
 
     // lehke ztmaveni (pohlti klepnuti do webu)
     val scrim = View(this)
-    scrim.setBackgroundColor(Color.parseColor("#44000000"))
+    scrim.setBackgroundColor("#44000000".toColorInt())
     scrim.isClickable = true
     scrim.elevation = dp(7).toFloat()
     val slp = ConstraintLayout.LayoutParams(0, 0)
@@ -125,13 +46,13 @@ internal fun MainActivity.enterGestureConfig() {
 
     // editor plochy (pouziva stejny ComposeView jako samotna plocha gest)
     gestureView.setContent {
-        @Suppress("UNUSED_VARIABLE") val tick = gestTick.value
+        @Suppress("UNUSED_VARIABLE", "unused") val tick = gestTick.intValue
         GestureAreaEditor(
             style = gestPreviewStyle.value ?: AppSettings.gestureStyle.get(),
             opacity = AppSettings.gestureOpacity.get() / 100f,
             defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
             bottomOffsetDp = bottomDp,
-            resetKey = gestResetKey.value,
+            resetKey = gestResetKey.intValue,
             onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) }
         )
     }
@@ -141,14 +62,15 @@ internal fun MainActivity.enterGestureConfig() {
     val panel = ComposeView(this)
     panel.setContent {
         GesturePanel(
-            onChanged = { gestTick.value = gestTick.value + 1 },
+            onChanged = { gestTick.intValue += 1 },
             onResetArea = {
                 AppSettings.gestureRect.reset()
                 AppSettings.gestureSize.reset()
-                gestResetKey.value = gestResetKey.value + 1
+                gestResetKey.intValue += 1
             },
             onClose = { exitGestureConfig() },
-            onPreviewStyle = { gestPreviewStyle.value = it }
+            onPreviewStyle = { gestPreviewStyle.value = it },
+            onAlignArea = { alignGestureAreaToOrb() }
         )
     }
     panel.elevation = dp(45).toFloat()
@@ -166,7 +88,9 @@ internal fun MainActivity.enterGestureConfig() {
     }
     for (n in listOf(5, 6) + extraViews.keys) buttonView(n)?.let { applySideMode(n, it) }   // bocni tlacitka celá
     updateOrbTarget()   // kulicka (start gesta) je v konfiguraci videt vzdy
-    if (gestureButtonN() == 0) Toast.makeText(this, "Tlačítko Gesta není přiřazené, kulička ukazuje výchozí místo (tlačítko 6)", Toast.LENGTH_LONG).show()
+    orbView?.alwaysShow = true              // editor schova vsechna tlacitka, kulicka (tlacitko gest) ale musi zustat videt
+    orbView?.elevation = dp(40).toFloat()   // nad editorem plochy (35), aby tlacitko gest bylo dobre videt a plochu sla zarovnat
+    if (gestureButtonN() == 0) AppToast.show(this, "Tlačítko Gesta není přiřazené, kulička ukazuje výchozí místo (tlačítko 6)", true)
     applyGestureConfigUi()
 }
 
@@ -182,7 +106,7 @@ internal fun MainActivity.applyGestureConfigUi() {
     for (i in 0 until parent.childCount) {
         val c = parent.getChildAt(i)
         if (c === gestScrim || c === gestPanel || c === gestureView || c === orbView || c === webTop) continue
-        if (c.visibility == View.VISIBLE) {
+        if (c.isVisible) {
             gestHidden[c] = View.VISIBLE
             c.visibility = View.INVISIBLE
         }
@@ -200,17 +124,20 @@ internal fun MainActivity.exitGestureConfig() {
     gestScrim?.let { parent.removeView(it) }
     gestScrim = null
     gestPreviewStyle.value = null   // zamceny vzor se neuklada
+    orbView?.elevation = dp(20).toFloat()
+    orbView?.alwaysShow = false
     for ((v, vis) in gestHidden) v.visibility = vis
     gestHidden.clear()
     hideGestures()   // zavre editor (ComposeView plochy)
     rebuildExtraButtons()
     wireButtons()
     updateButtonVisuals()
-    Toast.makeText(this, "Nastavení gest uloženo", Toast.LENGTH_SHORT).show()
+    AppToast.show(this, "Nastavení gest uloženo")
 }
 
 // Otevre pruhlednou plochu pro gesta (vychozi vpravo dole, 9 je u tlacitka 6; poloha a velikost podle nastaveni)
-internal fun MainActivity.showGestures() {
+// demoBounds != null = ukazka: plocha nic neprovede ani nezavre, jen hlasi svou polohu (x, y, sirka, vyska v px)
+internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float) -> Unit)? = null) {
     hideKeyboard()
     etSearchMain.clearFocus()
     etTopUrl.clearFocus()
@@ -227,16 +154,19 @@ internal fun MainActivity.showGestures() {
             bottomOffsetDp = bottomDp,
             rect = GestureArea.parse(AppSettings.gestureRect.get()),
             opacity = AppSettings.gestureOpacity.get() / 100f,
-            onDismiss = { hideGestures() },
+            onDismiss = { if (demoBounds == null) hideGestures() },
             onMatch = { def ->
-                // vibrace pri rozpoznanem gestu
-                gestureTick(this)
-                hideGestures()
-                performFunction(def.fn)
+                if (demoBounds == null) {
+                    // vibrace pri rozpoznanem gestu
+                    gestureTick(this)
+                    hideGestures()
+                    performFunction(def.fn)
+                }
             },
             external = externalTouch.value,
             externalDown = externalDown,
-            onUnknown = { Toast.makeText(this, "Neznámé gesto", Toast.LENGTH_SHORT).show() }
+            onUnknown = { if (demoBounds == null) AppToast.show(this, "Neznámé gesto") },
+            onSurfaceBounds = demoBounds
         )
     }
     gestureView.visibility = View.VISIBLE
@@ -269,7 +199,7 @@ internal fun MainActivity.updateOrbTarget() {
         // v konfiguraci gest je kulicka videt vzdy, i kdyz zadne tlacitko nema funkci Gesta: ukazuje, kde gesto zacina
         val b6 = buttonView(6)
         if (gestureConfigMode && b6 != null) {
-            if (b6.visibility == View.GONE) b6.visibility = View.INVISIBLE   // jinak by nemelo polohu
+            if (b6.isGone) b6.visibility = View.INVISIBLE   // jinak by nemelo polohu
             orb.target = b6
             orb.visibility = View.VISIBLE
             return
@@ -283,16 +213,50 @@ internal fun MainActivity.updateOrbTarget() {
     orb.visibility = View.VISIBLE
 }
 
-// Zivá kulicka pod tlacitkem 6 (gesta); vetsi nez tlacitko, aby jiskry mohly vyletet ven
+// Kulicka pod tlacitkem Gest (bile kolecko + zelena tecka)
 internal fun MainActivity.setupGestureOrb() {
     if (orbView != null) return
     val btn6 = findViewById<View>(R.id.btnSideRightMain)
     val orb = GestureOrbView(this, btn6)
     orb.elevation = dp(20).toFloat()   // nad spodni listou i bocnimi tlacitky; dotyky nechyta
     // vlevo nahore v rodici; presnou polohu na tlacitku si orb pocita sam (sleduje cilove tlacitko)
-    val lp = ConstraintLayout.LayoutParams(dp(150), dp(150))
+    val lp = ConstraintLayout.LayoutParams(dp(56), dp(56))
     lp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
     lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
     (root as ViewGroup).addView(orb, lp)
     orbView = orb
+}
+
+// Zarovnat k tlacitku: plocha se prisune tak, aby startovni klavesa (9 vpravo dole, u tlacitek vlevo 7) lezela na kulicce tlacitka gest; velikost zustava
+internal fun MainActivity.alignGestureAreaToOrb() {
+    val orb = orbView ?: return
+    val w = gestureView.width.toFloat()
+    val h = gestureView.height.toFloat()
+    if (w <= 0f || h <= 0f) return
+    val gl = IntArray(2)
+    val tl = IntArray(2)
+    gestureView.getLocationInWindow(gl)
+    orb.target.getLocationInWindow(tl)
+    val cx = tl[0] - gl[0] + orb.target.width / 2f
+    val cy = tl[1] - gl[1] + orb.target.height / 2f
+    val density = resources.displayMetrics.density
+    val cur = GestureArea.parse(AppSettings.gestureRect.get())
+    val aw: Float
+    val ah: Float
+    if (cur != null) {
+        aw = (cur.r - cur.l) / 1000f * w
+        ah = (cur.b - cur.t) / 1000f * h
+    } else {
+        aw = AppSettings.gestureSize.get().coerceIn(180, 340) * density
+        ah = aw
+    }
+    // tlacitko vlevo (start 7): klavesa 7 (vlevo dole) lezi na kulicce; jinak klavesa 9 (vpravo dole)
+    val left = if (Gestures.startKey() == 7) (cx - aw / 6f).coerceIn(0f, w - aw) else ((cx + aw / 6f).coerceIn(aw, w) - aw)
+    val bottom = (cy + ah / 6f).coerceIn(ah, h)
+    val rect = com.example.actimelteambrowser.ui.GestureRect(
+        (left / w * 1000f).roundToInt(), ((bottom - ah) / h * 1000f).roundToInt(),
+        ((left + aw) / w * 1000f).roundToInt(), (bottom / h * 1000f).roundToInt()
+    )
+    AppSettings.gestureRect.set(GestureArea.format(rect))
+    gestResetKey.intValue += 1   // editor nacte novou polohu
 }

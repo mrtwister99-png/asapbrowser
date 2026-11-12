@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.AppToast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -186,7 +187,7 @@ internal fun DownloadsScreen(onBack: () -> Unit) {
                                 view.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                 ctx.startActivity(view)
                             } catch (e: Exception) {
-                                android.widget.Toast.makeText(ctx, "Soubor nejde otevřít", android.widget.Toast.LENGTH_SHORT).show()
+                                AppToast.show(ctx, "Soubor nejde otevřít")
                             }
                         }
                         .padding(14.dp)

@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.demoMark
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -135,6 +136,7 @@ private val ROW = Color(0xFF2A2A2A)
 private val ACCENT = Color(0xFF00B055)
 private val MUTED = Color(0xFF888888)
 private val DANGER = Color(0xFFB91C1C)
+private val ORANGE = Color(0xFFFF8A00)
 
 // Hodnoceni aplikace a hlaseni chyb (otevira se drzenim tlacitka Nastaveni) + sdilene pozadi UFO Field.
 
@@ -219,6 +221,7 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
     var type by remember { mutableStateOf(0) }            // 0 = recenze, 1 = chyba
     var message by remember { mutableStateOf("") }
     var contact by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var sent by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -238,25 +241,40 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xD91E1E1E)).padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Jak se ti líbí ASAP Browser?", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        for (i in 1..5) {
-                            Box(Modifier.size(48.dp).clip(CircleShape).clickable { rating = i }, contentAlignment = Alignment.Center) {
-                                Text(if (i <= rating) "★" else "☆", color = if (i <= rating) Color(0xFFFFD400) else MUTED, fontSize = 34.sp)
+                    if (type == 0) {
+                        Text("Jak se ti líbí ASAP Browser?", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (i in 1..5) {
+                                Box(Modifier.size(48.dp).clip(CircleShape).clickable { rating = i }, contentAlignment = Alignment.Center) {
+                                    Text(if (i <= rating) "★" else "☆", color = if (i <= rating) Color(0xFFFFD400) else MUTED, fontSize = 34.sp)
+                                }
                             }
+                        }
+                    } else {
+                        // u chyby se hvezdicky nezobrazuji, misto nich vyzva (stejna vyska jako radek hvezdicek, nic neposkakuje)
+                        Text("Ohlaš nalezenou chybu.", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.CenterStart) {
+                            Text("Každé nahlášení pomůže chybu rychle opravit.", color = MUTED, fontSize = 13.sp)
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StyleCard("Recenze", "Co se ti líbí a co ne", type == 0, Modifier.weight(1f)) { type = 0 }
-                        StyleCard("Chyba", "Něco nefunguje", type == 1, Modifier.weight(1f)) { type = 1 }
+                        StyleCard("Recenze", "Co se ti líbí a co ne", type == 0, Modifier.weight(1f).demoMark("fb_review")) { type = 0 }
+                        StyleCard("Chyba", "Něco nefunguje", type == 1, Modifier.weight(1f).demoMark("fb_bug"), accent = ORANGE, fill = Color(0xFF3D2410)) { type = 1 }
                     }
+                    OutlinedTextField(
+                        value = nickname,
+                        onValueChange = { if (it.length <= 60) nickname = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Přezdívka") }
+                    )
                     OutlinedTextField(
                         value = message,
                         onValueChange = { if (it.length <= 2000) message = it },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4,
                         maxLines = 8,
-                        label = { Text(if (type == 0) "Tvoje recenze" else "Co se stalo? Jak to zopakovat?") }
+                        label = { Text(if (type == 0) "Tvoje recenze" else "Co se stalo? Popiš chybu.") }
                     )
                     OutlinedTextField(
                         value = contact,
@@ -267,7 +285,7 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                         label = { Text("E-mail pro odpověď (nepovinné)") }
                     )
                     Text(
-                        "Odešle se: hodnocení, text, e-mail (jen když ho vyplníš), verze aplikace, verze Androidu a model telefonu. Žádné adresy ani historie.",
+                        "Za veškeré recenze a vaši zpětnou vazbu jsem velmi vděčný a cílem je všem umožnit jednoduché, rychlé a bezpečné prohlížení.",
                         color = MUTED, fontSize = 12.sp, lineHeight = 17.sp
                     )
                     Box(
@@ -281,7 +299,9 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                                 status = null
                                 scope.launch {
                                     val err = withContext(Dispatchers.IO) {
-                                        postFeedback(ctx, rating, if (type == 0) "review" else "bug", message, contact)
+                                        // prezdivka jde na zacatek textu (server ma pevny tvar zpravy)
+                                        val text = if (nickname.isBlank()) message else "Přezdívka: " + nickname.trim() + "\n\n" + message
+                                        postFeedback(ctx, if (type == 0) rating else 0, if (type == 0) "review" else "bug", text, contact)
                                     }
                                     sending = false
                                     if (err == null) { sent = true; status = "Díky! Zpráva je odeslaná." } else status = err

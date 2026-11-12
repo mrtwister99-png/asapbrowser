@@ -69,6 +69,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,6 +150,29 @@ internal fun appVersionText(ctx: android.content.Context): String = try {
 internal fun AboutScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val version = remember { appVersionText(ctx) }
+    // hudba bez_zastaveni_full.mp3 hraje po dobu, co je obrazovka otevrena; po odchodu se zastavi (prepinac zvuku se nekontroluje)
+    DisposableEffect(Unit) {
+        var mp: MediaPlayer? = null
+        try {
+            @Suppress("DiscouragedApi")
+            val resId = ctx.resources.getIdentifier("bez_zastaveni_full", "raw", ctx.packageName)
+            if (resId != 0) {
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                mp = MediaPlayer.create(ctx.applicationContext, resId, attrs, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)
+                mp?.start()
+            }
+        } catch (e: Exception) {
+            android.util.Log.d("about", e.toString())   // hudba je jen bonus, nesmi shodit obrazovku
+        }
+        onDispose {
+            try { mp?.stop() } catch (_: Exception) { }
+            mp?.release()
+            mp = null
+        }
+    }
     // pozadi UFO Field pod celou obrazovkou, obsah je pres nej (karty jsou polopruhledne)
     UfoBackground {
     ScreenScaffold(title = "O aplikaci", onBack = onBack, containerColor = Color.Transparent) {

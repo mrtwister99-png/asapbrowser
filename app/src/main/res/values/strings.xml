@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">ASAP Browser</string>
+    <string name="home_restore_tabs">Obnovit poslední karty</string>
+    <string name="home_new_tab">Nová karta (domovská stránka)</string>
+    <string name="pinned_close_confirm">Tahle karta je připnutá. Opravdu ji chceš zavřít?</string>
+    <string name="no_other_folder">Žádná jiná složka tu zatím není. Složku vytvoříš v přehledu karet.</string>
+    <string name="hint_more">+%1$d</string>
+    <string name="tutorial_skip">Přeskočit</string>
+    <string name="config_save_close">Uložit a zavřít nastavení</string>
+    <string name="plus_sign">+</string>
+    <string name="intro_skip">Přeskočit  ›</string>
+    <string name="http_warning">Pozor: stránka není šifrovaná (HTTP). Nezadávej na ní hesla ani platební údaje.</string>
+    <string name="vpn_off">OFF</string>
+    <string name="folder_row">📁  %1$s</string>
 </resources>

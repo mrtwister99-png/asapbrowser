@@ -171,6 +171,7 @@ fun SearchSuggestionsList(
     pinned: SearchSuggestion? = null,
     pinnedAtBottom: Boolean = false,
     compact: Boolean = false,
+    accent: Color = Color(0xFF00B055),   // zelena, v anonymnim rezimu modra
     onCopy: (SearchSuggestion) -> Unit = {},
     onPinned: (SearchSuggestion) -> Unit = {},
     onEdit: (SearchSuggestion) -> Unit = {},
@@ -183,7 +184,7 @@ fun SearchSuggestionsList(
             .clip(RoundedCornerShape(20.dp))
             .background(Color(0xFF1E1E1E))
     ) {
-        if (pinned != null && !pinnedAtBottom) PinnedRow(pinned, onCopy, onPinned, onEdit)
+        if (pinned != null && !pinnedAtBottom) PinnedRow(pinned, accent, onCopy, onPinned, onEdit)
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -213,13 +214,13 @@ fun SearchSuggestionsList(
                 }
             }
         }
-        if (pinned != null && pinnedAtBottom) PinnedRow(pinned, onCopy, onPinned, onEdit)
+        if (pinned != null && pinnedAtBottom) PinnedRow(pinned, accent, onCopy, onPinned, onEdit)
     }
 }
 
 /** Aktuální stránka: zeleně zvýrazněný řádek s ikonou webu a tlačítkem Kopírovat. */
 @Composable
-private fun PinnedRow(pinned: SearchSuggestion, onCopy: (SearchSuggestion) -> Unit, onPinned: (SearchSuggestion) -> Unit, onEdit: (SearchSuggestion) -> Unit) {
+private fun PinnedRow(pinned: SearchSuggestion, accent: Color, onCopy: (SearchSuggestion) -> Unit, onPinned: (SearchSuggestion) -> Unit, onEdit: (SearchSuggestion) -> Unit) {
     // po zkopirovani se misto ikony na chvili ukaze "Zkopirovano"
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) {
@@ -231,7 +232,7 @@ private fun PinnedRow(pinned: SearchSuggestion, onCopy: (SearchSuggestion) -> Un
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF00B055))
+            .background(accent)
             .clickable { onPinned(pinned) }
             .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -251,7 +252,7 @@ private fun PinnedRow(pinned: SearchSuggestion, onCopy: (SearchSuggestion) -> Un
                 } else {
                     Text(
                         prettyUrl(pinned.url).firstOrNull()?.uppercase() ?: "•",
-                        color = Color(0xFF00B055), fontSize = 14.sp, fontWeight = FontWeight.Bold
+                        color = accent, fontSize = 14.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -262,7 +263,7 @@ private fun PinnedRow(pinned: SearchSuggestion, onCopy: (SearchSuggestion) -> Un
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Text(
-                prettyUrl(pinned.subtitle), color = Color(0xFFD7FFE8), fontSize = 12.sp,
+                prettyUrl(pinned.subtitle), color = androidx.compose.ui.graphics.lerp(accent, Color.White, 0.8f), fontSize = 12.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }

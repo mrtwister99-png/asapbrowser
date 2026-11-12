@@ -1,6 +1,6 @@
 package com.example.actimelteambrowser.core.adblock
 
-import android.net.Uri
+import androidx.core.net.toUri
 
 // Pravidla a skripty pro blokovani reklam
 object AdBlockRules {
@@ -15,7 +15,7 @@ object AdBlockRules {
     // true = stranka je YouTube (youtube.com, m.youtube.com, youtu.be)
     fun isYoutube(url: String?): Boolean {
         if (url == null) return false
-        val host = Uri.parse(url).host?.lowercase() ?: return false
+        val host = url.toUri().host?.lowercase() ?: return false
         return host == "youtube.com" || host.endsWith(".youtube.com") || host == "youtu.be"
     }
 

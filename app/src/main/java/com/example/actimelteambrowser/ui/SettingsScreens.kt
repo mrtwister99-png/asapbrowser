@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.demoMark
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -106,6 +107,7 @@ import androidx.compose.ui.unit.sp
 import com.example.actimelteambrowser.core.settings.AppSettings
 import com.example.actimelteambrowser.core.settings.ButtonDefaults
 import com.example.actimelteambrowser.core.settings.ButtonFunction
+import com.example.actimelteambrowser.core.vault.VaultManager
 import com.example.actimelteambrowser.data.BookmarkFolder
 import com.example.actimelteambrowser.data.Bookmark
 import com.example.actimelteambrowser.data.BookmarksRepository
@@ -143,6 +145,7 @@ sealed class Route {
     object Tutorials : Route()
     object About : Route()
     object Feedback : Route()
+    object Vault : Route()
 }
 
 /** Kořen obrazovek Nastavení: Záložky, Historie, Export, Import. */
@@ -154,7 +157,7 @@ fun SettingsApp(
     onOpenUrl: (String) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
-    onResetAll: () -> Unit,
+    onResetAll: (Boolean) -> Unit,   // true = pred smazanim ulozit zalohu trezoru
     onButtonConfig: () -> Unit,
     onGestureConfig: () -> Unit,
     isDefaultBrowser: Boolean,
@@ -166,7 +169,8 @@ fun SettingsApp(
     // Zpět: z detailu složky do složek, ze složek/historie do nastavení, z nastavení pryč
     BackHandler(enabled = route != Route.Main) {
         val r = route
-        route = if (r is Route.Folder) backFrom(r) else Route.Main
+        // trezor otevreny z leve listy: zpet zavre Nastaveni a vrati do prohlizece
+        if (r == Route.Vault && startRoute == Route.Vault) onClose() else route = if (r is Route.Folder) backFrom(r) else Route.Main
     }
 
     when (val r = route) {
@@ -181,6 +185,7 @@ fun SettingsApp(
             onOther = { route = Route.Other },
             onTutorials = { route = Route.Tutorials },
             onAbout = { route = Route.About },
+            onVault = { route = Route.Vault },
             isDefaultBrowser = isDefaultBrowser,
             onDefaultBrowser = onDefaultBrowser,
             onResetAll = onResetAll,
@@ -208,6 +213,7 @@ fun SettingsApp(
         is Route.Other -> OtherSettingsScreen(onBack = { route = Route.Main })
         is Route.Tutorials -> TutorialsScreen(onBack = { route = Route.Main })
         is Route.About -> AboutScreen(onBack = { route = Route.Main })
+        is Route.Vault -> VaultScreen(onBack = { if (startRoute == Route.Vault) onClose() else route = Route.Main })
         // otevreno drzenim tlacitka Nastaveni: zpet zavre Nastaveni a vrati do prohlizece
         is Route.Feedback -> FeedbackScreen(onBack = { if (startRoute == Route.Feedback) onClose() else route = Route.Main })
     }
@@ -239,6 +245,41 @@ internal fun StyledDialog(
     )
 }
 
+/** Jednotny potvrzovaci dialog (smazat skupinu, zavrit karty, smazat / obnovit tlacitko): titulek, text, Ne / Ano. */
+@Composable
+internal fun ConfirmDialog(
+    title: String,
+    text: String,
+    noLabel: String = "Ne",
+    yesLabel: String = "Ano",
+    yesColor: Color = Color(0xFFB91C1C),
+    onNo: () -> Unit,
+    onYes: () -> Unit
+) {
+    Dialog(onDismissRequest = onNo) {
+        Column(Modifier.clip(RoundedCornerShape(24.dp)).background(PANEL).padding(22.dp)) {
+            Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            if (text.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(text, color = Color(0xFFCCCCCC), fontSize = 15.sp)
+            }
+            Spacer(Modifier.height(18.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                Text(
+                    noLabel, color = Color(0xFFCCCCCC), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(ROW).clickable(onClick = onNo)
+                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                )
+                Text(
+                    yesLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(yesColor).clickable(onClick = onYes)
+                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 internal fun ScreenScaffold(title: String, onBack: () -> Unit, containerColor: Color = BG, content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -256,12 +297,13 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, containerColor: C
             Box(
                 Modifier
                     .size(44.dp)
+                    .demoMark("back")   // sipka zpet (ukazka prvniho tutorialu na ni ukazuje)
                     .clip(RoundedCornerShape(14.dp))
                     .background(ROW)
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) {
-                Text("←", color = Color.White, fontSize = 20.sp)
+                androidx.compose.foundation.Image(painterResource(com.example.actimelteambrowser.R.drawable.ic_back_chevron), contentDescription = "Zpět", modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(12.dp))
             Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -271,10 +313,11 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, containerColor: C
 }
 
 @Composable
-internal fun BigButton(text: String, color: Color, textColor: Color, onClick: () -> Unit) {
+internal fun BigButton(text: String, color: Color, textColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         Modifier
             .padding(16.dp)
+            .then(modifier)
             .fillMaxWidth()
             .height(54.dp)
             .clip(RoundedCornerShape(16.dp))
@@ -307,12 +350,16 @@ private fun SettingsRoot(
     onOther: () -> Unit,
     onTutorials: () -> Unit,
     onAbout: () -> Unit,
+    onVault: () -> Unit,
     isDefaultBrowser: Boolean,
     onDefaultBrowser: () -> Unit,
-    onResetAll: () -> Unit,
+    onResetAll: (Boolean) -> Unit,   // true = pred smazanim ulozit zalohu trezoru
     onBack: () -> Unit
 ) {
     var resetStep by remember { mutableStateOf(0) }   // 0 = nic, 1 = prvni potvrzeni, 2 = druhe
+    val resetContext = LocalContext.current
+    val hasVault = remember { VaultManager.isCreated(resetContext) }
+    var keepVault by remember { mutableStateOf(true) }   // zaloha trezoru pred smazanim
     ScreenScaffold(title = "Nastavení", onBack = onBack) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),   // aby se vsechno vlezlo i na male displeje
@@ -335,6 +382,7 @@ private fun SettingsRoot(
             Column(
                 Modifier
                     .fillMaxWidth()
+                    .demoMark("row:Konfigurace")
                     .clip(RoundedCornerShape(16.dp))
                     .background(ACCENT)
                     .clickable(onClick = onOther)
@@ -345,6 +393,7 @@ private fun SettingsRoot(
                 Text("Animace, zvuky, vibrace, vyhledávač a další nastavení", color = Color(0xFF0B3D2A), fontSize = 13.sp)
             }
             SettingsRow("O aplikaci", "Verze, popis, co umí a použité součásti", onAbout)
+            SettingsRow("Trezor hesel", "Hesla zašifrovaná jen v tomto telefonu, odemyká se PINem nebo 12 slovy", onVault)
             // nebezpecna akce uplne dole, cervene; vyzaduje dve potvrzeni
             Column(
                 Modifier
@@ -365,7 +414,13 @@ private fun SettingsRoot(
         StyledDialog(
             onDismissRequest = { resetStep = 0 },
             title = { Text("Restartovat vše?") },
-            text = { Text("Všechno bude smazáno: nastavení, tlačítka, gesta, záložky, historie, otevřené karty, přihlášení na webech i seznam stahování. Chceš pokračovat?") },
+            text = {
+                Text(
+                    "Všechno bude smazáno: nastavení, tlačítka, gesta, záložky, historie, otevřené karty, přihlášení na webech i seznam stahování." +
+                        (if (hasVault) " Smaže se i trezor hesel a bez zálohy a 12 slov ho nejde vrátit." else "") +
+                        " Chceš pokračovat?"
+                )
+            },
             confirmButton = { TextButton(onClick = { resetStep = 2 }) { Text("Ano") } },
             dismissButton = { TextButton(onClick = { resetStep = 0 }) { Text("Ne") } }
         )
@@ -374,9 +429,23 @@ private fun SettingsRoot(
         StyledDialog(
             onDismissRequest = { resetStep = 0 },
             title = { Text("Opravdu smazat?") },
-            text = { Text("Tohle už nejde vrátit zpět. Appka se po smazání zavře a při dalším spuštění bude jako nová. Tip: nejdřív si udělej Export.") },
+            text = {
+                Column {
+                    Text("Tohle už nejde vrátit zpět. Appka se po smazání zavře a při dalším spuštění bude jako nová. Tip: nejdřív si udělej Export.")
+                    if (hasVault) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(ROW)
+                                .clickable { keepVault = !keepVault }.padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.Checkbox(checked = keepVault, onCheckedChange = { keepVault = it })
+                            Text("Před smazáním uložit zálohu trezoru (zašifrovanou, k obnově potřebuješ 12 slov)", color = Color.White, fontSize = 13.sp)
+                        }
+                    }
+                }
+            },
             confirmButton = {
-                TextButton(onClick = { resetStep = 0; onResetAll() }) { Text("Smazat", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) }
+                TextButton(onClick = { resetStep = 0; onResetAll(hasVault && keepVault) }) { Text("Smazat", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { resetStep = 0 }) { Text("Zrušit") } }
         )
@@ -388,8 +457,12 @@ private fun SettingsRoot(
  * Vedle e-mailu je malý otazníček: po klepnutí se na chvíli ukáže nápověda.
  */
 @Composable
-fun ExportChooserDialog(onSave: () -> Unit, onEmail: () -> Unit, onDismiss: () -> Unit) {
+fun ExportChooserDialog(onSave: (Set<String>) -> Unit, onEmail: (Set<String>) -> Unit, onDismiss: () -> Unit) {
     var showHint by remember { mutableStateOf(false) }
+    // co se bude exportovat (vychozi = vse): nas = tlacitka a nastaveni, za = zalozky, ka = otevrene karty, hi = historie
+    val vaultContext = LocalContext.current
+    val hasVault = remember { VaultManager.isCreated(vaultContext) }   // "Trezor hesel" se nabidne jen kdyz existuje
+    var parts by remember { mutableStateOf(if (hasVault) setOf("nas", "za", "ka", "hi", "va") else setOf("nas", "za", "ka", "hi")) }
     // nápověda zmizí sama po 8 s (nový klik časovač restartuje)
     LaunchedEffect(showHint) {
         if (showHint) {
@@ -406,7 +479,21 @@ fun ExportChooserDialog(onSave: () -> Unit, onEmail: () -> Unit, onDismiss: () -
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Export", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Kam uložit nastavení, záložky a historii?", color = MUTED, fontSize = 13.sp)
+            Text("Co exportovat a kam to uložit?", color = MUTED, fontSize = 13.sp)
+            for ((code, label) in listOf("nas" to "Tlačítka a nastavení", "za" to "Záložky a složky", "ka" to "Otevřené karty", "hi" to "Historie") + (if (hasVault) listOf("va" to "Trezor hesel (zašifrovaný)") else emptyList())) {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ROW)
+                        .clickable { parts = if (code in parts) parts - code else parts + code }
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.Checkbox(
+                        checked = code in parts,
+                        onCheckedChange = { parts = if (it) parts + code else parts - code }
+                    )
+                    Text(label, color = Color.White, fontSize = 15.sp)
+                }
+            }
 
             Box(
                 Modifier
@@ -414,7 +501,7 @@ fun ExportChooserDialog(onSave: () -> Unit, onEmail: () -> Unit, onDismiss: () -
                     .height(52.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(ACCENT)
-                    .clickable(onClick = onSave),
+                    .clickable { if (parts.isNotEmpty()) onSave(parts) },
                 contentAlignment = Alignment.Center
             ) { Text("Uložit do telefonu", color = Color(0xFF06281D), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
 
@@ -425,7 +512,7 @@ fun ExportChooserDialog(onSave: () -> Unit, onEmail: () -> Unit, onDismiss: () -
                         .height(52.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(ROW)
-                        .clickable(onClick = onEmail),
+                        .clickable { if (parts.isNotEmpty()) onEmail(parts) },
                     contentAlignment = Alignment.Center
                 ) { Text("Odeslat na e-mail", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                 // malý otazníček
@@ -454,11 +541,53 @@ fun ExportChooserDialog(onSave: () -> Unit, onEmail: () -> Unit, onDismiss: () -
     }
 }
 
+/** Vyber casti souboru, ktere se maji nacist (zobrazi se jen ty, co soubor obsahuje; vychozi vse). */
+@Composable
+fun ImportChooserDialog(available: Set<String>, onImport: (Set<String>, Set<String>) -> Unit, onDismiss: () -> Unit) {
+    var parts by remember { mutableStateOf(available) }
+    var merge by remember { mutableStateOf(setOf("za", "ka", "hi")) }   // pridat ke stavajicim (vychozi) / nahradit
+    Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.clip(RoundedCornerShape(24.dp)).background(PANEL).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Import", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Co ze souboru načíst? Nevybrané části zůstanou v aplikaci beze změny.", color = MUTED, fontSize = 13.sp)
+            for ((code, label) in listOf("nas" to "Tlačítka a nastavení", "za" to "Záložky a složky", "ka" to "Otevřené karty", "hi" to "Historie", "va" to "Trezor hesel (potřebuješ 12 slov)")) {
+                if (code !in available) continue
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ROW)
+                        .clickable { parts = if (code in parts) parts - code else parts + code }
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.Checkbox(checked = code in parts, onCheckedChange = { parts = if (it) parts + code else parts - code })
+                    Text(label, color = Color.White, fontSize = 15.sp)
+                }
+                if (code in parts && code != "nas" && code != "va") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 24.dp).clip(RoundedCornerShape(12.dp)).background(ROW)
+                            .clickable { merge = if (code in merge) merge - code else merge + code }
+                            .padding(horizontal = 10.dp, vertical = 0.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(checked = code in merge, onCheckedChange = { merge = if (it) merge + code else merge - code })
+                        Text("přidat ke stávajícím (jinak nahradit)", color = Color(0xFFCCCCCC), fontSize = 12.sp)
+                    }
+                }
+            }
+            Box(
+                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(ACCENT)
+                    .clickable { if (parts.isNotEmpty()) onImport(parts, merge) },
+                contentAlignment = Alignment.Center
+            ) { Text("Načíst vybrané", color = Color(0xFF06281D), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
 @Composable
 internal fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
+            .demoMark("row:$title")
             .clip(RoundedCornerShape(16.dp))
             .background(PANEL)
             .clickable(onClick = onClick)

@@ -1,99 +1,24 @@
 package com.example.actimelteambrowser
 
-import android.annotation.SuppressLint
-import android.os.Bundle
-import android.view.View
-import android.view.inputmethod.InputMethodManager
+import androidx.appcompat.content.res.AppCompatResources
+import android.text.TextUtils
+import android.content.ClipboardManager
+import android.content.ClipData
+import androidx.core.graphics.toColorInt
 import android.webkit.*
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
-import java.io.ByteArrayInputStream
-import com.example.actimelteambrowser.core.engine.RustBridge
 import kotlin.concurrent.thread
-import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
-import com.example.actimelteambrowser.core.settings.AppSettings
 import android.content.Intent
-import android.text.Editable
-import android.text.TextWatcher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import com.example.actimelteambrowser.data.BookmarksRepository
-import com.example.actimelteambrowser.data.HistoryRepository
-import com.example.actimelteambrowser.data.HistoryVisit
-import com.example.actimelteambrowser.data.Bookmark
-import com.example.actimelteambrowser.ui.SearchSuggestion
-import com.example.actimelteambrowser.ui.ButtonConfigModal
-import com.example.actimelteambrowser.ui.SearchSuggestionsList
-import com.example.actimelteambrowser.ui.buildSearchSuggestions
-import android.graphics.Bitmap
-import android.view.MotionEvent
-import com.example.actimelteambrowser.ui.ExternalTouch
-import com.example.actimelteambrowser.core.settings.Gestures
-import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
-import com.example.actimelteambrowser.core.settings.SiteRules
-import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
-import androidx.webkit.ProfileStore
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.example.actimelteambrowser.ui.StartSite
-import com.example.actimelteambrowser.ui.GestureOverlay
-import com.example.actimelteambrowser.ui.GestureArea
-import com.example.actimelteambrowser.ui.GestureAreaEditor
-import com.example.actimelteambrowser.ui.GesturePanel
-import android.animation.ArgbEvaluator
 import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
-import androidx.constraintlayout.widget.ConstraintLayout
-import android.graphics.Paint
-import com.example.actimelteambrowser.core.settings.ButtonDefaults
-import com.example.actimelteambrowser.core.settings.ButtonFunction
-import android.animation.ValueAnimator
-import android.app.Dialog
-import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
 import android.util.TypedValue
-import android.transition.TransitionManager
-import android.net.Uri
-import android.graphics.BitmapFactory
-import android.text.InputType
 import java.io.File
-import java.io.FileOutputStream
-import androidx.activity.OnBackPressedCallback
-import org.json.JSONArray
-import org.json.JSONObject
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.view.PixelCopy
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
-import com.example.actimelteambrowser.ui.TabTile
-import com.example.actimelteambrowser.ui.TabsScreen
 
 // Dlouhé podržení na stránce: nabídka odkazu a obrázku, kopírování a sdílení (rozšíření MainActivity).
 internal fun MainActivity.onWebLongPress(wv: WebView): Boolean {
@@ -123,7 +48,7 @@ internal fun MainActivity.onWebLongPress(wv: WebView): Boolean {
 
 internal fun MainActivity.openInNewTab(url: String, incognito: Boolean) {
     if (!isWebUrl(url)) {
-        Toast.makeText(this, "Tuhle adresu nelze otevřít", Toast.LENGTH_SHORT).show()
+        AppToast.show(this, "Tuhle adresu nelze otevřít")
         return
     }
     val active = tabs.active()
@@ -132,9 +57,9 @@ internal fun MainActivity.openInNewTab(url: String, incognito: Boolean) {
 }
 
 internal fun MainActivity.copyToClipboard(label: String, text: String, msg: String) {
-    val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    cm.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
-    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText(label, text))
+    AppToast.show(this, msg)
 }
 
 internal fun MainActivity.shareText(text: String, title: String) {
@@ -155,11 +80,11 @@ internal fun MainActivity.showIconMenu(title: String, rows: List<MainActivity.Me
             row.gravity = Gravity.CENTER_VERTICAL
             row.setPadding(dp(14), dp(11), dp(14), dp(11))
             val bg = GradientDrawable()
-            bg.setColor(Color.parseColor(if (r.highlight) "#00B055" else "#2A2A2A"))   // zvyraznena nejcastejsi akce
+            bg.setColor((if (r.highlight) "#00B055" else "#2A2A2A").toColorInt())   // zvyraznena nejcastejsi akce
             bg.cornerRadius = dp(14).toFloat()
             row.background = bg
             val iv = ImageView(this)
-            if (r.icon != 0) iv.setImageDrawable(androidx.appcompat.content.res.AppCompatResources.getDrawable(this, r.icon))
+            if (r.icon != 0) iv.setImageDrawable(AppCompatResources.getDrawable(this, r.icon))
             row.addView(iv, LinearLayout.LayoutParams(dp(24), dp(24)))
             val col = LinearLayout(this)
             col.orientation = LinearLayout.VERTICAL
@@ -172,10 +97,10 @@ internal fun MainActivity.showIconMenu(title: String, rows: List<MainActivity.Me
             if (r.sub.isNotBlank()) {
                 val sub = TextView(this)
                 sub.text = r.sub
-                sub.setTextColor(Color.parseColor(if (r.highlight) "#D7FFE8" else "#888888"))
+                sub.setTextColor((if (r.highlight) "#D7FFE8" else "#888888").toColorInt())
                 sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 sub.maxLines = 1
-                sub.ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                sub.ellipsize = TextUtils.TruncateAt.MIDDLE
                 col.addView(sub)
             }
             val clp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -219,15 +144,14 @@ internal fun MainActivity.showLinkMenu(url: String, text: String?, imageSrc: Str
 // Ulozi odkaz (bez otevreni) do vychozi slozky Oblibene
 internal fun MainActivity.saveLinkToFavorites(url: String, text: String?) {
     if (!isWebUrl(url)) {
-        Toast.makeText(this, "Tenhle odkaz nelze uložit", Toast.LENGTH_SHORT).show()
+        AppToast.show(this, "Tenhle odkaz nelze uložit")
         return
     }
     thread(name = "bookmark-link") {
-        try {
+        quiet {
             bookmarksRepo.addBookmark(bookmarksRepo.defaultFolderId(), url, text?.trim().orEmpty())
-        } catch (e: Exception) {
         }
-        runOnUiThread { Toast.makeText(this, "Přidáno do Oblíbených", Toast.LENGTH_SHORT).show() }
+        runOnUiThread { AppToast.show(this, "Přidáno do Oblíbených") }
     }
 }
 
@@ -246,12 +170,12 @@ internal fun MainActivity.showImageMenu(src: String) {
 // Obrazek se stahne do cache (na pozadi) a nabidne se sdileni jako soubor; pri chybe se sdili aspon adresa
 internal fun MainActivity.shareImage(src: String) {
     if (!isWebUrl(src)) {
-        Toast.makeText(this, "Tenhle obrázek nejde sdílet", Toast.LENGTH_SHORT).show()
+        AppToast.show(this, "Tenhle obrázek nejde sdílet")
         return
     }
     val ua = webView.settings.userAgentString
     val cookie = cookiesFor(src, tabs.active()?.incognito == true)
-    Toast.makeText(this, "Připravuji obrázek…", Toast.LENGTH_SHORT).show()
+    AppToast.show(this, "Připravuji obrázek…")
     thread(name = "share-image") {
         try {
             val conn = java.net.URL(src).openConnection() as java.net.HttpURLConnection
@@ -282,10 +206,11 @@ internal fun MainActivity.shareImage(src: String) {
             val send = Intent(Intent.ACTION_SEND)
             send.type = if (mime.startsWith("image/")) mime else "image/jpeg"
             send.putExtra(Intent.EXTRA_STREAM, uri)
-            send.clipData = android.content.ClipData.newRawUri("", uri)
+            send.clipData = ClipData.newRawUri("", uri)
             send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             runOnUiThread { startActivity(Intent.createChooser(send, "Sdílet obrázek")) }
         } catch (e: Exception) {
+            noteError(e)
             runOnUiThread { shareText(src, "Sdílet adresu obrázku") }
         }
     }

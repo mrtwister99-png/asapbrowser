@@ -1,85 +1,28 @@
 package com.example.actimelteambrowser
 
+import androidx.core.graphics.toColorInt
 import android.annotation.SuppressLint
-import android.os.Bundle
+import androidx.core.graphics.createBitmap
 import android.view.View
-import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
-import java.io.ByteArrayInputStream
-import com.example.actimelteambrowser.core.engine.RustBridge
 import kotlin.concurrent.thread
-import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
 import com.example.actimelteambrowser.core.settings.AppSettings
-import android.content.Intent
-import android.text.Editable
-import android.text.TextWatcher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import com.example.actimelteambrowser.data.BookmarksRepository
-import com.example.actimelteambrowser.data.HistoryRepository
-import com.example.actimelteambrowser.data.HistoryVisit
-import com.example.actimelteambrowser.data.Bookmark
-import com.example.actimelteambrowser.ui.SearchSuggestion
-import com.example.actimelteambrowser.ui.ButtonConfigModal
-import com.example.actimelteambrowser.ui.SearchSuggestionsList
-import com.example.actimelteambrowser.ui.buildSearchSuggestions
 import android.graphics.Bitmap
 import android.view.MotionEvent
-import com.example.actimelteambrowser.ui.ExternalTouch
-import com.example.actimelteambrowser.core.settings.Gestures
-import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
-import com.example.actimelteambrowser.core.settings.SiteRules
 import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
 import androidx.webkit.ProfileStore
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.example.actimelteambrowser.ui.StartSite
-import com.example.actimelteambrowser.ui.GestureOverlay
-import com.example.actimelteambrowser.ui.GestureArea
-import com.example.actimelteambrowser.ui.GestureAreaEditor
-import com.example.actimelteambrowser.ui.GesturePanel
-import android.animation.ArgbEvaluator
-import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
 import androidx.constraintlayout.widget.ConstraintLayout
-import android.graphics.Paint
-import com.example.actimelteambrowser.core.settings.ButtonDefaults
-import com.example.actimelteambrowser.core.settings.ButtonFunction
 import android.animation.ValueAnimator
-import android.app.Dialog
 import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
 import android.util.TypedValue
-import android.transition.TransitionManager
-import android.net.Uri
-import android.graphics.BitmapFactory
 import android.text.InputType
 import java.io.File
 import java.io.FileOutputStream
-import androidx.activity.OnBackPressedCallback
 import org.json.JSONArray
 import org.json.JSONObject
 import android.graphics.Canvas
@@ -91,14 +34,13 @@ import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
 import com.example.actimelteambrowser.ui.TabTile
 import com.example.actimelteambrowser.ui.TabsScreen
 
 // Karty: vytváření, přepínání, složky, zavírání, ukládání a obnova, přehled karet (rozšíření MainActivity).
 // Vytvori novou kartu s vlastnim WebView (a volitelne ji zobrazi a nacte adresu)
 // (@SuppressLint je na buildWebView)
-internal fun MainActivity.createTab(url: String?, activate: Boolean = true, incognito: Boolean = false): BrowserTab {
+internal fun MainActivity.createTab(url: String?, activate: Boolean = true, incognito: Boolean = false, fly: Boolean = true): BrowserTab {
     // WebView se postavi az pri prvnim pouziti (buildWebView); obnovene karty na pozadi ho tedy nemaji
     var ref: BrowserTab? = null
     val tab = BrowserTab(tabs.newId()) { buildWebView(ref!!) }
@@ -107,8 +49,10 @@ internal fun MainActivity.createTab(url: String?, activate: Boolean = true, inco
     tabs.list.add(tab)
     if (activate) switchTo(tab)
     updateTabCount()
+    // animace: zelene + (normalni karta) / modre + (anonymni); az po rozlozeni okna, takze ne pri startu
+    if (fly && activate && root.isLaidOut) { if (incognito) flyBurst("+", "#2979FF") else flyBurst("+", "#00B055") }
     if (url != null) tab.webView.loadUrl(url)
-    if (!activate && tab.webViewCreated) { try { tab.webView.onPause() } catch (e: Exception) { } }   // karta na pozadi nema bezet
+    if (!activate && tab.webViewCreated) { quiet { tab.webView.onPause() } }   // karta na pozadi nema bezet
     return tab
 }
 
@@ -116,9 +60,9 @@ internal fun MainActivity.createTab(url: String?, activate: Boolean = true, inco
 internal fun MainActivity.switchTo(tab: BrowserTab) {
     // predchozi karta se pozastavi (JS, casovace, animace) - setri baterii a vykon
     if (isWebViewReady() && webView !== tab.webView) {
-        try { webView.onPause() } catch (e: Exception) { }
+        quiet { webView.onPause() }
     }
-    try { tab.webView.onResume() } catch (e: Exception) { }
+    quiet { tab.webView.onResume() }
     webContainer.removeAllViews()
     webContainer.addView(tab.webView)
     tabs.activeId = tab.id
@@ -131,8 +75,11 @@ internal fun MainActivity.switchTo(tab: BrowserTab) {
     }
     etTopUrl.setText(topUrlText(tab.url))
             updateLockIcon(tab.url)
-    // anonymni karta: adresa nahore je svetle fialova
-    etTopUrl.setTextColor(if (tab.incognito) Color.parseColor("#CE93D8") else Color.WHITE)
+    // anonymni karta: hlavni barva plochy je modra (text v polich zustava bily nahore / cerny dole)
+    etTopUrl.setTextColor(Color.WHITE)
+    etSearchMain.setTextColor(Color.BLACK)
+    applyAccent(tab.incognito)
+    updateLockIcon(tab.url)   // zamek v anonymnim rezimu modry
     progressBar.visibility = View.GONE
     updateAdBlockBadge()
     updateTabCount()
@@ -190,15 +137,16 @@ internal fun MainActivity.closeTabs(ids: List<Long>) {
     val all = tabManager.expandIds(ids)
     val toClose = tabs.list.filter { it.id in all }
     if (toClose.isEmpty()) return
+    flyBurst("−", "#E53935")   // cervene minus pri zavreni
     val activeClosed = toClose.any { it.id == tabs.activeId }
     val mode = toClose[0].incognito
     for (tab in toClose) {
         rememberClosed(tab)
         disposeTab(tab)
     }
-    tabs.list.removeAll(toClose)
+    tabs.list.removeAll(toClose.toSet())
     pruneGroups()
-    if (tabs.list.isEmpty()) createTab(homeUrl)
+    if (tabs.list.isEmpty()) createTab(homeUrl, fly = false)
     else if (activeClosed) {
         val same = tabs.list.filter { it.incognito == mode }
         switchTo(if (same.isNotEmpty()) same.last() else tabs.list.last())
@@ -216,25 +164,27 @@ internal fun MainActivity.closeAllTabs() {
 
 // Smaze vsechna data anonymniho profilu (cookies, localStorage...). Smazani profilu selze, dokud ho nejaky WebView
 // pouziva - pak se aspon vymazou data.
+@SuppressLint("RequiresFeature")   // hlidano pres incognitoProfilesSupported()
 internal fun MainActivity.purgeIncognito() {
     if (!incognitoProfilesSupported()) return
-    try {
+    runCatching {
         ProfileStore.getInstance().deleteProfile(MainActivity.INCOGNITO_PROFILE)
-    } catch (e: Throwable) {
-        try {
+    }.onFailure {
+        quiet {
             val p = ProfileStore.getInstance().getProfile(MainActivity.INCOGNITO_PROFILE)
             p?.cookieManager?.removeAllCookies(null)
             p?.webStorage?.deleteAllData()
-        } catch (e2: Throwable) { }
+        }
     }
 }
 
 // Cookies pro dane okno: anonymni karta ma vlastni (jinak by se pri stahovani poslaly cookies z beznych karet)
+@SuppressLint("RequiresFeature")   // hlidano pres incognitoProfilesSupported()
 internal fun MainActivity.cookiesFor(url: String, incognito: Boolean): String? {
     if (incognito && incognitoProfilesSupported()) {
-        try {
+        quiet {
             return ProfileStore.getInstance().getOrCreateProfile(MainActivity.INCOGNITO_PROFILE).cookieManager.getCookie(url)
-        } catch (e: Throwable) { }
+        }
         return null
     }
     return CookieManager.getInstance().getCookie(url)
@@ -245,32 +195,15 @@ internal fun MainActivity.disposeTab(tab: BrowserTab) {
     if (!tab.webViewCreated) return   // WebView se nikdy nevytvoril - neni co rusit
     (tab.webView.parent as? ViewGroup)?.removeView(tab.webView)
     if (tab.incognito) {
-        try {
+        quiet {
             tab.webView.clearCache(true)
             tab.webView.clearFormData()
             tab.webView.clearHistory()
-        } catch (e: Exception) {
         }
     }
-    try { tab.webView.destroy() } catch (e: Exception) { }
+    quiet { tab.webView.destroy() }
     // po zavreni posledni anonymni karty smazat jeji data (az po dokonceni prave probihajici akce)
     if (tab.incognito) window.decorView.post { if (tabs.list.none { it.incognito }) purgeIncognito() }
-}
-
-// Prehled karet: "Zavrit vse" zavre jen karty te skupiny, kterou prave vidis
-internal fun MainActivity.closeAllInMode(incognito: Boolean) {
-    val toClose = tabs.list.filter { it.incognito == incognito }
-    val activeClosed = toClose.any { it.id == tabs.activeId }
-    for (tab in toClose) {
-        rememberClosed(tab)
-        disposeTab(tab)
-    }
-    tabs.list.removeAll(toClose)
-    pruneGroups()
-    if (tabs.list.isEmpty()) createTab(homeUrl)
-    else if (activeClosed) switchTo(tabs.list.last())
-    updateTabCount()
-    refreshTiles()
 }
 
 internal fun MainActivity.clearAllTabs() {
@@ -299,14 +232,14 @@ internal fun MainActivity.saveTabs() {
         if (tab.id == tabs.activeId) activeIdx = arr.length()
         savedIdx[tab.id] = arr.length()
         previews.add(tab.preview)
-        arr.put(JSONObject().put("url", u).put("title", tab.title))
+        arr.put(JSONObject().put("url", u).put("title", tab.title).put("pin", tab.pinned).put("pt", tab.pinnedTop))
     }
     if (arr.length() == 0) return
     // slozky: seznamy poradi karet v ulozenem seznamu
     val garr = JSONArray()
     for (g in groups) {
         val idxs = g.members.mapNotNull { savedIdx[it] }
-        if (idxs.size >= 2) garr.put(JSONObject().put("m", JSONArray(idxs)).put("c", g.color))
+        if (idxs.size >= 2) garr.put(JSONObject().put("m", JSONArray(idxs)).put("c", g.color).put("n", g.name))
     }
     AppSettings.savedTabs.set(JSONObject().put("active", activeIdx).put("tabs", arr).put("groups", garr).toString())
     writePreviewsAsync(previewDir, previews)
@@ -315,7 +248,7 @@ internal fun MainActivity.saveTabs() {
 // Ulozi nahledy karet mimo UI vlakno: prepise jen ty, ktere se zmenily, a smaze p<i>.jpg navic
 internal fun MainActivity.writePreviewsAsync(dir: File, previews: List<Bitmap?>) {
     previewExecutor.execute {
-        try {
+        quiet {
             dir.mkdirs()
             for (i in previews.indices) {
                 while (previewWritten.size <= i) previewWritten.add(null)
@@ -333,21 +266,20 @@ internal fun MainActivity.writePreviewsAsync(dir: File, previews: List<Bitmap?>)
                 val n = f.name.removePrefix("p").removeSuffix(".jpg").toIntOrNull()
                 if (n == null || n >= previews.size) f.delete()
             }
-        } catch (e: Exception) {
         }
     }
 }
 
+@Suppress("UnusedReceiverParameter")
 internal fun MainActivity.savePreview(bmp: Bitmap, file: File) {
-    try {
+    quiet {
         FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.JPEG, 80, it) }
-    } catch (e: Exception) {
     }
 }
 
 // Drzeni tlacitka Domu: adresa domovske stranky + co delat po spusteni prohlizece
 internal fun MainActivity.showHomeDialog() {
-    val green = Color.parseColor("#00B055")
+    val green = "#00B055".toColorInt()
     var inputRef: EditText? = null
     var restoreRef: RadioButton? = null
     var engineBtns: List<Pair<String, RadioButton>> = emptyList()
@@ -359,13 +291,13 @@ internal fun MainActivity.showHomeDialog() {
             var u = inputRef?.text?.toString().orEmpty().trim()
             if (u.isNotEmpty() && !u.contains("://")) u = "https://$u"
             if (!isWebUrl(u)) {
-                Toast.makeText(this, "Neplatná adresa (musí být http nebo https)", Toast.LENGTH_LONG).show()
+                AppToast.show(this, "Neplatná adresa (musí být http nebo https)", true)
                 false
             } else {
                 AppSettings.homeUrl.set(u)
                 AppSettings.startupRestoreTabs.set(restoreRef?.isChecked == true)
                 engineBtns.firstOrNull { it.second.isChecked }?.let { AppSettings.searchEngine.set(it.first) }
-                Toast.makeText(this, "Uloženo", Toast.LENGTH_SHORT).show()
+                AppToast.show(this, "Uloženo")
                 true
             }
         }
@@ -379,10 +311,10 @@ internal fun MainActivity.showHomeDialog() {
         input.setSingleLine(true)
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         input.setTextColor(Color.WHITE)
-        input.setHintTextColor(Color.parseColor("#888888"))
+        input.setHintTextColor("#888888".toColorInt())
         input.setPadding(dp(14), dp(12), dp(14), dp(12))
         val inputBg = GradientDrawable()
-        inputBg.setColor(Color.parseColor("#2A2A2A"))
+        inputBg.setColor("#2A2A2A".toColorInt())
         inputBg.cornerRadius = dp(14).toFloat()
         input.background = inputBg
         val inLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -398,7 +330,7 @@ internal fun MainActivity.showHomeDialog() {
                 input.setText(u)
                 input.setSelection(input.text.length)
             } else {
-                Toast.makeText(this, "Tuhle stránku nelze nastavit jako domovskou", Toast.LENGTH_SHORT).show()
+                AppToast.show(this, "Tuhle stránku nelze nastavit jako domovskou")
             }
         }
         val acLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -413,10 +345,10 @@ internal fun MainActivity.showHomeDialog() {
         val group = RadioGroup(this)
         val rbRestore = RadioButton(this)
         rbRestore.id = View.generateViewId()
-        rbRestore.text = "Obnovit poslední karty"
+        rbRestore.text = getString(R.string.home_restore_tabs)
         val rbNew = RadioButton(this)
         rbNew.id = View.generateViewId()
-        rbNew.text = "Nová karta (domovská stránka)"
+        rbNew.text = getString(R.string.home_new_tab)
         for (rb in listOf(rbRestore, rbNew)) {
             rb.setTextColor(Color.WHITE)
             rb.buttonTintList = ColorStateList.valueOf(green)
@@ -453,6 +385,8 @@ internal fun MainActivity.showHomeDialog() {
 internal fun MainActivity.restoreTabs() {
     val urls = ArrayList<String>()
     val titles = ArrayList<String>()
+    val pins = ArrayList<Boolean>()
+    val pinTops = ArrayList<Boolean>()
     val srcIdx = ArrayList<Int>()   // poradi v ulozenem seznamu pro kazdou obnovenou kartu
     var groupsJson: JSONArray? = null
     var active = 0
@@ -468,11 +402,14 @@ internal fun MainActivity.restoreTabs() {
                 if (isWebUrl(u)) {
                     urls.add(u)
                     titles.add(e.optString("title"))
+                    pins.add(e.optBoolean("pin", false))
+                    pinTops.add(e.optBoolean("pt", false))
                     srcIdx.add(i)
                 }
             }
         }
     } catch (e: Exception) {
+        noteError(e)
     }
     if (urls.isEmpty()) {
         createTab(homeUrl)
@@ -483,8 +420,10 @@ internal fun MainActivity.restoreTabs() {
         val tab = createTab(null, false)
         tab.url = urls[i]
         tab.title = titles[i]
+        tab.pinned = pins[i]
+        tab.pinnedTop = pinTops[i]
         tab.pendingUrl = urls[i]
-        tab.preview = loadPreview(File(File(filesDir, "tab_previews"), "p" + i + ".jpg"))
+        tab.preview = loadPreview(File(File(filesDir, "tab_previews"), "p$i.jpg"))
         created.add(tab)
     }
     // obnova slozek (jen platne a s aspon 2 kartami)
@@ -503,25 +442,46 @@ internal fun MainActivity.restoreTabs() {
                 if (ids.size >= 2) {
                     val g = tabManager.newGroup(ids)
                     if (obj != null && obj.has("c")) g.color = obj.optInt("c", g.color)
+                    if (obj != null && obj.has("n")) g.name = obj.optString("n")
                 }
             }
         }
     } catch (e: Exception) {
+        noteError(e)
     }
     switchTo(created[active.coerceIn(0, created.size - 1)])
     updateTabCount()
 }
 
+private var closingAnim = false
+
+// Zavreni karty: aktivni karta se "vtahne" dolu do stredu obrazovky (zmensi se k dolnimu okraji a zmizi)
 internal fun MainActivity.closeTab(id: Long) {
+    if (AppSettings.animationsOn.get() && !closingAnim && id == tabs.activeId && tabsView.visibility != View.VISIBLE && webContainer.height > 0) {
+        closingAnim = true
+        webContainer.pivotX = webContainer.width / 2f
+        webContainer.pivotY = webContainer.height.toFloat()
+        webContainer.animate().scaleX(0.2f).scaleY(0.2f).alpha(0f).setDuration(240)
+            .withEndAction {
+                closingAnim = false
+                closeTabNow(id)
+                webContainer.animate().cancel()
+                webContainer.scaleX = 1f; webContainer.scaleY = 1f; webContainer.alpha = 1f
+            }.start()
+    } else closeTabNow(id)
+}
+
+internal fun MainActivity.closeTabNow(id: Long) {
     val idx = tabs.list.indexOfFirst { it.id == id }
     if (idx < 0) return
+    flyBurst("−", "#E53935")   // cervene minus pri zavreni
     val tab = tabs.list.removeAt(idx)
     rememberClosed(tab)
     val wasActive = tab.id == tabs.activeId
     disposeTab(tab)
     pruneGroups()
     if (tabs.list.isEmpty()) {
-        createTab(homeUrl)          // vzdy zustane aspon jedna karta
+        createTab(homeUrl, fly = false)          // vzdy zustane aspon jedna karta
     } else if (wasActive) {
         // radsi karta ze stejne skupiny (bezna / anonymni)
         val same = tabs.list.filter { it.incognito == tab.incognito }
@@ -536,6 +496,7 @@ internal fun MainActivity.updateTabCount() {
     // cislo se ukazuje jen kdyz ma tlacitko 2 vychozi funkci (jinak je tam ikona funkce)
     val incog = tabs.active()?.incognito ?: false
     if (isDefaultVisual(2)) findViewById<TextView>(R.id.tvTabCount).text = tabs.list.count { it.incognito == incog }.toString()
+    updateTabStrips()
 }
 
 internal fun MainActivity.setupTabsOverlay() {
@@ -547,6 +508,7 @@ internal fun MainActivity.setupTabsOverlay() {
             incognitoCount = tabs.list.count { it.incognito },
             onToggleIncognito = { inc ->
                 overviewIncognito = inc
+                applyAccent(inc)
                 refreshTiles()
             },
             onSelect = { id ->
@@ -554,6 +516,7 @@ internal fun MainActivity.setupTabsOverlay() {
                 hideTabs()
             },
             onClose = { id -> closeTab(id) },
+            onDeleteDragged = { id -> deleteCardWithUndo(id) },
             onSave = { id -> saveTabToFolder(id) },
             onMove = { fromId, toId -> moveTab(fromId, toId) },
             onMoveInFolder = { folderId, fromId, toId -> moveInGroup(folderId, fromId, toId) },
@@ -562,6 +525,10 @@ internal fun MainActivity.setupTabsOverlay() {
             onExtract = { ids -> extractTabs(ids) },
             onFolderColor = { tileId, color ->
                 tabManager.groupByTile(tileId)?.color = color
+                refreshTiles()
+            },
+            onFolderRename = { tileId, name ->
+                tabManager.groupByTile(tileId)?.name = name.trim().take(40)
                 refreshTiles()
             },
             onNew = {
@@ -588,13 +555,14 @@ internal fun MainActivity.showTabs() {
 
 internal fun MainActivity.hideTabs() {
     tabsView.visibility = View.GONE
+    applyAccent(tabs.active()?.incognito == true)   // po zavreni prehledu barva podle aktivni karty
 }
 
 internal fun MainActivity.refreshTiles() {
     fun tileOf(t: BrowserTab) = TabTile(t.id, t.title, t.url, t.preview, t.id == tabs.activeId, t.incognito)
     tabTiles.value = buildItems(overviewIncognito).map { (g, ms) ->
         if (g == null) tileOf(ms[0])
-        else TabTile(-g.id, "", "", null, ms.any { it.id == tabs.activeId }, overviewIncognito, true, ms.map { tileOf(it) }, g.color)
+        else TabTile(-g.id, "", "", null, ms.any { it.id == tabs.activeId }, overviewIncognito, true, ms.map { tileOf(it) }, g.color, g.name)
     }
 }
 
@@ -607,30 +575,29 @@ internal fun MainActivity.capturePreview(tab: BrowserTab, done: () -> Unit) {
     }
     val bw = 360
     val bh = maxOf(1, wv.height * bw / wv.width)
-    val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+    val bmp = createBitmap(bw, bh)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         val loc = IntArray(2)
         wv.getLocationInWindow(loc)
         val rect = Rect(loc[0], loc[1], loc[0] + wv.width, loc[1] + wv.height)
-        try {
-            PixelCopy.request(window, rect, bmp, PixelCopy.OnPixelCopyFinishedListener { result ->
+        runCatching {
+            PixelCopy.request(window, rect, bmp, { result ->
                 if (result == PixelCopy.SUCCESS) {
                     tab.preview = bmp
                     saveSiteThumb(tab)
                 }
                 done()
             }, Handler(Looper.getMainLooper()))
-        } catch (e: Exception) {
+        }.onFailure {
             done()
         }
     } else {
-        try {
+        quiet {
             val canvas = Canvas(bmp)
             canvas.scale(bw.toFloat() / wv.width, bw.toFloat() / wv.width)
             wv.draw(canvas)
             tab.preview = bmp
             saveSiteThumb(tab)
-        } catch (e: Exception) {
         }
         done()
     }
@@ -643,41 +610,45 @@ internal fun MainActivity.saveTabToFolder(id: Long) {
     chooseFolderAndSave(u, tab.title)
 }
 
-internal fun MainActivity.chooseFolderAndSave(curUrl: String?, pageTitle: String) {
+// demo = ukazka prvniho tutorialu: radky se jen ukazou (demoTargets folder0, folder1...), klepnuti nic neulozi
+internal fun MainActivity.chooseFolderAndSave(curUrl: String?, pageTitle: String, demo: Boolean = false) {
     if (curUrl == null || !isWebUrl(curUrl)) {
-        Toast.makeText(this, "Tuhle stranku nelze ulozit", Toast.LENGTH_SHORT).show()
+        AppToast.show(this, "Tuhle stranku nelze ulozit")
         return
     }
     thread(name = "bookmark-folders") {
         val folders = try {
             bookmarksRepo.foldersForPicker()
         } catch (e: Exception) {
+            noteError(e)
             emptyList()
         }
         runOnUiThread {
             if (folders.isEmpty()) return@runOnUiThread
+            if (demo) demoTargets.clear()
             showStyledDialog(title = "Přidat do složky") { dismiss ->
                 val list = LinearLayout(this)
                 list.orientation = LinearLayout.VERTICAL
-                for (f in folders) {
+                for ((fi, f) in folders.withIndex()) {
                     val row = TextView(this)
-                    row.text = "📁  " + f.name
+                    row.text = getString(R.string.folder_row, f.name)
                     row.setTextColor(Color.WHITE)
                     row.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                     row.setPadding(dp(16), dp(14), dp(16), dp(14))
                     val rowBg = GradientDrawable()
-                    rowBg.setColor(Color.parseColor("#2A2A2A"))
+                    rowBg.setColor("#2A2A2A".toColorInt())
                     rowBg.cornerRadius = dp(14).toFloat()
                     row.background = rowBg
+                    if (demo) demoTargets["folder$fi"] = row
                     row.setOnClickListener {
                         dismiss()
+                        if (demo) return@setOnClickListener
                         thread(name = "bookmark-add") {
-                            try {
+                            quiet {
                                 bookmarksRepo.addBookmark(f.id, curUrl, pageTitle)
-                            } catch (e: Exception) {
                             }
                             runOnUiThread {
-                                Toast.makeText(this, "Přidáno do: " + f.name, Toast.LENGTH_SHORT).show()
+                                AppToast.show(this, "Přidáno do: " + f.name)
                             }
                         }
                     }
@@ -695,5 +666,415 @@ internal fun MainActivity.chooseFolderAndSave(curUrl: String?, pageTitle: String
                 scroll
             }
         }
+    }
+}
+
+
+// ---------------- Listy karet (barevne dlazdice s ikonou webu) ----------------
+// Spodni lista: prvnich 5 karet, horni: dalsi (od 6.). Je-li zapnuta jen jedna, ukazuje vsechny karty. Aktivni karta je vyssi a jemne pulzuje.
+// Kazda lista se posouva zvlast. Web se o vysku listy zmensi (updateWebPadding).
+
+internal var lastSystemTopPx = 0
+internal var stripTopPx = 0
+internal var stripBottomPx = 0
+@SuppressLint("StaticFieldLeak")
+private var stripTop: HorizontalScrollView? = null
+@SuppressLint("StaticFieldLeak")
+private var stripBottom: HorizontalScrollView? = null
+private var pulseAnims = ArrayList<ValueAnimator>()
+
+private val NORMAL_BOTTOM = listOf("#FFEB3B", "#E53935", "#2962FF", "#4CE620", "#8D5A33")
+private val NORMAL_TOP = listOf("#9EA3A8", "#B0156A", "#FF80FF", "#008055", "#FF5A00")
+private val INCOG_BOTTOM = listOf("#0D47A1", "#1565C0", "#1976D2", "#1E88E5", "#2196F3")   // anonymni: dole odstiny modre
+private val INCOG_TOP = listOf("#1B5E20", "#2E7D32", "#388E3C", "#43A047", "#4CAF50")      // nahore odstiny zelene
+
+// Dalsi barvy karet od 11. karty dal (padaji nahodne; barva je stala podle id karty, v obou listach stejna)
+private val EXTRA_COLORS = listOf(
+    "#00ff1a", "#00ff84", "#9dfcce", "#024726", "#36baa4", "#00ffd5", "#00ffff", "#94e0e0",
+    "#00c8f5", "#1776a6", "#0084ff", "#004cff", "#0800ff", "#5d00ff", "#9900ff", "#dd00ff",
+    "#ff00c3", "#ff0059", "#ba5b7c", "#52323d", "#5b4585", "#bfc4e3", "#7d65a6", "#ff69f2",
+    "#d4ff00", "#004cff", "#616161", "#2e2e2e", "#c2c2c2", "#969696", "#707070", "#e0d83a",
+    "#222b63", "#910000", "#ff0000", "#992c2c", "#3d1212", "#968080", "#d9a275", "#f59445",
+    "#ff7300", "#bf5600", "#ff4d00", "#913f1c", "#f0a400", "#fae8c3", "#7a6026", "#abb00e",
+    "#f7ff0f", "#8e8f7b", "#c6fa0a", "#779605", "#a0ba43", "#98e802", "#527d02", "#2f7d02",
+    "#64d622", "#71de5b"
+)
+
+// Barva karty podle jejiho poradi v celem seznamu: 1-5 pevne (spodni), 6-10 pevne (horni), od 11. nahodne ze seznamu
+private fun tabColor(all: List<BrowserTab>, tab: BrowserTab, incog: Boolean): String {
+    val idx = all.indexOfFirst { it.id == tab.id }.coerceAtLeast(0)
+    val bottom = if (incog) INCOG_BOTTOM else NORMAL_BOTTOM
+    val top = if (incog) INCOG_TOP else NORMAL_TOP
+    if (idx < 5) return bottom[idx]
+    if (idx < 10) return top[idx - 5]
+    val pool = if (incog) INCOG_BOTTOM + INCOG_TOP else EXTRA_COLORS
+    fun pick(t: BrowserTab) = (((t.id * 2654435761L) ushr 8) % pool.size).toInt()
+    var k = pick(tab)
+    if (idx > 10 && pick(all[idx - 1]) == k) k = (k + 1) % pool.size   // soused nema stejnou barvu
+    return pool[k]
+}
+
+private var shownTopIds: Set<Long> = emptySet()      // karty, ktere lista prave ukazuje (pro pripnuti na stejnem miste)
+private var shownBottomIds: Set<Long> = emptySet()
+private var lastTapId = -1L                            // dvojklik na dlazdici = rychle menu
+private var lastTapAt = 0L
+@SuppressLint("StaticFieldLeak")
+private var hintTop: TextView? = null      // "+N" u horni listy (vlevo)
+@SuppressLint("StaticFieldLeak")
+private var hintBottom: TextView? = null   // "+N" u spodni listy (vpravo)
+
+@Suppress("UnusedReceiverParameter")
+internal fun MainActivity.stripViews(): List<Pair<View, Boolean>> =
+    listOfNotNull(stripTop?.let { it to true }, stripBottom?.let { it to false }, hintTop?.let { it to true }, hintBottom?.let { it to false })
+
+// Ukazatel poctu karet, ktere se v zadne liste nevejdou: nahore uplne vlevo, dole uplne vpravo
+private fun MainActivity.setHint(top: Boolean, count: Int) {
+    var tv = if (top) hintTop else hintBottom
+    if (tv == null) {
+        tv = TextView(this)
+        tv.setTextColor(Color.WHITE)
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        tv.setTypeface(tv.typeface, Typeface.BOLD)
+        tv.gravity = Gravity.CENTER
+        tv.setPadding(dp(7), 0, dp(7), 0)
+        val g = GradientDrawable()
+        g.setColor("#E6141414".toColorInt())
+        g.setStroke(dp(1), "#88FFFFFF".toColorInt())
+        g.cornerRadius = dp(10).toFloat()
+        tv.background = g
+        tv.elevation = dp(6).toFloat()   // nad listou
+        val lp = ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(20))
+        if (top) { lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID; lp.marginStart = dp(10); lp.topToTop = (stripTop ?: return).id; lp.topMargin = dp(5) }
+        else { lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID; lp.marginEnd = dp(10); lp.bottomToBottom = (stripBottom ?: return).id; lp.bottomMargin = dp(5) }
+        (root as ConstraintLayout).addView(tv, lp)
+        if (top) hintTop = tv else hintBottom = tv
+    }
+    tv.text = getString(R.string.hint_more, count)
+    tv.visibility = if (count > 0) View.VISIBLE else View.GONE
+}
+
+// Web je mezi listami: nahore konci horni lista (+ lista karet), dole zacina spodni (+ lista karet)
+internal fun MainActivity.updateWebPadding() {
+    webContainer.setPadding(0, lastSystemTopPx + 16 + dp(52) + stripTopPx, 0, lastSystemBottom + 16 + dp(48) + stripBottomPx)
+}
+
+private fun MainActivity.ensureStrip(top: Boolean): HorizontalScrollView {
+    (if (top) stripTop else stripBottom)?.let { return it }
+    val sv = HorizontalScrollView(this)
+    sv.id = View.generateViewId()
+    sv.isHorizontalScrollBarEnabled = false
+    sv.overScrollMode = View.OVER_SCROLL_NEVER
+    sv.visibility = View.GONE
+    val row = LinearLayout(this)
+    row.orientation = LinearLayout.HORIZONTAL
+    sv.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)))
+    val lp = ConstraintLayout.LayoutParams(0, dp(30))
+    lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.marginStart = dp(8); lp.marginEnd = dp(8)
+    if (top) { lp.topToBottom = R.id.progressBar; lp.topMargin = dp(2) }
+    else { lp.bottomToTop = R.id.bottomBar; lp.bottomMargin = dp(4) }
+    (root as ConstraintLayout).addView(sv, lp)
+    if (top) stripTop = sv else stripBottom = sv
+    return sv
+}
+
+internal fun MainActivity.updateTabStrips() {
+    pulseAnims.forEach { it.cancel() }
+    pulseAnims.clear()
+    val wantBottom = AppSettings.tabStripBottom.get()
+    val wantTop = AppSettings.tabStripTop.get()
+    val imeUp = lastImeShift != 0f
+    val incog = tabs.active()?.incognito ?: false
+    val list = tabs.list.filter { it.incognito == incog }
+    val bottomList: List<BrowserTab>
+    val topList: List<BrowserTab>
+    if (wantBottom && wantTop) {
+        // dole 1-5 (posunem 6), nahore poslednich 5 (posunem o 1 dal); vychozi pet druhe strany tam neni videt
+        val topBase = list.drop(5).takeLast(6)
+        val base = list.take(6)
+        // pripnuta karta zustava v te liste, kde byla pri pripnuti (na svem miste v poradi)
+        bottomList = list.filter { it in base || (it.pinned && !it.pinnedTop && it !in topBase) }
+        topList = list.filter { it in topBase || (it.pinned && it.pinnedTop && it !in base) }
+    }
+    else if (wantBottom) { bottomList = list; topList = emptyList() }
+    else if (wantTop) { bottomList = emptyList(); topList = list }
+    else { bottomList = emptyList(); topList = emptyList() }
+    shownTopIds = topList.map { it.id }.toSet(); shownBottomIds = bottomList.map { it.id }.toSet()
+    fill(true, topList.takeIf { !imeUp } ?: emptyList(), incog)
+    fill(false, bottomList.takeIf { !imeUp } ?: emptyList(), incog)
+    // karty, ktere nejsou v zadne liste (uprostred pri 12+): "+N" nahore vlevo / dole vpravo
+    val hidden = if (wantBottom && wantTop && !imeUp) list.size - (bottomList + topList).distinctBy { it.id }.size else 0
+    if (hidden > 0 || hintTop != null) setHint(true, hidden)
+    if (hidden > 0 || hintBottom != null) setHint(false, hidden)
+    stripTopPx = if (topList.isNotEmpty() && !imeUp) dp(34) else 0
+    stripBottomPx = if (bottomList.isNotEmpty() && !imeUp) dp(34) else 0
+    updateWebPadding()
+}
+
+private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boolean) {
+    if (list.isEmpty()) {
+        val old = if (top) stripTop else stripBottom
+        (old?.getChildAt(0) as? LinearLayout)?.removeAllViews()   // dalsi sestaveni = zase vychozi pozice
+        old?.visibility = View.GONE
+        return
+    }
+    val sv = ensureStrip(top)
+    val row = sv.getChildAt(0) as LinearLayout
+    // pozice posunu pred prestavbou (horni lista se drzi od konce, spodni od zacatku)
+    val firstBuild = row.isEmpty()
+    val keepStart = sv.scrollX
+    val keepFromEnd = (row.width - sv.width) - sv.scrollX
+    row.removeAllViews()
+    sv.visibility = View.VISIBLE
+    val screenW = resources.displayMetrics.widthPixels - dp(16)
+    val gap = dp(3)
+    val tileW = (screenW - gap * 4) / 5          // 5 dlazdic na sirku, dalsi se posouvaji
+    val all = tabs.list.filter { it.incognito == incog }
+    var activeLeft = -1
+    list.forEachIndexed { i, tab ->
+        val active = tab.id == tabs.activeId
+        val h = if (active) dp(30) else dp(26)
+        val tile = FrameLayout(this)
+        val bg = GradientDrawable()
+        val grp = groupOf(tab.id)   // karta ve slozce ma barvu slozky
+        bg.setColor(grp?.color ?: tabColor(all, tab, incog).toColorInt())
+        bg.cornerRadius = dp(8).toFloat()
+        tile.background = bg
+        // ikona webu na skoro cernem podkladu
+        val box = FrameLayout(this)
+        val bb = GradientDrawable()
+        bb.setColor("#141414".toColorInt())
+        bb.cornerRadius = dp(6).toFloat()
+        box.background = bb
+        val iv = ImageView(this)
+        val fav = tab.favicon
+        if (fav != null) iv.setImageBitmap(fav) else iv.setImageResource(R.drawable.ic_globe)
+        box.addView(iv, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER))
+        tile.addView(box, FrameLayout.LayoutParams(dp(30), h - dp(8), Gravity.CENTER))
+        if (tab.pinned) {
+            val pin = TextView(this)
+            pin.text = "📌"
+            pin.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
+            tile.addView(pin, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START))
+        }
+        attachTileTouch(tile, tab, list, row, sv)
+        val lp = LinearLayout.LayoutParams(tileW, h)
+        lp.gravity = if (top) Gravity.TOP else Gravity.BOTTOM
+        lp.marginEnd = gap
+        row.addView(tile, lp)
+        if (active) {
+            activeLeft = i * (tileW + gap)
+            if (AppSettings.animationsOn.get()) {
+                // aktivni dlazdice jemne pulzuje
+                val a = ValueAnimator.ofFloat(1f, 0.75f)
+                a.duration = 900
+                a.repeatMode = ValueAnimator.REVERSE
+                a.repeatCount = ValueAnimator.INFINITE
+                a.addUpdateListener { tile.alpha = it.animatedValue as Float }
+                a.start()
+                pulseAnims.add(a)
+            }
+        }
+    }
+    sv.post {
+        val maxScroll = (row.width - sv.width).coerceAtLeast(0)
+        val target = when {
+            firstBuild -> if (top) maxScroll else 0   // vychozi: horni lista na konci (poslednich 5), spodni na zacatku
+            top -> (maxScroll - keepFromEnd).coerceIn(0, maxScroll)
+            else -> keepStart.coerceIn(0, maxScroll)
+        }
+        sv.scrollTo(target, 0)
+        // aktivni karta mimo viditelnou cast = dojet na ni (jinak zustane posun, jak ho uzivatel nechal)
+        if (activeLeft >= 0 && (firstBuild || activeLeft < target || activeLeft + tileW > target + sv.width)) {
+            sv.smoothScrollTo((activeLeft - (screenW - tileW) / 2).coerceIn(0, maxScroll), 0)
+        }
+    }
+}
+
+
+// Rychle menu karty z listy (dlouhy stisk na dlazdici)
+internal fun MainActivity.showTabQuickMenu(tab: BrowserTab) {
+    val title = tab.title.ifBlank { tab.url.ifBlank { "Karta" } }
+    showStyledDialog(title = title, negativeText = "Zrušit") { dismiss ->
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        fun item(text: String, onClick: () -> Unit) {
+            val b = styledButton(text, false)
+            b.setOnClickListener { dismiss(); onClick() }
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.topMargin = dp(8)
+            box.addView(b, lp)
+        }
+        item(if (tab.pinned) "Odepnout" else "Připnout") {
+            if (!tab.pinned) tab.pinnedTop = tab.id in shownTopIds && tab.id !in shownBottomIds   // zustane v liste, kde je ted
+            tab.pinned = !tab.pinned
+            updateTabStrips()
+            saveTabs()
+            AppToast.show(this, if (tab.pinned) "Karta připnuta" else "Karta odepnuta")
+        }
+        item("Duplikovat") {
+            val u = tab.pendingUrl ?: tab.liveUrl().ifBlank { tab.url }
+            if (!isWebUrl(u)) { AppToast.show(this, "Nelze duplikovat: karta nemá adresu"); return@item }
+            // nova karta se otevre na pozadi hned za puvodni
+            val copy = createTab(u, activate = false, incognito = tab.incognito, fly = false)
+            if (tab.desktop) applyDesktop(copy, true)
+            val at = tabs.list.indexOfFirst { it.id == tab.id }
+            if (at >= 0) { tabs.list.remove(copy); tabs.list.add(at + 1, copy) }
+            updateTabStrips()
+            AppToast.show(this, "Karta duplikována")
+        }
+        item("Přesunout do složky") { showMoveToFolder(tab) }
+        item("Zavřít kartu") {
+            if (!tab.pinned) closeTab(tab.id)
+            else showStyledDialog(title = "Zavřít připnutou kartu?", positiveText = "Zavřít", onPositive = { closeTab(tab.id); true }) { _ ->
+                val tv = TextView(this)
+                tv.text = getString(R.string.pinned_close_confirm)
+                tv.setTextColor("#CCCCCC".toColorInt())
+                tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                tv
+            }
+        }
+        box
+    }
+}
+
+
+// Dlazdice v liste: klepnuti = prepnout, dvojklik = rychle menu, drzeni = presunout (zmena poradi karet)
+@SuppressLint("ClickableViewAccessibility")
+private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List<BrowserTab>, row: LinearLayout, sv: HorizontalScrollView) {
+    val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+    val handler = Handler(Looper.getMainLooper())
+    var downX = 0f
+    var downY = 0f
+    var moved = false
+    var dragging = false
+    val startDrag = Runnable {
+        dragging = true
+        tile.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        tile.elevation = dp(10).toFloat()
+        tile.scaleX = 1.12f; tile.scaleY = 1.12f
+        sv.requestDisallowInterceptTouchEvent(true)   // lista se behem tahu neposouva
+    }
+    fun resetVisual() {
+        tile.translationX = 0f; tile.scaleX = 1f; tile.scaleY = 1f; tile.elevation = 0f
+    }
+    tile.setOnTouchListener { v, ev ->
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.rawX; downY = ev.rawY; moved = false; dragging = false
+                handler.postDelayed(startDrag, android.view.ViewConfiguration.getLongPressTimeout().toLong())
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (dragging) v.translationX = ev.rawX - downX
+                else if (!moved && (kotlin.math.abs(ev.rawX - downX) > slop || kotlin.math.abs(ev.rawY - downY) > slop)) {
+                    moved = true
+                    handler.removeCallbacks(startDrag)   // je to posun listy, ne drzeni
+                }
+                true
+            }
+            MotionEvent.ACTION_UP -> {
+                handler.removeCallbacks(startDrag)
+                if (dragging) {
+                    // kam dlazdici pustil: na dlazdici jine karty = karta se presune na jeji misto v poradi
+                    val cx = v.left + v.width / 2f + v.translationX
+                    var target: BrowserTab? = null
+                    for (i in 0 until row.childCount) {
+                        val c = row.getChildAt(i)
+                        if (c !== v && cx >= c.left && cx <= c.right) { target = list.getOrNull(i); break }
+                    }
+                    dragging = false
+                    resetVisual()
+                    if (target != null) {
+                        val from = tabs.list.indexOfFirst { it.id == tab.id }
+                        val to = tabs.list.indexOfFirst { it.id == target.id }
+                        if (from >= 0 && to >= 0 && from != to) {
+                            tabs.list.add(to, tabs.list.removeAt(from))
+                            saveTabs()
+                            updateTabStrips()
+                        }
+                    }
+                } else if (!moved) {
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (lastTapId == tab.id && now - lastTapAt < 350) {
+                        lastTapId = -1L
+                        showTabQuickMenu(tab)   // dvojklik
+                    } else {
+                        lastTapId = tab.id; lastTapAt = now
+                        if (tab.id != tabs.activeId) switchTo(tab)
+                    }
+                }
+                true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                handler.removeCallbacks(startDrag)
+                if (dragging) { dragging = false; resetVisual() }
+                true
+            }
+            else -> true
+        }
+    }
+}
+
+// Presun karty do existujici slozky (skupiny karet) stejneho rezimu (bezne / anonymni)
+private fun MainActivity.showMoveToFolder(tab: BrowserTab) {
+    val options = groups.filter { g ->
+        tab.id !in g.members && tabs.list.firstOrNull { it.id == g.members.firstOrNull() }?.incognito == tab.incognito
+    }
+    showStyledDialog(title = "Přesunout do složky", negativeText = "Zrušit") { dismiss ->
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        if (options.isEmpty()) {
+            val tv = TextView(this)
+            tv.text = getString(R.string.no_other_folder)
+            tv.setTextColor("#CCCCCC".toColorInt())
+            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            box.addView(tv)
+        }
+        for (g in options) {
+            val label = "● " + g.name.ifBlank { "Složka" } + " (" + g.members.size + ")"
+            val sp = android.text.SpannableString(label)
+            sp.setSpan(android.text.style.ForegroundColorSpan(g.color), 0, 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val b = styledButton(label, false)
+            b.text = sp
+            b.setOnClickListener {
+                dismiss()
+                tabManager.removeFromGroups(listOf(tab.id))
+                g.members.add(tab.id)
+                tabManager.prune(tabs.list.map { it.id }.toSet())   // zanikla puvodni slozka (mene nez 2 karty)
+                saveTabs()
+                updateTabStrips()
+                AppToast.show(this, "Karta přesunuta do složky")
+            }
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.topMargin = dp(8)
+            box.addView(b, lp)
+        }
+        box
+    }
+}
+
+
+// Smazani karty pretazene na "Smazat kartu": zavre se hned a toast nabidne "Vratit zpet" (karta se otevre znovu na stejnem miste)
+internal fun MainActivity.deleteCardWithUndo(id: Long) {
+    val tab = tabs.list.firstOrNull { it.id == id } ?: return
+    val idx = tabs.list.indexOf(tab)
+    val url = tab.pendingUrl ?: tab.url.ifBlank { tab.liveUrl() }
+    val incog = tab.incognito
+    val desktop = tab.desktop
+    val pinned = tab.pinned
+    closeTabNow(id)
+    refreshTiles()
+    AppToast.showAction(this, "Karta smazána", "Vrátit zpět") {
+        val back = createTab(if (isWebUrl(url)) url else null, activate = false, incognito = incog, fly = false)
+        if (desktop) applyDesktop(back, true)
+        back.pinned = pinned
+        tabs.list.remove(back)
+        tabs.list.add(idx.coerceIn(0, tabs.list.size), back)
+        updateTabStrips()
+        saveTabs()
+        if (tabsView.isVisible) refreshTiles()
+        AppToast.show(this, "Karta vrácena")
     }
 }

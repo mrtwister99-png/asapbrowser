@@ -1,99 +1,38 @@
 package com.example.actimelteambrowser
 
 import android.annotation.SuppressLint
-import android.os.Bundle
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.createBitmap
+import androidx.compose.runtime.DisposableEffect
+import androidx.appcompat.content.res.AppCompatResources
+import android.view.animation.DecelerateInterpolator
+import androidx.core.graphics.toColorInt
 import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.webkit.*
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.*
-import com.example.actimelteambrowser.core.adblock.AdBlocker
-import com.example.actimelteambrowser.core.adblock.AdBlockRules
-import java.io.ByteArrayInputStream
-import com.example.actimelteambrowser.core.engine.RustBridge
-import kotlin.concurrent.thread
-import java.util.concurrent.atomic.AtomicInteger
-import com.example.actimelteambrowser.core.adblock.CookieReject
-import com.example.actimelteambrowser.core.adblock.ListUpdater
 import com.example.actimelteambrowser.core.settings.AppSettings
-import android.content.Intent
-import android.text.Editable
-import android.text.TextWatcher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
-import com.example.actimelteambrowser.data.BookmarksRepository
-import com.example.actimelteambrowser.data.HistoryRepository
-import com.example.actimelteambrowser.data.HistoryVisit
-import com.example.actimelteambrowser.data.Bookmark
-import com.example.actimelteambrowser.ui.SearchSuggestion
 import com.example.actimelteambrowser.ui.ButtonConfigModal
-import com.example.actimelteambrowser.ui.SearchSuggestionsList
-import com.example.actimelteambrowser.ui.buildSearchSuggestions
 import android.graphics.Bitmap
 import android.view.MotionEvent
 import com.example.actimelteambrowser.ui.ExternalTouch
-import com.example.actimelteambrowser.core.settings.Gestures
-import com.example.actimelteambrowser.core.gestures.gestureTick
-import com.example.actimelteambrowser.core.gestures.playRawSound
-import com.example.actimelteambrowser.core.settings.GlyphIcons
-import com.example.actimelteambrowser.core.settings.SiteRules
-import com.example.actimelteambrowser.core.settings.SearchEngines
-import com.example.actimelteambrowser.ui.StartPage
-import androidx.webkit.ProfileStore
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import com.example.actimelteambrowser.ui.StartSite
-import com.example.actimelteambrowser.ui.GestureOverlay
-import com.example.actimelteambrowser.ui.GestureArea
-import com.example.actimelteambrowser.ui.GestureAreaEditor
-import com.example.actimelteambrowser.ui.GesturePanel
 import android.animation.ArgbEvaluator
-import android.content.Context
-import android.graphics.BitmapShader
-import android.graphics.Matrix
-import android.graphics.RadialGradient
-import android.graphics.Shader
-import android.graphics.drawable.ColorDrawable
-import android.view.Choreographer
 import androidx.constraintlayout.widget.ConstraintLayout
 import android.graphics.Paint
 import com.example.actimelteambrowser.core.settings.ButtonDefaults
 import com.example.actimelteambrowser.core.settings.ButtonFunction
 import android.animation.ValueAnimator
-import android.app.Dialog
-import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
-import android.view.Window
-import android.view.animation.OvershootInterpolator
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
 import android.util.TypedValue
-import android.transition.TransitionManager
-import android.net.Uri
-import android.graphics.BitmapFactory
-import android.text.InputType
-import java.io.File
-import java.io.FileOutputStream
-import androidx.activity.OnBackPressedCallback
-import org.json.JSONArray
-import org.json.JSONObject
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.view.PixelCopy
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
-import com.example.actimelteambrowser.ui.TabTile
-import com.example.actimelteambrowser.ui.TabsScreen
 
 // Tlačítka 1–12, konfigurační mód tlačítek, boční lišta a vzhled tlačítek (rozšíření MainActivity).
 // Pridana boci tlacitka (9-12): vytvori se nad tlacitky 5 a 6 podle nastaveni
@@ -126,9 +65,16 @@ internal fun MainActivity.rebuildExtraButtons() {
 
 // Tlacitko s funkci Gesta (kulicka, vychozi je 6): prst polozeny na kulicku hned ukaze plochu a dotyk pokracuje
 // na ploše (jednim tahem bez zvednuti prstu). Funkce se kontroluje pri kazdem dotyku, takze jde menit za behu.
+@SuppressLint("ClickableViewAccessibility")   // kulicka Gesta predava dotyk dal, klik se tu nevola
 internal fun MainActivity.wireGestureTouch(v: View, n: Int) {
+    var swallow = false   // prvni dotyk spustil ukazku: zbytek tohoto dotyku se zahodi
     v.setOnTouchListener { view, ev ->
         if (buttonFunction(n, false) != ButtonFunction.GESTURES) return@setOnTouchListener false
+        if (swallow) {
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) swallow = false
+            return@setOnTouchListener true
+        }
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN && liveTutorialDone(n)) { swallow = true; return@setOnTouchListener true }
         val wl = IntArray(2)
         window.decorView.getLocationOnScreen(wl)
         val x = ev.rawX - wl[0]
@@ -138,7 +84,7 @@ internal fun MainActivity.wireGestureTouch(v: View, n: Int) {
                 view.parent?.requestDisallowInterceptTouchEvent(true)
                 val down = ExternalTouch(x, y, 0, ++extSeq)
                 externalDown = down
-                if (gestureView.visibility != View.VISIBLE) showGestures()
+                if (!gestureView.isVisible) showGestures()
                 externalTouch.value = down
             }
             MotionEvent.ACTION_MOVE -> externalTouch.value = ExternalTouch(x, y, 1, ++extSeq)
@@ -162,6 +108,7 @@ internal fun MainActivity.wireButtons() {
             v.setOnClickListener { runTap(i) }
             v.setOnLongClickListener {
                 buzz(it)
+                holdIconFlip(i)
                 runLongPress(i)
                 true
             }
@@ -177,17 +124,16 @@ internal fun MainActivity.enterConfigMode() {
     hideKeyboard()
     etSearchMain.clearFocus()
     etTopUrl.clearFocus()
-    if (gestureView.visibility == View.VISIBLE) hideGestures()
+    if (gestureView.isVisible) hideGestures()
     if (leftBarOpen) closeLeftBarAndHide()
     hideTabs()
     etSearchMain.isEnabled = false
     etTopUrl.isEnabled = false
     val parent = root as ViewGroup
-    val green = Color.parseColor("#00B055")
 
-    // lehke ztmaveni plochy; pohlti klepnuti do webu (tlacitka maji vyssi elevation)
+    // pruhledna vrstva; pohlti klepnuti do webu (tlacitka maji vyssi elevation)
     val scrim = View(this)
-    scrim.setBackgroundColor(Color.parseColor("#44000000"))
+    scrim.setBackgroundColor(Color.TRANSPARENT)   // bez ztmaveni: zmeny tlacitek jsou videt hned
     scrim.isClickable = true
     scrim.elevation = dp(7).toFloat()
     val slp = ConstraintLayout.LayoutParams(0, 0)
@@ -198,18 +144,20 @@ internal fun MainActivity.enterConfigMode() {
     parent.addView(scrim, slp)
     configScrim = scrim
 
-    // uprostred: zelene prerusovane tlacitko
+    // uprostred: zluty text s plnym zlutooranzovym obrysem
+    val saveYellow = "#FFD600".toColorInt()
+    val saveOrange = "#FFA000".toColorInt()
     val save = TextView(this)
-    save.text = "Uložit a zavřít nastavení"
-    save.setTextColor(green)
+    save.text = getString(R.string.config_save_close)
+    save.setTextColor(saveYellow)
     save.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
     save.setTypeface(save.typeface, Typeface.BOLD)
     save.gravity = Gravity.CENTER
     save.setPadding(dp(26), dp(18), dp(26), dp(18))
     val sbg = GradientDrawable()
-    sbg.setColor(Color.parseColor("#E61E1E1E"))
+    sbg.setColor("#E61E1E1E".toColorInt())
     sbg.cornerRadius = dp(18).toFloat()
-    sbg.setStroke(dp(2), green, dp(10).toFloat(), dp(7).toFloat())   // prerusovany obrys
+    sbg.setStroke(dp(2), saveOrange)   // plny obrys
     save.background = sbg
     save.elevation = dp(9).toFloat()
     save.setOnClickListener { exitConfigMode() }
@@ -226,11 +174,18 @@ internal fun MainActivity.enterConfigMode() {
     host.setContent {
         val n = configButton.value
         if (n != null) {
+            // upravovane tlacitko pomalu pulzuje modre, dokud je okno otevrene
+            DisposableEffect(n) {
+                startEditPulse(n)
+                onDispose { stopEditPulse() }
+            }
             ButtonConfigModal(
                 n = n,
                 onChanged = { refreshConfigUi() },
                 onRemoved = { configButton.value = null; refreshConfigUi() },
-                onDismiss = { configButton.value = null }
+                onDismiss = { configButton.value = null },
+                // po ✓: okno se zavre a upravene tlacitko 10 s pomalu bliká modře/žlutě
+                onSaved = { configButton.value = null; blinkSaved(n) }
             )
         }
     }
@@ -244,6 +199,7 @@ internal fun MainActivity.exitConfigMode() {
     if (!configMode) return
     configMode = false
     configButton.value = null
+    stopEditPulse()
     val parent = root as ViewGroup
     for (v in listOf(configScrim, configSave, configHost)) if (v != null) parent.removeView(v)
     configScrim = null
@@ -256,7 +212,7 @@ internal fun MainActivity.exitConfigMode() {
     rebuildExtraButtons()
     wireButtons()
     updateButtonVisuals()
-    Toast.makeText(this, "Nastavení tlačítek uloženo", Toast.LENGTH_SHORT).show()
+    AppToast.show(this, "Nastavení tlačítek uloženo")
 }
 
 // Po zmene v modalu: znovu postavit tlacitka (i pridana) a "+" nad nimi
@@ -286,20 +242,20 @@ internal fun MainActivity.rebuildConfigPlus() {
     val l = AppSettings.extraButtons(true)
     val r = AppSettings.extraButtons(false)
     if (l.size + r.size >= 4) return
-    val green = Color.parseColor("#00B055")
+    val green = "#00B055".toColorInt()
     for (left in listOf(true, false)) {
         val list = if (left) l else r
         if (list.size >= 2) continue
         val anchor = if (list.isEmpty()) (if (left) R.id.btnSideLeftMain else R.id.btnSideRightMain)
         else extraViews[list.last()]?.id ?: continue
         val plus = TextView(this)
-        plus.text = "+"
+        plus.text = getString(R.string.plus_sign)
         plus.setTextColor(green)
         plus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
         plus.setTypeface(plus.typeface, Typeface.BOLD)
         plus.gravity = Gravity.CENTER
         val bg = GradientDrawable()
-        bg.setColor(Color.parseColor("#E61E1E1E"))
+        bg.setColor("#E61E1E1E".toColorInt())
         bg.cornerRadius = dp(18).toFloat()
         bg.setStroke(dp(2), green, dp(8).toFloat(), dp(5).toFloat())
         plus.background = bg
@@ -328,6 +284,7 @@ internal fun MainActivity.addConfigButton(left: Boolean) {
 }
 
 // Vibrace pri drzeni tlacitka (jde vypnout v Konfiguraci)
+@Suppress("UnusedReceiverParameter")
 internal fun MainActivity.buzz(v: View) {
     if (AppSettings.vibrationOn.get()) v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
 }
@@ -335,12 +292,14 @@ internal fun MainActivity.buzz(v: View) {
 // Klepnuti: tlacitka 1-4 maji sve animace (1 problikne 2x zelene, 2 se otoci o 360 stupnu,
 // 3 vyplni zlutou hvezdu s jiskrami, 4 prohodi logo za kolecko) a az potom provedou funkci
 internal fun MainActivity.runTap(i: Int) {
+    if (buttonFunction(i, false) == ButtonFunction.GESTURES) return   // tlacitko Gest: jen gesto
+    if (liveTutorialDone(i)) return   // prvni klepnuti na AdBlock / VPN = ukazka misto akce
     val fn = buttonFunction(i, false)
     if (fn == ButtonDefaults.tap(i) && isDefaultVisual(i) && AppSettings.animationsOn.get()) {
         when (i) {
             1 -> { blinkHome(); performFunction(fn); return }
             2 -> { spinTabs { performFunction(fn) }; return }
-            3 -> { animateStar { performFunction(fn) }; return }
+            3 -> { spinFavorites { performFunction(fn) }; return }
             4 -> { playSettingsOutro { performFunction(fn) }; return }
         }
     }
@@ -349,12 +308,15 @@ internal fun MainActivity.runTap(i: Int) {
 
 // Drzeni: puvodni animace se prehraje jen u vychozi funkce toho tlacitka
 internal fun MainActivity.runLongPress(i: Int) {
+    if (buttonFunction(i, false) == ButtonFunction.GESTURES) return   // tlacitko Gest: jen gesto, zadne klepnuti / drzeni
+    if (liveTutorialDone(i)) return
     val fn = buttonFunction(i, true)
     if (fn != ButtonFunction.NONE && fn == ButtonDefaults.long(i) && isDefaultVisual(i) && AppSettings.animationsOn.get()) {
         when (i) {
             1 -> { animateHome { performFunction(fn) }; return }
             2 -> { animateTabsButton { performFunction(fn) }; return }
             3 -> { animateStar { performFunction(fn) }; return }
+            4 -> { spinSettingsLogo { performFunction(fn) }; return }
         }
     }
     performFunction(fn)
@@ -364,16 +326,61 @@ internal fun MainActivity.runLongPress(i: Int) {
 internal fun MainActivity.wireSideButton(n: Int, v: View) {
     // spusti funkci tlacitka; u 5/6 si zapamatuje, ze lista ma vyjet z teto strany
     fun press(long: Boolean) {
-        if (n == 5 || n == 6) pressedOrigin = n
-        performFunction(buttonFunction(n, long))
-        pressedOrigin = 0
+        if (buttonFunction(n, false) == ButtonFunction.GESTURES) return   // jen gesto
+        liveTutorialDone(n)
+        val fn = buttonFunction(n, long)
+        val run = {
+            if (n == 5 || n == 6) pressedOrigin = n
+            performFunction(fn)
+            pressedOrigin = 0
+        }
+        // Gesta, Bocni lista a prazdne tlacitko bez animace; ostatni: vyjede na 100 %, zelene blikne a pak funkce
+        if (fn == ButtonFunction.GESTURES || fn == ButtonFunction.LEFT_BAR || fn == ButtonFunction.NONE) run()
+        else confirmSideButton(n, v, run)
     }
     v.setOnClickListener { press(false) }
     v.setOnLongClickListener {
         buzz(it)
+        holdIconFlip(n)
         press(true)
         true
     }
+}
+
+@SuppressLint("StaticFieldLeak")
+private val sideConfirming = HashSet<Int>()
+
+// Potvrzeni stisku zasunuteho bocniho tlacitka: vyjede na 100 %, 2x zelene blikne, spusti se funkce a tlacitko se zase zasune.
+// Behem animace dalsi stisky tlacitka nic nedelaji. Vypnute animace (Konfigurace) = funkce hned.
+internal fun MainActivity.confirmSideButton(n: Int, v: View, onDone: () -> Unit) {
+    if (!AppSettings.animationsOn.get()) { onDone(); return }
+    if (!sideConfirming.add(n)) return
+    val greenBg = GradientDrawable()
+    greenBg.setColor(accentState.value)
+    greenBg.cornerRadius = dp(16).toFloat()
+    greenBg.setStroke(dp(1), Color.WHITE)
+    fun retract() {
+        // jako applySideMode: schovat za okraj, krome otevrene listy tohoto tlacitka a konfiguracnich modu
+        val target = if (!configMode && !gestureConfigMode && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
+        v.animate().translationX(target).setDuration(250).withEndAction { sideConfirming.remove(n) }.start()
+    }
+    v.animate().translationX(0f).setDuration(220).withEndAction {
+        var step = 0
+        val blink = object : Runnable {
+            override fun run() {
+                if (step >= 4) {
+                    v.setBackgroundResource(R.drawable.side_button_bg)
+                    onDone()
+                    v.postDelayed({ retract() }, 150)
+                    return
+                }
+                if (step % 2 == 0) v.background = greenBg else v.setBackgroundResource(R.drawable.side_button_bg)
+                step++
+                v.postDelayed(this, 110)
+            }
+        }
+        blink.run()
+    }.start()
 }
 
 // Boční tlačítka: trvale zasunutá (50 / 70 %); celá jsou vidět jen v konfiguračních módech a u otevřené lišty
@@ -393,7 +400,7 @@ internal fun MainActivity.setupSideBar() {
     bar.setPadding(0, dp(12), 0, 0)
     bar.elevation = dp(6).toFloat()   // nad webem, pod tlacitky (8)
     val bg = GradientDrawable()
-    bg.setColor(Color.parseColor("#1E1E1E"))
+    bg.setColor("#1E1E1E".toColorInt())
     bg.cornerRadius = 24f * d
     bg.setStroke((1f * d).toInt().coerceAtLeast(1), Color.WHITE)
     bar.background = bg
@@ -405,24 +412,18 @@ internal fun MainActivity.setupSideBar() {
         b.isClickable = true
         b.isFocusable = true
         b.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        b.setOnClickListener { action() }
+        val liveId = 201 + bar.childCount   // cislo v zive napovede (201-203)
+        b.setOnClickListener { if (!liveTutorialDone(liveId)) action() }   // prvni klepnuti = ukazka misto akce
         val blp = LinearLayout.LayoutParams(dp(48), dp(48))
         blp.bottomMargin = dp(8)
         bar.addView(b, blp)
         return b
     }
-    fun glyph(text: String, sizeSp: Float = 22f) = TextView(this).apply {
-        this.text = text
-        gravity = Gravity.CENTER
-        setTextColor(Color.WHITE)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-    }
     // 1) screenshot obrazovky (sdilet odkaz a QR jsou ted u adresniho radku)
-    fun whiteIcon(g: String) = ImageView(this).apply { setImageBitmap(GlyphIcons.white(g, dp(28))) }
     fun fnIcon(fn: ButtonFunction) = ImageView(this).apply { setImageBitmap(glyphBitmap(fn, dp(28))) }
     fun resIcon(res: Int) = ImageView(this).apply {
-        val bmp = Bitmap.createBitmap(dp(28), dp(28), Bitmap.Config.ARGB_8888)
-        androidx.appcompat.content.res.AppCompatResources.getDrawable(this@setupSideBar, res)?.let {
+        val bmp = createBitmap(dp(28), dp(28))
+        AppCompatResources.getDrawable(this@setupSideBar, res)?.let {
             it.setBounds(0, 0, dp(28), dp(28))
             it.draw(Canvas(bmp))
         }
@@ -443,6 +444,11 @@ internal fun MainActivity.setupSideBar() {
         closeLeftBarAndHide()
         performFunction(ButtonFunction.FIND_IN_PAGE)
     }
+    // 6) trezor hesel (posledni v liste): otevre Nastaveni rovnou na trezoru
+    barButton(resIcon(R.drawable.ic_vault)) {
+        closeLeftBarAndHide()
+        openSettingsAt(SettingsActivity.START_VAULT)
+    }
     updateDeskBtn()
 
     val lp = ConstraintLayout.LayoutParams((68 * d).toInt(), 0)
@@ -462,7 +468,7 @@ internal fun MainActivity.updateDeskBtn() {
     val b = leftDeskBtn ?: return
     if (tabs.active()?.desktop == true) {
         val g = GradientDrawable()
-        g.setColor(Color.parseColor("#00B055"))
+        g.setColor("#00B055".toColorInt())
         g.cornerRadius = dp(18).toFloat()
         g.setStroke(dp(1), Color.WHITE)
         b.background = g
@@ -515,23 +521,24 @@ internal fun MainActivity.closeLeftBarAndHide() {
     }
 }
 
-// Dokud je lista otevrena, pridana tlacitka nad tlacitkem na teze strane se uplne schovaji (100 %),
-// po zavreni se vrati. Tlacitko s kulickou gest se jen skryje/ukaze (jeho pruhlednost ridi kulicka).
+// Dokud je lista otevrena, pridana tlacitka nad tlacitkem na teze strane zajedou za okraj (100 % schovana),
+// po zavreni se vrati do vychozi (zasunute) polohy. Tlacitko s kulickou gest se navic skryje/ukaze.
 internal fun MainActivity.hideExtrasForBar(open: Boolean) {
     val orbN = gestureButtonN()
     for ((n, v) in extraViews) {
         val sameSide = isLeftSide(n) == (barOrigin != 6)
         val hide = open && sameSide
-        if (n == orbN) {
-            v.visibility = if (hide) View.INVISIBLE else View.VISIBLE
-            continue
-        }
         v.animate().cancel()
+        v.alpha = if (n == orbN) v.alpha else 1f
         if (hide) {
-            v.animate().alpha(0f).setDuration(200).withEndAction { if (leftBarOpen) v.visibility = View.INVISIBLE }.start()
+            val out = (if (isLeftSide(n)) -1f else 1f) * dp(56)   // cela sirka tlacitka = uplne za okrajem
+            v.animate().translationX(out).setDuration(300).withEndAction {
+                if (n == orbN && leftBarOpen) v.visibility = View.INVISIBLE
+            }.start()
         } else {
             v.visibility = View.VISIBLE
-            v.animate().alpha(1f).setDuration(200).start()
+            val back = if (configMode || gestureConfigMode) 0f else hiddenX(n)
+            v.animate().translationX(back).setDuration(300).start()
         }
     }
 }
@@ -555,8 +562,8 @@ internal fun MainActivity.setLeftBar(open: Boolean, animate: Boolean, onDone: ((
     bar.visibility = View.VISIBLE
     reveal(if (open) 0f else 1f)
     val a = ValueAnimator.ofFloat(if (open) 0f else 1f, if (open) 1f else 0f)
-    a.duration = 320
-    a.interpolator = android.view.animation.DecelerateInterpolator()
+    a.duration = 570   // otevreni i zavreni listy (drive 320 ms)
+    a.interpolator = DecelerateInterpolator()
     a.addUpdateListener { reveal(it.animatedValue as Float) }
     a.addListener(object : AnimatorListenerAdapter() {
         private var cancelled = false
@@ -583,7 +590,205 @@ internal fun MainActivity.ensureSettingsReachable() {
         }
     }
     AppSettings.buttonTap[3].set(ButtonDefaults.tap(4).key)
-    Toast.makeText(this, "Nastavení vráceno na tlačítko 4", Toast.LENGTH_LONG).show()
+    AppToast.show(this, "Nastavení vráceno na tlačítko 4", true)
+}
+
+@SuppressLint("StaticFieldLeak")
+private val liveOutlines = HashMap<Int, Pair<View, GradientDrawable>>()
+@SuppressLint("StaticFieldLeak")
+private val tutorialPlus = ArrayList<View>()
+private var liveAnim: ValueAnimator? = null
+@SuppressLint("StaticFieldLeak")
+private val liveIcons = ArrayList<View>()   // ikony Sdilet / zamek, ktere ted blikaji zlute
+
+// Zlute vybarveni ikony Sdilet (103) a zamku (104); vypnuti vraci puvodni vzhled
+private fun MainActivity.paintTutorialIcon(n: Int, on: Boolean) {
+    val iv = findViewById<ImageView>(if (n == 103) R.id.ivUrlShare else R.id.ivUrlLock)
+    if (on) {
+        iv.setColorFilter("#FFD600".toColorInt())
+    } else if (n == 103) {
+        iv.clearColorFilter()
+        iv.alpha = 0.85f
+    } else {
+        iv.alpha = 1f
+        updateLockIcon(if (isWebViewReady()) webView.url else null)   // vrati barvu zamku podle stranky (pri startu WebView jeste neni)
+    }
+}
+
+// Cisla v seznamu zive napovedy: 1-12 tlacitka, 101 horni pole, 102 dolni pole, 103 ikona Sdilet a 104 ikona zamku (zluta ikona misto obrysu), 201-203 tlacitka v liste
+@Suppress("UnusedReceiverParameter")
+internal fun MainActivity.liveIds(): List<Int> =
+    AppSettings.liveTutorial.get().split(",").mapNotNull { it.trim().toIntOrNull() }
+
+// Zivy tutorial: prvky, na ktere uzivatel jeste neklepl, maji blikajici zluty obrys (9-12 carkovany).
+// Obrys je v ViewOverlay, aby se nepral s plnenim tlacitek pri stahovani (to pouziva foreground).
+internal fun MainActivity.applyLiveTutorial() {
+    liveAnim?.cancel()
+    liveAnim = null
+    for ((v, d) in liveOutlines.values) v.overlay.remove(d)
+    liveOutlines.clear()
+    val left = liveIds()
+    liveIcons.clear()
+    for (n in listOf(103, 104)) {
+        paintTutorialIcon(n, n in left)
+        if (n in left) liveIcons.add(findViewById(if (n == 103) R.id.ivUrlShare else R.id.ivUrlLock))
+    }
+    rebuildTutorialPlus(left.any { it in 9..12 })
+    if (left.isEmpty()) return
+    val yellow = "#FFD600".toColorInt()
+    val orbN = gestureButtonN()
+    for (n in left) {
+        // cil obrysu a polomer rohu (v px; 0 = kruh)
+        val found: View? = when (n) {
+            in 1..12 -> buttonView(n)
+            101 -> findViewById(R.id.urlContainer)
+            102 -> etSearchMain
+            in 201..203 -> (sideBarLeft as? ViewGroup)?.getChildAt(n - 201)
+            else -> null
+        }
+        val v: View = found ?: continue
+        val radius = when (n) { in 1..4 -> dp(18); in 5..12 -> dp(16); 101 -> dp(18); 102 -> dp(22); else -> dp(18) }
+        val d = GradientDrawable()
+        d.setColor(Color.TRANSPARENT)
+        if (n in 9..12) d.setStroke(dp(2), yellow, dp(8).toFloat(), dp(5).toFloat()) else d.setStroke(dp(2), yellow)
+        // tlacitko s funkci Gesta je nevidite, kresli se misto nej kulicka: obrys jde na kulicku (kruh podle tlacitka)
+        val orbTarget: View? = if (n == orbN) v else null
+        val target: View = if (orbTarget != null) (orbView ?: continue) else v
+        val circle = orbTarget != null
+        liveOutlines[n] = Pair(target, d)
+        val place = {
+            if (orbTarget != null) {
+                val side = orbTarget.width
+                val l = (target.width - side) / 2
+                val t = (target.height - side) / 2
+                d.setBounds(l, t, l + side, t + side)
+            } else d.setBounds(0, 0, target.width, target.height)
+            d.cornerRadius = if (circle) minOf(d.bounds.width(), d.bounds.height()) / 2f else radius.toFloat()
+            target.overlay.add(d)
+        }
+        if (target.width > 0) place() else target.post { if (liveOutlines[n]?.second === d) place() }
+    }
+    val a = ValueAnimator.ofFloat(0.2f, 1f)
+    a.duration = 650
+    a.repeatMode = ValueAnimator.REVERSE
+    a.repeatCount = ValueAnimator.INFINITE
+    a.addUpdateListener { anim ->
+        if (!root.isAttachedToWindow) { anim.cancel(); return@addUpdateListener }
+        val k = anim.animatedValue as Float
+        val al = (k * 255).toInt()
+        for ((_, d) in liveOutlines.values) d.alpha = al
+        for (p in tutorialPlus) p.alpha = k
+        for (ic in liveIcons) ic.alpha = 0.3f + 0.7f * k
+    }
+    liveAnim = a
+    a.start()
+}
+
+// "+" (zluty carkovany) na kazde strane nad tlacitky 5 / 6: pri prvnim klepnuti se otevre modal "Pridatelne tlacitko"
+private fun MainActivity.rebuildTutorialPlus(show: Boolean) {
+    val parent = root as ViewGroup
+    for (v in tutorialPlus) parent.removeView(v)
+    tutorialPlus.clear()
+    if (!show || configMode) return
+    val l = AppSettings.extraButtons(true)
+    val r = AppSettings.extraButtons(false)
+    if (l.size + r.size >= 4) return
+    val yellow = "#FFD600".toColorInt()
+    for (left in listOf(true, false)) {
+        val list = if (left) l else r
+        if (list.size >= 2) continue
+        val anchor = if (list.isEmpty()) (if (left) R.id.btnSideLeftMain else R.id.btnSideRightMain)
+        else extraViews[list.last()]?.id ?: continue
+        val plus = TextView(this)
+        plus.text = getString(R.string.plus_sign)
+        plus.setTextColor(yellow)
+        plus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+        plus.setTypeface(plus.typeface, Typeface.BOLD)
+        plus.gravity = Gravity.CENTER
+        val bg = GradientDrawable()
+        bg.setColor("#E61E1E1E".toColorInt())
+        bg.cornerRadius = dp(16).toFloat()
+        bg.setStroke(dp(2), yellow, dp(8).toFloat(), dp(5).toFloat())
+        plus.background = bg
+        plus.elevation = dp(8).toFloat()
+        plus.translationY = lastImeShift
+        plus.setOnClickListener { showTutorialPlusDialog() }
+        val lp = ConstraintLayout.LayoutParams(dp(56), dp(56))
+        lp.bottomToTop = anchor
+        if (left) lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID else lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+        lp.bottomMargin = dp(12)
+        parent.addView(plus, lp)
+        tutorialPlus.add(plus)
+    }
+}
+
+// Klepnuti na tutorialove "+": modal s vysvetlenim. "Pridat tlacitko nyni" prepne do nastaveni tlacitek, "Preskocit" jen ukonci tutorial "+"
+internal fun MainActivity.showTutorialPlusDialog() {
+    fun finishPlusTutorial() {
+        AppSettings.liveTutorial.set(liveIds().filter { it !in 9..12 }.joinToString(","))
+        updateButtonVisuals()   // znovu vykresli obrysy a odstrani "+"
+    }
+    showStyledDialog(title = "Přidatelné tlačítko", negativeText = null) { dismiss ->
+        val body = LinearLayout(this)
+        body.orientation = LinearLayout.VERTICAL
+        val text = TextView(this)
+        text.text = "Tlačítkem + můžeš přidat další tlačítko na kraj displeje."
+        text.setTextColor(Color.WHITE)
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        body.addView(text)
+        val add = styledButton("Přidat tlačítko nyní", true)
+        add.setOnClickListener { dismiss(); finishPlusTutorial(); enterConfigMode() }
+        // text tlacitka blika: 1 s zlute, 1 s vychozi barva, dokola (dokud je okno otevrene)
+        val addDefault = add.currentTextColor
+        val addYellow = "#FFD600".toColorInt()
+        val blink = object : Runnable {
+            var on = true
+            override fun run() {
+                if (!add.isAttachedToWindow) return
+                add.setTextColor(if (on) addYellow else addDefault)
+                on = !on
+                add.postDelayed(this, 1000)
+            }
+        }
+        add.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { v.removeCallbacks(blink); blink.on = true; blink.run() }
+            override fun onViewDetachedFromWindow(v: View) { v.removeCallbacks(blink) }
+        })
+        val addLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        addLp.topMargin = dp(18)
+        body.addView(add, addLp)
+        val skip = styledButton("Přeskočit", false)   // vzdy dole
+        skip.setOnClickListener { dismiss(); finishPlusTutorial() }
+        val skipLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        skipLp.topMargin = dp(10)
+        body.addView(skip, skipLp)
+        body
+    }
+}
+
+// Zacatek zive tutorialu (po "Okay" v uvodni zprave): tlacitka, pole, Sdilet a tlacitka v liste dostanou obrys
+internal fun MainActivity.startLiveTutorial() {
+    AppSettings.liveTutorial.set(((1..12) + listOf(101, 102, 103, 104, 201, 202, 203)).joinToString(","))
+    applyLiveTutorial()
+}
+
+// Prvni klepnuti / drzeni na prvek: jeho obrys zmizi a je zase normalni
+// Vrati true, kdyz se misto bezne akce spustila ukazka prvniho tutorialu (AdBlock 7, VPN 8, Sdilet 103, zamek 104)
+internal fun MainActivity.liveTutorialDone(n: Int): Boolean {
+    val left = liveIds()
+    if (n !in left) return false
+    AppSettings.liveTutorial.set(left.filter { it != n }.joinToString(","))
+    liveOutlines.remove(n)?.let { (v, d) -> v.overlay.remove(d) }
+    if (n == 103 || n == 104) {
+        liveIcons.remove(findViewById(if (n == 103) R.id.ivUrlShare else R.id.ivUrlLock))
+        paintTutorialIcon(n, false)
+    }
+    if (liveIds().none { it in 9..12 } && tutorialPlus.isNotEmpty()) rebuildTutorialPlus(false)
+    if (liveOutlines.isEmpty() && tutorialPlus.isEmpty() && liveIcons.isEmpty()) { liveAnim?.cancel(); liveAnim = null }
+    val gestBtn = n in 1..12 && n != 7 && n != 8 && buttonFunction(n, false) == ButtonFunction.GESTURES
+    // tlacitka 1-4: ukazka jen pri vychozich funkcich (klepnuti i drzeni), jinak by ukazovala neco jineho nez tlacitko dela
+    val basic = n in 1..4 && !gestBtn && buttonFunction(n, false) == ButtonDefaults.tap(n) && buttonFunction(n, true) == ButtonDefaults.long(n)
+    return (n == 7 || n == 8 || n == 103 || n == 104 || n in 201..203 || gestBtn || basic) && startFirstDemo(n)
 }
 
 internal fun MainActivity.updateButtonVisuals() {
@@ -600,12 +805,12 @@ internal fun MainActivity.updateButtonVisuals() {
                 if (custom) {
                     // vlastni funkce: bila ikona (obrazek) misto cisla
                     label.text = ""
-                    val bd = android.graphics.drawable.BitmapDrawable(resources, glyphBitmap(fn, dp(28)))
+                    val bd = glyphBitmap(fn, dp(28)).toDrawable(resources)
                     bd.gravity = Gravity.CENTER
                     label.background = bd
                 } else {
                     label.text = tabs.list.size.toString()
-                    label.background = tabCountBg
+                    label.background = tabCountLayer
                     label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 }
             }
@@ -635,6 +840,7 @@ internal fun MainActivity.updateButtonVisuals() {
         }
     }
     showNumbersOnDisabledButtons()
+    applyLiveTutorial()
 }
 
 // Sytě svetle modre problikavani ~10 s (22 x 450 ms) u prave pridaneho tlacitka
@@ -642,8 +848,8 @@ internal fun MainActivity.startBlink(v: View) {
     blinkAnim?.cancel()
     val bg = GradientDrawable()
     bg.cornerRadius = dp(16).toFloat()
-    val base = Color.parseColor("#1E1E1E")
-    val blue = Color.parseColor("#00B0FF")
+    val base = "#1E1E1E".toColorInt()
+    val blue = "#00B0FF".toColorInt()
     val eval = ArgbEvaluator()
     v.background = bg
     val a = ValueAnimator.ofFloat(0f, 1f)
@@ -674,7 +880,7 @@ internal fun MainActivity.updateSideButtons() {
     // s jinou funkci je to bezne boční tlacitko (tmave, s ikonou)
     val isOrb = gestureButtonN() == 6
     val b6 = findViewById<View>(R.id.btnSideRightMain)
-    if (isOrb) b6.background = ColorDrawable(Color.TRANSPARENT) else b6.setBackgroundResource(R.drawable.side_button_bg)
+    if (isOrb) b6.background = Color.TRANSPARENT.toDrawable() else b6.setBackgroundResource(R.drawable.side_button_bg)
     (b6 as? ImageView)?.scaleType = if (isOrb) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_INSIDE
     b6.setPadding(if (isOrb) 0 else dp(8), if (isOrb) 0 else dp(8), if (isOrb) 0 else dp(8), if (isOrb) 0 else dp(8))
     // tlacitka 5-8 si uzivatel muze skryt (kulicka mizi s tlacitkem 6 nebo kdyz neni funkce Gesta)
@@ -705,8 +911,8 @@ internal fun MainActivity.setIcon(viewId: Int, defaultRes: Int, glyph: Bitmap?) 
 
 // Ikona funkce (bila vektorova ikona ze sady) nakreslena do obrazku pro tlacitko
 internal fun MainActivity.glyphBitmap(fn: ButtonFunction, sizePx: Int = dp(48)): Bitmap {
-    val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-    val d = androidx.appcompat.content.res.AppCompatResources.getDrawable(this, fn.iconRes)
+    val bmp = createBitmap(sizePx, sizePx)
+    val d = AppCompatResources.getDrawable(this, fn.iconRes)
     if (d != null) {
         d.setBounds(0, 0, sizePx, sizePx)
         d.draw(Canvas(bmp))
@@ -717,7 +923,7 @@ internal fun MainActivity.glyphBitmap(fn: ButtonFunction, sizePx: Int = dp(48)):
 // Velke cislo tlacitka (ukazuje se na neaktivnich tlacitkach 5-8 v konfiguracnim modu, aby bylo poznat, ktere to je)
 internal fun MainActivity.numberBitmap(n: Int): Bitmap {
     val size = dp(56)
-    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val bmp = createBitmap(size, size)
     val c = Canvas(bmp)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
     p.color = Color.WHITE
@@ -747,4 +953,101 @@ internal fun MainActivity.showNumbersOnDisabledButtons() {
             }
         }
     }
+}
+
+
+// Pomale blikani (modra <-> zluta) upraveneho tlacitka 10 s po potvrzeni v modalu. Kresli se pres ViewOverlay,
+// takze nemeni pozadi tlacitka (nic se nemusi vracet).
+// Pomale modre pulzovani upravovaneho tlacitka (bezi, dokud se okno nezavre)
+private var editPulse: ValueAnimator? = null
+@SuppressLint("StaticFieldLeak")
+private var editPulseView: View? = null
+private var editPulseDrawable: GradientDrawable? = null
+
+internal fun MainActivity.startEditPulse(n: Int) {
+    stopEditPulse()
+    val v = buttonView(n) ?: return
+    val d = GradientDrawable()
+    d.cornerRadius = dp(18).toFloat()
+    v.overlay.add(d)
+    val blue = "#00B0FF".toColorInt()
+    val a = ValueAnimator.ofFloat(0f, 1f)
+    a.duration = 1400
+    a.repeatMode = ValueAnimator.REVERSE
+    a.repeatCount = ValueAnimator.INFINITE
+    a.addUpdateListener {
+        d.setBounds(0, 0, v.width, v.height)
+        val f = it.animatedValue as Float
+        d.setColor((blue and 0x00FFFFFF) or ((0x10 + (0x40 * f).toInt()) shl 24))
+        d.setStroke(dp(3), (blue and 0x00FFFFFF) or ((0x70 + (0x8F * f).toInt()) shl 24))
+    }
+    a.start()
+    editPulse = a; editPulseView = v; editPulseDrawable = d
+}
+
+@Suppress("UnusedReceiverParameter")
+internal fun MainActivity.stopEditPulse() {
+    editPulse?.cancel()
+    editPulseDrawable?.let { editPulseView?.overlay?.remove(it) }
+    editPulse = null; editPulseView = null; editPulseDrawable = null
+}
+
+internal fun MainActivity.blinkSaved(n: Int) {
+    val v = buttonView(n) ?: return
+    val d = GradientDrawable()
+    d.cornerRadius = dp(18).toFloat()
+    val blue = "#00B0FF".toColorInt()
+    val yellow = "#FFD600".toColorInt()
+    val eval = ArgbEvaluator()
+    fun place() = d.setBounds(0, 0, v.width, v.height)
+    place()
+    v.overlay.add(d)
+    val a = ValueAnimator.ofFloat(0f, 1f)
+    a.duration = 1000
+    a.repeatMode = ValueAnimator.REVERSE
+    a.repeatCount = 9   // 10 pulzu x 1 s = 10 s
+    a.addUpdateListener {
+        place()
+        val c = eval.evaluate(it.animatedValue as Float, blue, yellow) as Int
+        d.setColor((c and 0x00FFFFFF) or 0x40000000)
+        d.setStroke(dp(3), c)
+    }
+    a.addListener(object : AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: Animator) { v.overlay.remove(d) }
+        override fun onAnimationCancel(animation: Animator) { v.overlay.remove(d) }
+    })
+    a.start()
+}
+
+
+// Pri drzeni tlacitka: ikona klepnuti rychle zmizi a naskoci ikona funkce pro drzeni; za chvili se vrati ta puvodni.
+internal fun MainActivity.holdIconFlip(n: Int) {
+    if (!AppSettings.animationsOn.get()) return
+    val tapFn = buttonFunction(n, false)
+    val longFn = buttonFunction(n, true)
+    if (longFn == ButtonFunction.NONE || longFn == tapFn) return
+    if (longFn == ButtonFunction.GESTURES || tapFn == ButtonFunction.GESTURES || n == 2 || n == 6) return   // kulicka / cislo karet maji vlastni vzhled
+    val iv: ImageView = when (n) {
+        1 -> findViewById(R.id.ivHome)
+        3 -> findViewById(R.id.ivBookmarks)
+        4 -> findViewById(R.id.btnSettings)
+        5 -> findViewById(R.id.btnSideLeftMain)
+        7 -> findViewById(R.id.ivAdBlock)
+        8 -> findViewById(R.id.ivVpn)
+        else -> (buttonView(n) as? ImageView) ?: return
+    }
+    iv.animate().cancel()
+    iv.animate().alpha(0f).setDuration(110).withEndAction {
+        iv.clearColorFilter()
+        iv.setImageBitmap(glyphBitmap(longFn))
+        iv.animate().alpha(1f).setDuration(160).withEndAction {
+            // po chvilce zpet na ikonu klepnuti
+            iv.postDelayed({
+                iv.animate().alpha(0f).setDuration(110).withEndAction {
+                    updateButtonVisuals()
+                    iv.animate().alpha(1f).setDuration(160).start()
+                }.start()
+            }, 900)
+        }.start()
+    }.start()
 }
