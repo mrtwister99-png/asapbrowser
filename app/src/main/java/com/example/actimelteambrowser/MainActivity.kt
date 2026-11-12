@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity() {
     internal var externalDown: ExternalTouch? = null
     internal var extSeq = 0L
     internal var overviewIncognito = false            // prehled karet ukazuje anonymni (true) nebo bezne karty
+    internal var overviewGroups = false               // prehled karet ukazuje zalozku Skupiny
     internal var lastSystemBottom = 0
     internal val tabs = BrowserTabs()
     internal val tabTiles = mutableStateOf<List<TabTile>>(emptyList())

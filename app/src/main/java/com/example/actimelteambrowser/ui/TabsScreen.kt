@@ -91,7 +91,8 @@ data class TabTile(
     val folder: Boolean = false,
     val members: List<TabTile> = emptyList(),
     val folderColor: Int = 0xFFCDA24D.toInt(),  // barva slozky
-    val folderName: String = ""                 // nazev slozky (prazdny = "Složka")
+    val folderName: String = "",                // nazev slozky (prazdny = "Složka")
+    val color: Int = 0                          // barva karty (kolecko vpravo dole); 0 = zadna
 )
 
 /** Titulek slozky: nazev (nebo "Složka") a pocet karet. */
@@ -144,6 +145,10 @@ fun TabsScreen(
     onFolderRename: (Long, String) -> Unit,       // (složka, nový název)
     onNew: () -> Unit,
     onDismiss: () -> Unit,
+    groupsMode: Boolean = false,                  // zalozka Skupiny: jen skupiny karet
+    onGroupsMode: () -> Unit = {},
+    onNewGroup: () -> Unit = {},
+    onTabColor: (Long, Int) -> Unit = { _, _ -> },   // (karta, nova barva)
     onDeleteDragged: ((Long) -> Unit)? = null     // karta pusteno na "Smazat kartu": smaze hned (toast s Vratit zpet)
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -284,8 +289,9 @@ fun TabsScreen(
                     Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ModeChip("Běžné ($normalCount)", !incognito, Modifier.weight(1f)) {}
-                    ModeChip("🕶 Anonymní ($incognitoCount)", incognito, Modifier.weight(1f), blue = true) {}
+                    ModeChip("Běžné ($normalCount)", !incognito && !groupsMode, Modifier.weight(1f)) {}
+                    ModeChip("Skupiny", groupsMode, Modifier.weight(1f), yellow = true) {}
+                    ModeChip("🕶 Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f), blue = true) {}
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -327,10 +333,13 @@ fun TabsScreen(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ModeChip("Běžné ($normalCount)", !incognito, Modifier.weight(1f).demoMark("tabs_normal")) {
+                ModeChip("Běžné ($normalCount)", !incognito && !groupsMode, Modifier.weight(1f).demoMark("tabs_normal")) {
                     endSelect(); openFolderId = null; onToggleIncognito(false)
                 }
-                ModeChip("🕶 Anonymní ($incognitoCount)", incognito, Modifier.weight(1f).demoMark("tabs_incog"), blue = true) {
+                ModeChip("Skupiny", groupsMode, Modifier.weight(1f), yellow = true) {
+                    endSelect(); openFolderId = null; onGroupsMode()
+                }
+                ModeChip("🕶 Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f).demoMark("tabs_incog"), blue = true) {
                     endSelect(); openFolderId = null; onToggleIncognito(true)
                 }
             }
@@ -674,11 +683,14 @@ fun TabsScreen(
                         .fillMaxWidth()
                         .height(54.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(accent)
-                        .clickable(onClick = onNew),
+                        .background(if (groupsMode) YELLOW else accent)
+                        .clickable(onClick = if (groupsMode) onNewGroup else onNew),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+ NOVÁ KARTA", color = onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (groupsMode) "+ NOVÁ SKUPINA" else "+ NOVÁ KARTA",
+                        color = if (groupsMode) Color(0xFF1A1A1A) else onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -747,36 +759,57 @@ fun TabsScreen(
         }
     }
 
-    // vyber barvy slozky
+    // vyber barvy slozky / karty: prvni stranka 5 + 5 nahodnych barev, posunem doprava dalsi (vsechny barvy)
     val pickFor = colorPickFor
     if (pickFor != null) {
+        val pages = remember(pickFor) { com.example.actimelteambrowser.TabColors.pickerPages() }
+        val pager = androidx.compose.foundation.pager.rememberPagerState { pages.size }
         Dialog(onDismissRequest = { colorPickFor = null }) {
             Column(
                 Modifier
                     .clip(RoundedCornerShape(24.dp))
                     .background(PANEL)
-                    .padding(22.dp)
+                    .padding(vertical = 22.dp)
             ) {
-                Text("Barva složky", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (pickFor < 0) "Barva složky" else "Barva karty",
+                    color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 22.dp)
+                )
                 Spacer(Modifier.height(16.dp))
-                for (rowColors in FOLDER_COLORS.chunked(4)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        for (c in rowColors) {
-                            Box(
-                                Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(c))
-                                    .border(2.dp, Color.White, CircleShape)
-                                    .clickable {
-                                        onFolderColor(pickFor, c.toInt())
-                                        colorPickFor = null
-                                    }
-                            )
+                androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth()) { page ->
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        for (rowColors in pages[page].chunked(5)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                for (c in rowColors) {
+                                    Box(
+                                        Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(c))
+                                            .border(2.dp, Color.White, CircleShape)
+                                            .clickable {
+                                                if (pickFor < 0) onFolderColor(pickFor, c) else onTabColor(pickFor, c)
+                                                colorPickFor = null
+                                            }
+                                    )
+                                }
+                                repeat(5 - rowColors.size) { Spacer(Modifier.size(42.dp)) }
+                            }
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
                 }
+                Spacer(Modifier.height(14.dp))
+                // tecky stranek
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    for (i in pages.indices) {
+                        Box(
+                            Modifier.padding(horizontal = 3.dp).size(if (i == pager.currentPage) 8.dp else 6.dp).clip(CircleShape)
+                                .background(if (i == pager.currentPage) Color.White else MUTED)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text("Posuň doprava pro další barvy", color = MUTED, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
     }
@@ -889,6 +922,13 @@ private fun TabTileCard(
             if (tile.folder) {
                 FolderBody(tile.members)
             } else {
+                if (tile.color != 0 && !selectMode) {
+                    // barva karty: klepnuti otevre vyber (zmena je videt i v liste karet)
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(4.dp).size(36.dp).clip(CircleShape).clickable { onColor() },
+                        contentAlignment = Alignment.Center
+                    ) { Box(Modifier.size(18.dp).clip(CircleShape).background(Color(tile.color)).border(1.5.dp, Color.White, CircleShape)) }
+                }
                 val p = tile.preview
                 if (p != null) {
                     Image(
@@ -963,19 +1003,19 @@ private fun FolderBody(members: List<TabTile>) {
 }
 
 @Composable
-private fun ModeChip(text: String, selected: Boolean, modifier: Modifier, blue: Boolean = false, onClick: () -> Unit) {
+private fun ModeChip(text: String, selected: Boolean, modifier: Modifier, blue: Boolean = false, yellow: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) (if (blue) BLUE else GREEN) else ROW)
+            .background(if (selected) (if (blue) BLUE else if (yellow) YELLOW else GREEN) else ROW)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text,
-            color = if (selected) (if (blue) Color.White else Color(0xFF06281D)) else Color.White,
-            fontSize = 14.sp, fontWeight = FontWeight.Bold
+            color = if (selected) (if (blue) Color.White else if (yellow) Color(0xFF1A1A1A) else Color(0xFF06281D)) else Color.White,
+            fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
         )
     }
 }

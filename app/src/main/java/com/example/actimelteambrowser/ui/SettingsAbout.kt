@@ -150,7 +150,12 @@ internal fun appVersionText(ctx: android.content.Context): String = try {
 internal fun AboutScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val version = remember { appVersionText(ctx) }
-    // hudba bez_zastaveni_full.mp3 hraje po dobu, co je obrazovka otevrena; po odchodu se zastavi (prepinac zvuku se nekontroluje)
+    // hudba bez_zastaveni_full.mp3 hraje po dobu, co je obrazovka otevrena; po odchodu se zastavi (prepinac zvuku se nekontroluje).
+    // Vpravo nahore cas prehravani a tlacitko pauza / prehrat.
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    var playing by remember { mutableStateOf(false) }
+    var posMs by remember { mutableStateOf(0) }
+    var durMs by remember { mutableStateOf(0) }
     DisposableEffect(Unit) {
         var mp: MediaPlayer? = null
         try {
@@ -162,20 +167,51 @@ internal fun AboutScreen(onBack: () -> Unit) {
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build()
                 mp = MediaPlayer.create(ctx.applicationContext, resId, attrs, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)
+                mp?.setOnCompletionListener { playing = false; posMs = 0; runCatching { it.seekTo(0) } }
                 mp?.start()
+                durMs = mp?.duration ?: 0
+                playing = mp != null
+                player = mp
             }
         } catch (e: Exception) {
             android.util.Log.d("about", e.toString())   // hudba je jen bonus, nesmi shodit obrazovku
         }
         onDispose {
+            player = null
             try { mp?.stop() } catch (_: Exception) { }
             mp?.release()
             mp = null
         }
     }
+    // casovac: obnovuje se 2x za sekundu, jen kdyz hraje
+    LaunchedEffect(playing) {
+        while (playing) {
+            posMs = runCatching { player?.currentPosition ?: 0 }.getOrDefault(0)
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    fun mmss(ms: Int): String { val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60) }
+    val musicControl: (@Composable () -> Unit)? = if (player == null) null else ({
+        Row(
+            Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xD92A2A2A)).padding(start = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(mmss(posMs) + (if (durMs > 0) " / " + mmss(durMs) else ""), color = Color(0xFFDDDDDD), fontSize = 13.sp)
+            Box(
+                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).clickable {
+                    val mp = player ?: return@clickable
+                    runCatching { if (playing) mp.pause() else mp.start() }
+                    playing = runCatching { mp.isPlaying }.getOrDefault(false)
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(if (playing) "❚❚" else "▶", color = Color(0xFF00B055), fontSize = if (playing) 14.sp else 18.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    })
     // pozadi UFO Field pod celou obrazovkou, obsah je pres nej (karty jsou polopruhledne)
     UfoBackground {
-    ScreenScaffold(title = "O aplikaci", onBack = onBack, containerColor = Color.Transparent) {
+    ScreenScaffold(title = "O aplikaci", onBack = onBack, containerColor = Color.Transparent, trailing = musicControl) {
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)

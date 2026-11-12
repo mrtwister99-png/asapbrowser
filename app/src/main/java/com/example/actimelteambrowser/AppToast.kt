@@ -39,19 +39,27 @@ object AppToast {
     private var currentDialog: Dialog? = null   // toast je ve vlastnim okne = vzdy nad dialogy a modaly
     private var hideRunnable: Runnable? = null
 
-    private enum class Kind(val icon: String, val color: String) {
-        OK("✓", "#00B055"), ERROR("!", "#E53935"), INFO("i", "#4FC3F7")
+    /**
+     * Barva toastu: zelena = pozitivni (ulozeno, pridano...), cervena = chyba nebo zavreni / smazani / vypnuti,
+     * zluta = oznameni (upozorneni, tip), bila = uplne neutralni zprava.
+     */
+    enum class Kind(val icon: String, val color: String) {
+        OK("✓", "#00B055"), ERROR("!", "#E53935"), CLOSE("✕", "#E53935"), INFO("i", "#FFD600"), NEUTRAL("•", "#FFFFFF")
     }
 
-    // druh zpravy podle textu (ikona): chyba / potvrzeni / informace
+    // druh zpravy podle textu
     private fun kindOf(t: String): Kind {
         val s = t.lowercase()
         val err = listOf("nepoved", "nelze", "nejde", "neplatn", "selhal", "nenašla", "nepodařilo", "není co", "neznámé", "musí", "nemohou", "moc dlouhá", "zhroutila", "vyžaduje")
-        val ok = listOf("uložen", "přidáno", "staženo", "zkopírov", "smazána", "vytvořena", "přidána", "připnuta", "odepnuta", "duplikována", "smazáno", "smazány", "zapomenuty", "přesunuta", "vráceno")
+        val close = listOf("zavřen", "smazán", "smazan", "vypnut", "odebrán", "odstraněn", "zrušen", "zapomenut", "zamčen")
+        val ok = listOf("uložen", "přidáno", "staženo", "zkopírov", "vytvořena", "vytvořen", "přidána", "připnuta", "odepnuta", "duplikována", "přesunuta", "vráceno", "zapnut", "odemčen", "hotov", "díky", "obnoven")
+        val info = listOf("není kam", "zatím", "připravuje", "pamatuje", "podrž", "klepni", "tip", "pozor", "upozorn", "vráceno na", "chvíli")
         return when {
             err.any { s.contains(it) } -> Kind.ERROR
+            close.any { s.contains(it) } -> Kind.CLOSE
+            info.any { s.contains(it) } -> Kind.INFO
             ok.any { s.contains(it) } -> Kind.OK
-            else -> Kind.INFO
+            else -> Kind.NEUTRAL
         }
     }
 
@@ -66,8 +74,11 @@ object AppToast {
 
     @JvmStatic
     @JvmOverloads
-    fun show(ctx: Context, text: String, long: Boolean = false) {
-        val kind = kindOf(text)
+    fun show(ctx: Context, text: String, long: Boolean = false) = show(ctx, text, long, null)
+
+    /** Toast s pevne danou barvou (kind); null = podle textu. */
+    fun show(ctx: Context, text: String, long: Boolean, kindOverride: Kind?) {
+        val kind = kindOverride ?: kindOf(text)
         // vypnute informacni toasty: potlaci se vse krome chyb
         if (kind != Kind.ERROR && !AppSettings.infoToasts.get()) return
         val act = activityOf(ctx)
@@ -101,6 +112,7 @@ object AppToast {
         val bg = GradientDrawable()
         bg.setColor("#F0383838".toColorInt())   // seda
         bg.cornerRadius = 16 * d
+        bg.setStroke((1.5f * d).toInt().coerceAtLeast(1), kind.color.toColorInt())   // obrys v barve druhu zpravy
         row.background = bg
         row.elevation = 30 * d
         row.isClickable = false

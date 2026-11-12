@@ -46,11 +46,15 @@ internal fun MainActivity.createTab(url: String?, activate: Boolean = true, inco
     val tab = BrowserTab(tabs.newId()) { buildWebView(ref!!) }
     ref = tab
     tab.incognito = incognito
+    tab.color = TabColors.random(tabs.list.lastOrNull()?.color ?: 0)   // kazda nova karta ma nahodnou barvu (jinou nez soused)
     tabs.list.add(tab)
     if (activate) switchTo(tab)
     updateTabCount()
     // animace: zelene + (normalni karta) / modre + (anonymni); az po rozlozeni okna, takze ne pri startu
-    if (fly && activate && root.isLaidOut) { if (incognito) flyBurst("+", "#2979FF") else flyBurst("+", "#00B055") }
+    if (fly && activate && root.isLaidOut) {
+        if (incognito) flyBurst("+", "#2979FF") else flyBurst("+", "#00B055")
+        softBuzz()   // nova karta: jednou lehce zabrni
+    }
     if (url != null) tab.webView.loadUrl(url)
     if (!activate && tab.webViewCreated) { quiet { tab.webView.onPause() } }   // karta na pozadi nema bezet
     return tab
@@ -232,7 +236,7 @@ internal fun MainActivity.saveTabs() {
         if (tab.id == tabs.activeId) activeIdx = arr.length()
         savedIdx[tab.id] = arr.length()
         previews.add(tab.preview)
-        arr.put(JSONObject().put("url", u).put("title", tab.title).put("pin", tab.pinned).put("pt", tab.pinnedTop))
+        arr.put(JSONObject().put("url", u).put("title", tab.title).put("pin", tab.pinned).put("pt", tab.pinnedTop).put("col", tab.color))
     }
     if (arr.length() == 0) return
     // slozky: seznamy poradi karet v ulozenem seznamu
@@ -387,6 +391,7 @@ internal fun MainActivity.restoreTabs() {
     val titles = ArrayList<String>()
     val pins = ArrayList<Boolean>()
     val pinTops = ArrayList<Boolean>()
+    val colors = ArrayList<Int>()
     val srcIdx = ArrayList<Int>()   // poradi v ulozenem seznamu pro kazdou obnovenou kartu
     var groupsJson: JSONArray? = null
     var active = 0
@@ -404,6 +409,7 @@ internal fun MainActivity.restoreTabs() {
                     titles.add(e.optString("title"))
                     pins.add(e.optBoolean("pin", false))
                     pinTops.add(e.optBoolean("pt", false))
+                    colors.add(e.optInt("col", 0))
                     srcIdx.add(i)
                 }
             }
@@ -422,6 +428,7 @@ internal fun MainActivity.restoreTabs() {
         tab.title = titles[i]
         tab.pinned = pins[i]
         tab.pinnedTop = pinTops[i]
+        if (colors[i] != 0) tab.color = colors[i]
         tab.pendingUrl = urls[i]
         tab.preview = loadPreview(File(File(filesDir, "tab_previews"), "p$i.jpg"))
         created.add(tab)
@@ -503,10 +510,22 @@ internal fun MainActivity.setupTabsOverlay() {
     tabsView.setContent {
         TabsScreen(
             tiles = tabTiles.value,
-            incognito = overviewIncognito,
+            incognito = overviewIncognito && !overviewGroups,
+            groupsMode = overviewGroups,
+            onGroupsMode = {
+                overviewGroups = true
+                applyAccent(false)
+                refreshTiles()
+            },
+            onNewGroup = { showNewGroupDialog() },
+            onTabColor = { id, color ->
+                tabs.list.firstOrNull { it.id == id }?.color = color
+                refreshTiles(); updateTabStrips(); saveTabs()
+            },
             normalCount = tabs.list.count { !it.incognito },
             incognitoCount = tabs.list.count { it.incognito },
             onToggleIncognito = { inc ->
+                overviewGroups = false
                 overviewIncognito = inc
                 applyAccent(inc)
                 refreshTiles()
@@ -525,7 +544,7 @@ internal fun MainActivity.setupTabsOverlay() {
             onExtract = { ids -> extractTabs(ids) },
             onFolderColor = { tileId, color ->
                 tabManager.groupByTile(tileId)?.color = color
-                refreshTiles()
+                refreshTiles(); updateTabStrips(); saveTabs()
             },
             onFolderRename = { tileId, name ->
                 tabManager.groupByTile(tileId)?.name = name.trim().take(40)
@@ -545,6 +564,7 @@ internal fun MainActivity.openTabsOverview() {
     etSearchMain.clearFocus()
     val active = tabs.active()
     overviewIncognito = active?.incognito == true   // prehled se otevre ve skupine aktivni karty
+    overviewGroups = false
     if (active == null) showTabs() else capturePreview(active) { showTabs() }
 }
 
@@ -559,10 +579,11 @@ internal fun MainActivity.hideTabs() {
 }
 
 internal fun MainActivity.refreshTiles() {
-    fun tileOf(t: BrowserTab) = TabTile(t.id, t.title, t.url, t.preview, t.id == tabs.activeId, t.incognito)
-    tabTiles.value = buildItems(overviewIncognito).map { (g, ms) ->
-        if (g == null) tileOf(ms[0])
-        else TabTile(-g.id, "", "", null, ms.any { it.id == tabs.activeId }, overviewIncognito, true, ms.map { tileOf(it) }, g.color, g.name)
+    fun tileOf(t: BrowserTab) = TabTile(t.id, t.title, t.url, t.preview, t.id == tabs.activeId, t.incognito, color = t.color)
+    val inc = overviewIncognito && !overviewGroups   // Skupiny = skupiny beznych karet
+    tabTiles.value = buildItems(inc).mapNotNull { (g, ms) ->
+        if (g == null) { if (overviewGroups) null else tileOf(ms[0]) }
+        else TabTile(-g.id, "", "", null, ms.any { it.id == tabs.activeId }, inc, true, ms.map { tileOf(it) }, g.color, g.name)
     }
 }
 
@@ -648,6 +669,7 @@ internal fun MainActivity.chooseFolderAndSave(curUrl: String?, pageTitle: String
                                 bookmarksRepo.addBookmark(f.id, curUrl, pageTitle)
                             }
                             runOnUiThread {
+                                softBuzz(35)
                                 AppToast.show(this, "Přidáno do: " + f.name)
                             }
                         }
@@ -786,7 +808,7 @@ internal fun MainActivity.updateTabStrips() {
     val wantTop = AppSettings.tabStripTop.get()
     val imeUp = lastImeShift != 0f
     val incog = tabs.active()?.incognito ?: false
-    val list = tabs.list.filter { it.incognito == incog }
+    val list = buildItems(incog).flatMap { it.second }   // karty jedne skupiny jsou v liste vedle sebe (spojene)
     val bottomList: List<BrowserTab>
     val topList: List<BrowserTab>
     if (wantBottom && wantTop) {
@@ -838,9 +860,21 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
         val tile = FrameLayout(this)
         val bg = GradientDrawable()
         val grp = groupOf(tab.id)   // karta ve slozce ma barvu slozky
-        bg.setColor(grp?.color ?: tabColor(all, tab, incog).toColorInt())
-        bg.cornerRadius = dp(8).toFloat()
+        bg.setColor(grp?.color ?: tab.color.takeIf { it != 0 } ?: tabColor(all, tab, incog).toColorInt())
+        // karty jedne skupiny jsou spojene dohromady: mezi nimi zadna mezera a rovne vnitrni rohy
+        val joinPrev = grp != null && i > 0 && groupOf(list[i - 1].id) === grp
+        val joinNext = grp != null && i < list.size - 1 && groupOf(list[i + 1].id) === grp
+        val r = dp(8).toFloat()
+        val l = if (joinPrev) 0f else r
+        val rr = if (joinNext) 0f else r
+        bg.cornerRadii = floatArrayOf(l, l, rr, rr, rr, rr, l, l)
         tile.background = bg
+        if (joinPrev) {
+            // tenka delici cara mezi kartami skupiny
+            val sep = View(this)
+            sep.setBackgroundColor("#55000000".toColorInt())
+            tile.addView(sep, FrameLayout.LayoutParams(dp(1), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
+        }
         // ikona webu na skoro cernem podkladu
         val box = FrameLayout(this)
         val bb = GradientDrawable()
@@ -861,7 +895,7 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
         attachTileTouch(tile, tab, list, row, sv)
         val lp = LinearLayout.LayoutParams(tileW, h)
         lp.gravity = if (top) Gravity.TOP else Gravity.BOTTOM
-        lp.marginEnd = gap
+        lp.marginEnd = if (joinNext) 0 else gap
         row.addView(tile, lp)
         if (active) {
             activeLeft = i * (tileW + gap)
@@ -956,7 +990,30 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
         tile.scaleX = 1.12f; tile.scaleY = 1.12f
         sv.requestDisallowInterceptTouchEvent(true)   // lista se behem tahu neposouva
     }
+    // nahled, kam se karta vlozi: kopie dlazdice v 50% pruhlednosti na miste cile
+    var ghost: android.graphics.drawable.Drawable? = null
+    fun clearGhost() { ghost?.let { row.overlay.remove(it) }; ghost = null }
+    fun targetAt(v: View): Pair<Int, View>? {
+        val cx = v.left + v.width / 2f + v.translationX
+        for (i in 0 until row.childCount) {
+            val c = row.getChildAt(i)
+            if (c !== v && cx >= c.left && cx <= c.right) return i to c
+        }
+        return null
+    }
+    fun showGhost(v: View) {
+        val t = targetAt(v)
+        if (t == null) { clearGhost(); return }
+        val g = ghost ?: (v.background?.constantState?.newDrawable()?.mutate() ?: return).also {
+            it.alpha = 128
+            ghost = it
+            row.overlay.add(it)
+        }
+        val c = t.second
+        g.setBounds(c.left, v.top, c.left + v.width, v.bottom)
+    }
     fun resetVisual() {
+        clearGhost()
         tile.translationX = 0f; tile.scaleX = 1f; tile.scaleY = 1f; tile.elevation = 0f
     }
     tile.setOnTouchListener { v, ev ->
@@ -967,7 +1024,7 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
                 true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (dragging) v.translationX = ev.rawX - downX
+                if (dragging) { v.translationX = ev.rawX - downX; showGhost(v) }
                 else if (!moved && (kotlin.math.abs(ev.rawX - downX) > slop || kotlin.math.abs(ev.rawY - downY) > slop)) {
                     moved = true
                     handler.removeCallbacks(startDrag)   // je to posun listy, ne drzeni
@@ -978,22 +1035,27 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
                 handler.removeCallbacks(startDrag)
                 if (dragging) {
                     // kam dlazdici pustil: na dlazdici jine karty = karta se presune na jeji misto v poradi
-                    val cx = v.left + v.width / 2f + v.translationX
-                    var target: BrowserTab? = null
-                    for (i in 0 until row.childCount) {
-                        val c = row.getChildAt(i)
-                        if (c !== v && cx >= c.left && cx <= c.right) { target = list.getOrNull(i); break }
-                    }
+                    val target: BrowserTab? = targetAt(v)?.let { list.getOrNull(it.first) }
                     dragging = false
                     resetVisual()
                     if (target != null) {
+                        // skupina: vytazeni ze skupiny jinam = karta opravdu skupinu opusti (i v prehledu karet);
+                        // pusteni na kartu jine skupiny = karta se do ni prida na misto cile
+                        val dg = groupOf(tab.id)
+                        val tg = groupOf(target.id)
+                        if (dg !== tg) {
+                            tabManager.removeFromGroups(listOf(tab.id))
+                            if (tg != null) tg.members.add(tg.members.indexOf(target.id).coerceAtLeast(0), tab.id)
+                            pruneGroups()
+                        } else if (dg != null) {
+                            tabManager.moveInGroup(-dg.id, tab.id, target.id)
+                        }
                         val from = tabs.list.indexOfFirst { it.id == tab.id }
                         val to = tabs.list.indexOfFirst { it.id == target.id }
-                        if (from >= 0 && to >= 0 && from != to) {
-                            tabs.list.add(to, tabs.list.removeAt(from))
-                            saveTabs()
-                            updateTabStrips()
-                        }
+                        if (from >= 0 && to >= 0 && from != to) tabs.list.add(to, tabs.list.removeAt(from))
+                        saveTabs()
+                        updateTabStrips()
+                        if (tabsView.isVisible) refreshTiles()
                     }
                 } else if (!moved) {
                     val now = android.os.SystemClock.uptimeMillis()
@@ -1076,5 +1138,59 @@ internal fun MainActivity.deleteCardWithUndo(id: Long) {
         saveTabs()
         if (tabsView.isVisible) refreshTiles()
         AppToast.show(this, "Karta vrácena")
+    }
+}
+
+
+// Skupiny -> "+ Nova skupina": vyber aspon 2 beznych karet, ktere jeste nejsou ve skupine
+internal fun MainActivity.showNewGroupDialog() {
+    val free = tabs.list.filter { !it.incognito && groupOf(it.id) == null }
+    if (free.size < 2) {
+        AppToast.show(this, "Na novou skupinu potřebuješ aspoň 2 karty mimo skupiny", true, AppToast.Kind.INFO)
+        return
+    }
+    val chosen = LinkedHashSet<Long>()
+    showStyledDialog(title = "Nová skupina", positiveText = "Vytvořit", onPositive = {
+        if (chosen.size < 2) {
+            AppToast.show(this, "Vyber aspoň 2 karty", false, AppToast.Kind.INFO)
+            false
+        } else {
+            val g = tabManager.newGroup(tabs.list.filter { it.id in chosen }.map { it.id }.toMutableList())
+            g.color = TabColors.random()
+            g.name = "Skupina " + groups.size
+            softBuzz()
+            refreshTiles(); updateTabStrips(); saveTabs()
+            AppToast.show(this, "Skupina vytvořena")
+            true
+        }
+    }) { _ ->
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        for (t in free) {
+            val row = TextView(this)
+            fun paint() {
+                val on = t.id in chosen
+                row.text = (if (on) "☑  " else "☐  ") + t.title.ifBlank { t.url.ifBlank { "Nová karta" } }
+                val bg = GradientDrawable()
+                bg.setColor((if (on) "#14382A" else "#2A2A2A").toColorInt())
+                bg.cornerRadius = dp(14).toFloat()
+                if (on) bg.setStroke(dp(2), "#00B055".toColorInt())
+                row.background = bg
+            }
+            row.setTextColor(Color.WHITE)
+            row.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            row.maxLines = 1
+            row.ellipsize = android.text.TextUtils.TruncateAt.END
+            row.setPadding(dp(14), dp(12), dp(14), dp(12))
+            paint()
+            row.setOnClickListener { if (!chosen.remove(t.id)) chosen.add(t.id); paint() }
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.bottomMargin = dp(8)
+            list.addView(row, lp)
+        }
+        val scroll = ScrollView(this)
+        scroll.addView(list)
+        scroll.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, minOf(dp(52) * free.size, dp(360)))
+        scroll
     }
 }

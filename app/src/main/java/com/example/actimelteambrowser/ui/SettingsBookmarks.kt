@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import com.example.actimelteambrowser.softBuzz
 import com.example.actimelteambrowser.demoMark
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
@@ -597,6 +598,7 @@ internal fun FolderDetailScreen(
             BigButton("+ PŘIDAT AKTUÁLNÍ STRÁNKU SEM", ACCENT, Color(0xFF06281D)) {
                 scope.launch {
                     withContext(Dispatchers.IO) { repo.addBookmark(folder.id, currentUrl, currentTitle) }
+                    context.softBuzz(35)   // ulozeni do Oblibenych: lehce zabrni
                     reloadKey += 1
                 }
             }

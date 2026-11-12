@@ -155,7 +155,7 @@ internal fun MainActivity.performFunction(fn: ButtonFunction) {
                     quiet {
                         bookmarksRepo.addBookmark(bookmarksRepo.defaultFolderId(), curUrl, title)
                     }
-                    runOnUiThread { AppToast.show(this, "Přidáno do Oblíbených") }
+                    runOnUiThread { softBuzz(35); AppToast.show(this, "Přidáno do Oblíbených") }
                 }
             }
         }

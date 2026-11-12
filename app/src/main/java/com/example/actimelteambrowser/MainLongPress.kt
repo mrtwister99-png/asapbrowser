@@ -151,7 +151,7 @@ internal fun MainActivity.saveLinkToFavorites(url: String, text: String?) {
         quiet {
             bookmarksRepo.addBookmark(bookmarksRepo.defaultFolderId(), url, text?.trim().orEmpty())
         }
-        runOnUiThread { AppToast.show(this, "Přidáno do Oblíbených") }
+        runOnUiThread { softBuzz(35); AppToast.show(this, "Přidáno do Oblíbených") }
     }
 }
 

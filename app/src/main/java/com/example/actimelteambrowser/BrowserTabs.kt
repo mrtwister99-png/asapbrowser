@@ -19,6 +19,7 @@ class BrowserTab(val id: Long, webViewFactory: () -> WebView) {
     var startPage: Boolean = false                // nova karta ukazuje uvodni stranku (normalni / anonymni + nejnavstevovanejsi)
     var pinnedTop: Boolean = false                // pripnuta karta zustava v horni (true) / spodni (false) liste, kde byla pri pripnuti
     var pinned: Boolean = false                   // pripnuta karta: v liste je vzdy videt
+    var color: Int = 0                            // barva karty (lista karet, prehled); 0 = jeste neprirazena
     var desktop: Boolean = false                  // verze pro pocitac (jiny user-agent)
     @Volatile var pendingUrl: String? = null      // obnovena karta, ktera se nacte az pri prvnim zobrazeni
     var preview: Bitmap? = null                   // náhled (screenshot) pro dlaždici

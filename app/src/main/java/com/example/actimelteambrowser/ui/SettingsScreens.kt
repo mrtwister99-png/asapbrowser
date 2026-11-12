@@ -281,7 +281,11 @@ internal fun ConfirmDialog(
 }
 
 @Composable
-internal fun ScreenScaffold(title: String, onBack: () -> Unit, containerColor: Color = BG, content: @Composable ColumnScope.() -> Unit) {
+internal fun ScreenScaffold(
+    title: String, onBack: () -> Unit, containerColor: Color = BG,
+    trailing: (@Composable () -> Unit)? = null,   // prvek vpravo nahore (napr. prehravac v O aplikaci)
+    content: @Composable ColumnScope.() -> Unit
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -306,7 +310,8 @@ internal fun ScreenScaffold(title: String, onBack: () -> Unit, containerColor: C
                 androidx.compose.foundation.Image(painterResource(com.example.actimelteambrowser.R.drawable.ic_back_chevron), contentDescription = "Zpět", modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(12.dp))
-            Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (trailing != null) trailing()
         }
         content()
     }

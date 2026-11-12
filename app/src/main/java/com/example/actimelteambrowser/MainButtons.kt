@@ -283,6 +283,19 @@ internal fun MainActivity.addConfigButton(left: Boolean) {
     configButton.value = next
 }
 
+// Kratke jemne zabrneni (nova karta, ulozeni do Oblibenych); respektuje vypnute vibrace v Konfiguraci
+internal fun android.content.Context.softBuzz(ms: Long = 25) {
+    if (!AppSettings.vibrationOn.get()) return
+    runCatching {
+        val vib: android.os.Vibrator? = if (android.os.Build.VERSION.SDK_INT >= 31)
+            (getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager)?.defaultVibrator
+        else @Suppress("DEPRECATION") (getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
+        if (vib?.hasVibrator() != true) return
+        if (android.os.Build.VERSION.SDK_INT >= 26) vib.vibrate(android.os.VibrationEffect.createOneShot(ms, 70))
+        else @Suppress("DEPRECATION") vib.vibrate(ms)
+    }
+}
+
 // Vibrace pri drzeni tlacitka (jde vypnout v Konfiguraci)
 @Suppress("UnusedReceiverParameter")
 internal fun MainActivity.buzz(v: View) {
@@ -399,8 +412,8 @@ internal fun MainActivity.setupSideBar() {
     bar.gravity = Gravity.CENTER_HORIZONTAL
     bar.setPadding(0, dp(12), 0, 0)
     bar.elevation = dp(6).toFloat()   // nad webem, pod tlacitky (8)
-    val bg = GradientDrawable()
-    bg.setColor("#1E1E1E".toColorInt())
+    // lista vyrusta z (zeleneho) tlacitka: prechod zespoda zelena -> nahore cerna
+    val bg = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf("#00B055".toColorInt(), "#0F3D2A".toColorInt(), "#0A0A0A".toColorInt()))
     bg.cornerRadius = 24f * d
     bg.setStroke((1f * d).toInt().coerceAtLeast(1), Color.WHITE)
     bar.background = bg
@@ -505,12 +518,45 @@ internal fun MainActivity.toggleBarFrom(origin: Int) {
     barOrigin = origin
     applyBarSide()
     val btn = barBtn()
+    // tlacitka nad listou na teze strane zajedou za okraj postupne (nejdriv horni, pak dalsi), az potom vyjede lista
+    val left = origin != 6
+    val above = AppSettings.extraButtons(left).reversed().mapNotNull { n -> extraViews[n]?.let { n to it } }
+    fun hideNext(i: Int) {
+        if (i >= above.size) { setLeftBar(true, true); return }
+        val (n, v) = above[i]
+        v.animate().cancel()
+        val out = (if (isLeftSide(n)) -1f else 1f) * dp(56)
+        v.animate().translationX(out).setDuration(200).withEndAction { hideNext(i + 1) }.start()
+    }
     if (AppSettings.isEnabled(origin) && kotlin.math.abs(btn.translationX) > 1f) {
-        btn.animate().translationX(0f).setDuration(250).withEndAction { setLeftBar(true, true) }.start()
+        btn.animate().translationX(0f).setDuration(250).withEndAction { hideNext(0) }.start()
     } else {
-        setLeftBar(true, true)
+        hideNext(0)
     }
 }
+
+// Tlacitko, ze ktereho lista vyjela: pri otevrene liste ma ikonu sipky zpet, po zavreni zase svou ikonu
+internal fun MainActivity.applyBarBtnIcon(open: Boolean) {
+    val n = barOrigin
+    val iv = barBtn() as? ImageView ?: return
+    if (configMode || gestureConfigMode) return
+    if (open) {
+        iv.clearColorFilter()
+        iv.setImageResource(R.drawable.ic_back_chevron)
+        return
+    }
+    val fn = buttonFunction(n, false)
+    when {
+        n == 5 && fn == ButtonDefaults.tap(5) -> iv.setImageResource(R.drawable.ic_sidebar)
+        n == 6 && fn == ButtonFunction.GESTURES -> iv.setImageDrawable(null)
+        else -> iv.setImageBitmap(glyphBitmap(fn))
+    }
+}
+
+// Pozadi bocniho tlacitka 5 / 6: s funkci Bocni lista (klepnuti nebo drzeni) je zelene
+internal fun MainActivity.sideButtonBgRes(n: Int): Int =
+    if (buttonFunction(n, false) == ButtonFunction.LEFT_BAR || buttonFunction(n, true) == ButtonFunction.LEFT_BAR) R.drawable.side_button_bar_bg
+    else R.drawable.side_button_bg
 
 // Lista zajede dolu do tlacitka a pak se tlacitko zasune do vychozi polohy (podle nastaveni vysouvani)
 internal fun MainActivity.closeLeftBarAndHide() {
@@ -549,6 +595,7 @@ internal fun MainActivity.setLeftBar(open: Boolean, animate: Boolean, onDone: ((
     leftBarAnim?.cancel()
     leftBarOpen = open
     hideExtrasForBar(open)
+    applyBarBtnIcon(open)
     if (!animate) {
         bar.clipBounds = null
         bar.visibility = if (open) View.VISIBLE else View.INVISIBLE
@@ -880,7 +927,8 @@ internal fun MainActivity.updateSideButtons() {
     // s jinou funkci je to bezne boční tlacitko (tmave, s ikonou)
     val isOrb = gestureButtonN() == 6
     val b6 = findViewById<View>(R.id.btnSideRightMain)
-    if (isOrb) b6.background = Color.TRANSPARENT.toDrawable() else b6.setBackgroundResource(R.drawable.side_button_bg)
+    if (isOrb) b6.background = Color.TRANSPARENT.toDrawable() else b6.setBackgroundResource(sideButtonBgRes(6))
+    findViewById<View>(R.id.btnSideLeftMain).setBackgroundResource(sideButtonBgRes(5))
     (b6 as? ImageView)?.scaleType = if (isOrb) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_INSIDE
     b6.setPadding(if (isOrb) 0 else dp(8), if (isOrb) 0 else dp(8), if (isOrb) 0 else dp(8), if (isOrb) 0 else dp(8))
     // tlacitka 5-8 si uzivatel muze skryt (kulicka mizi s tlacitkem 6 nebo kdyz neni funkce Gesta)
