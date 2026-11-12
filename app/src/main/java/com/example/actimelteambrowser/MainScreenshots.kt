@@ -224,7 +224,7 @@ internal fun MainActivity.captureScreenshot() {
 // Probliknuti obrazovky + zvuk (res/raw/gotmyphoto.mp3) - da vedet, ze se screenshot povedl.
 // Vola se az po porizeni snimku, takze blesk na obrazku neni.
 internal fun MainActivity.flashScreen() {
-    playRawSound(this, "gotmyphoto")
+    if (com.example.actimelteambrowser.core.settings.AppSettings.screenshotSound.get()) playRawSound(this, "gotmyphoto")
     val flash = View(this)
     flash.setBackgroundColor(Color.WHITE)
     flash.alpha = 0f

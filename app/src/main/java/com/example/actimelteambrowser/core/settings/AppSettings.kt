@@ -87,7 +87,8 @@ object AppSettings {
     val vaultDemoSeen = BoolSetting("vault_demo_seen", false)          // pruvodce trezorem uz byl ukazan (pak jen otaznikem); neexportuje se
     val welcomeShown = BoolSetting("welcome_shown", false)             // uvodni zprava (2 strany) uz byla ukazana; neexportuje se
     val introOn = BoolSetting("intro_on", true)                        // uvodni animace pri spusteni
-    val soundsOn = BoolSetting("sounds_on", true)                      // vsechny zvuky (gesta, screenshot)
+    val soundsOn = BoolSetting("sounds_on", true)                      // hudba uvodni animace (zvuky gest a screenshotu maji vlastni prepinace)
+    val screenshotSound = BoolSetting("screenshot_sound", true)        // zvuk po vyfoceni obrazovky
     val vibrationOn = BoolSetting("vibration_on", true)                // vsechna vibrace (drzeni tlacitek, gesta)
     val pullRefreshOn = BoolSetting("pull_refresh_on", true)           // obnoveni stranky tazenim shora dolu
     val pullRefreshDistance = IntSetting("pull_refresh_distance", 120) // vzdalenost tazeni (dp), od ktere se stranka obnovi
@@ -211,7 +212,7 @@ object AppSettings {
         homeUrl, startupRestoreTabs
     ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
         listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, sitePermissions, totalBlocked, startShowFavorites,
-        squareStyleOwned, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
+        squareStyleOwned, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
 
     // Vsechna nastaveni pro kodovy export (SettingsCodes)
     val allSettings: List<Setting<*>> get() = all

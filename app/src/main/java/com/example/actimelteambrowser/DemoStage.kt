@@ -71,8 +71,11 @@ internal class DemoDim(ctx: Context) : View(ctx) {
         return true
     }
 
+    var passHoles = false   // dotek do diry projde na prvek pod ni (rychle nastaveni: klepni na kulicku)
+
     // pohlti vsechny doteky; performClick kvuli pristupnosti, bez zvuku
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (passHoles && event.actionMasked == MotionEvent.ACTION_DOWN && holes.any { it.contains(event.x, event.y) }) return false
         if (event.actionMasked == MotionEvent.ACTION_UP) {
             isSoundEffectsEnabled = false
             performClick()
@@ -84,6 +87,8 @@ internal class DemoDim(ctx: Context) : View(ctx) {
 /** Polohy prvku Compose obrazovek v souradnicich obrazovky (klic -> obdelnik). */
 internal object DemoMarks {
     val rects = HashMap<String, RectF>()
+    var demo = false                              // Nastaveni bezi jako ukazka (dole je misto navic, aby radky vyjely nad popisek)
+    var scrollBy: ((Float) -> Unit)? = null       // posun hlavniho seznamu Nastaveni o px (ukazka)
 }
 
 /** Oznaci prvek, aby na nej ukazka umela ukazat (ulozi jeho polohu na obrazovce). */
@@ -226,6 +231,12 @@ internal class DemoStage(private val act: Activity, private val onSkip: () -> Un
         ov.addView(ring, FrameLayout.LayoutParams(fs, fs))
         ring.translationX = finger.translationX; ring.translationY = finger.translationY
         ring.animate().scaleX(2.2f).scaleY(2.2f).alpha(0f).setDuration(450).withEndAction { ov.removeView(ring) }.start()
+    }
+
+    /** Zlute probliknuti bez ztmaveni (vse zustava videt). */
+    fun blinkOnly(r: RectF) {
+        focus(null)
+        blinkOutline(ov, local(r))
     }
 
     /** Zlute probliknuti obdelniku (a ztmaveni kolem nej). */

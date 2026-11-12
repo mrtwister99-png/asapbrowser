@@ -727,7 +727,12 @@ internal fun MainActivity.applyLiveTutorial() {
         if (!root.isAttachedToWindow) { anim.cancel(); return@addUpdateListener }
         val k = anim.animatedValue as Float
         val al = (k * 255).toInt()
-        for ((_, d) in liveOutlines.values) d.alpha = al
+        for ((n, pair) in liveOutlines) {
+            val (t, d) = pair
+            d.alpha = al
+            // pole zmenilo velikost (napr. spodni pole se pri psani nahore roztahne): obrys jde s nim
+            if (n != orbN && t.width > 0 && (d.bounds.width() != t.width || d.bounds.height() != t.height)) d.setBounds(0, 0, t.width, t.height)
+        }
         for (p in tutorialPlus) p.alpha = k
         for (ic in liveIcons) ic.alpha = 0.3f + 0.7f * k
     }
@@ -761,7 +766,7 @@ private fun MainActivity.rebuildTutorialPlus(show: Boolean) {
         bg.cornerRadius = dp(16).toFloat()
         bg.setStroke(dp(2), yellow, dp(8).toFloat(), dp(5).toFloat())
         plus.background = bg
-        plus.elevation = dp(8).toFloat()
+        plus.elevation = dp(5).toFloat()   // pod listou (6): otevrena lista "+" prekryje
         plus.translationY = lastImeShift
         plus.setOnClickListener { showTutorialPlusDialog() }
         val lp = ConstraintLayout.LayoutParams(dp(56), dp(56))

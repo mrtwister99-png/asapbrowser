@@ -142,6 +142,8 @@ internal fun OtherSettingsScreen(section: String, isDefaultBrowser: Boolean, onD
     var stripTop by remember { mutableStateOf(AppSettings.tabStripTop.get()) }
     var intro by remember { mutableStateOf(AppSettings.introOn.get()) }
     var sounds by remember { mutableStateOf(AppSettings.soundsOn.get()) }
+    var gestureSound by remember { mutableStateOf(AppSettings.gestureSound.get()) }
+    var shotSound by remember { mutableStateOf(AppSettings.screenshotSound.get()) }
     var vibration by remember { mutableStateOf(AppSettings.vibrationOn.get()) }
     var hideBars by remember { mutableStateOf(AppSettings.hideBarsOnScroll.get()) }
     var pullOn by remember { mutableStateOf(AppSettings.pullRefreshOn.get()) }
@@ -228,7 +230,11 @@ internal fun OtherSettingsScreen(section: String, isDefaultBrowser: Boolean, onD
             }
             }
 
-            if (section == "sounds") SwitchRow("Zvuky", "Gesta, screenshot", sounds) { sounds = it; AppSettings.soundsOn.set(it) }
+            if (section == "sounds") {
+                SwitchRow("Gesta", "Zvuk po dokončeném gestu", gestureSound) { gestureSound = it; AppSettings.gestureSound.set(it) }
+                SwitchRow("Screenshot", "Zvuk po vyfocení obrazovky nebo stránky", shotSound) { shotSound = it; AppSettings.screenshotSound.set(it) }
+                SwitchRow("Úvodní animace", "Hudba při spuštění aplikace", sounds) { sounds = it; AppSettings.soundsOn.set(it) }
+            }
             if (section == "vibra") SwitchRow("Vibrace", "Odezva při držení tlačítek, po gestu, nová karta, uložení do Oblíbených", vibration) { vibration = it; AppSettings.vibrationOn.set(it) }
 
             if (section == "home") {

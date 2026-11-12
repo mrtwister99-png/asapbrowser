@@ -54,6 +54,8 @@ private var demoGestureOpen = false         // ukazka otevrela plochu gest
 private var demoTabsOpen = false            // ukazka otevrela skutecny prehled karet
 private var demoFindOpen = false            // ukazka otevrela panel Najit na strance
 private var demoResume: (() -> Unit)? = null   // pokracovani ukazky po navratu z okna Nastaveni
+private var demoNewTabId = -1L              // nova karta otevrena ukazkou (po ukazce se zavre)
+private var demoPrevTabId = -1L             // karta, na kterou se po ukazce vrati
 
 /** Ukazkovy vyber casti obrazovky (jen kresleni, nic se neuklada): ramecek roste z rohu a ukaze tlacitka Ulozit / Zrusit. */
 private class DemoRegion(ctx: Context) : View(ctx) {
@@ -86,7 +88,7 @@ private class DemoRegion(ctx: Context) : View(ctx) {
     }
 }
 
-private fun MainActivity.rectOf(v: View): RectF {
+internal fun MainActivity.rectOf(v: View): RectF {
     val a = IntArray(2); val r = IntArray(2)
     v.getLocationInWindow(a); root.getLocationInWindow(r)
     val x = (a[0] - r[0]).toFloat(); val y = (a[1] - r[1]).toFloat()
@@ -122,6 +124,15 @@ private fun MainActivity.endDemo() {
     if (demoGestureOpen) { hideGestures(); demoGestureOpen = false }   // zavre plochu gest, nic neprovede
     if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }             // zavre prehled karet otevreny ukazkou
     if (demoFindOpen) { hideFindBar(); demoFindOpen = false }          // zavre ukazkovy panel hledani
+    tabsView.scaleX = 1f; tabsView.scaleY = 1f; tabsView.alpha = 1f
+    if (demoNewTabId >= 0) {
+        // nova karta z ukazky zmizi a vrati se puvodni karta
+        val prev = tabs.list.firstOrNull { it.id == demoPrevTabId }
+        if (tabs.list.size > 1) closeTabNow(demoNewTabId)
+        prev?.let { switchTo(it) }
+        updateTabStrips()
+        demoNewTabId = -1L; demoPrevTabId = -1L
+    }
     demoResume = null
     updateDeskBtn()   // tlacitko Verze pro pocitac zpet podle skutecneho stavu
     if (demoDialogOpen) { runCatching { lastDialogDismiss?.invoke() }; demoDialogOpen = false }
@@ -152,7 +163,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     if (n == 8) { showVpnSoon(); return true }
 
     demoRunning = true
-    if (id == 300 && quickSetupStage == 2) quickSetupStage = 21   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
+    if (id == 300 && quickSetupStage == 2) { quickSetupStage = 21; quickSpotOff?.invoke() }   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
     val parent = root as ConstraintLayout
     val urlBox = findViewById<View>(R.id.urlContainer)
     val adBtn = findViewById<View>(R.id.btnAdBlock)
@@ -453,6 +464,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
                     rm.visibility = View.INVISIBLE
                     ov.addView(rm, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.CENTER))
                     at(150) {
+                        dim.visibility = View.GONE   // po klepnuti zadne ztmaveni
                         blinkHome()
                         rm.alpha = 1f; rm.rotation = 0f; rm.visibility = View.VISIBLE
                         rm.animate().rotation(360f).setDuration(900).withEndAction {
@@ -460,10 +472,19 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
                             rm.animate().alpha(0f).setStartDelay(500).setDuration(300).start()
                         }.start()
                     }
-                    at(2300) { focusViews(btn); say(holdText[1] ?: "") }
-                    at(500) { holdFinger() }
-                    // ikona se zespoda vyplni, zvetsi se a az potom se otevre skutecne okno nastaveni domovske stranky
-                    at(650) { animateHome { if (demoRunning) { releaseFinger(); openModal { showHomeDialog() } } } }
+                    at(2300) { focusViews(btn); say(holdText[1] ?: ""); moveTo(btn, 400) }   // zase ztmaveni, prst na domecku
+                    at(600) { holdFinger() }
+                    // ikona se zespoda vyplni, zvetsi se a az potom se otevre skutecne okno nastaveni domovske stranky (bez ztmaveni, zluty obrys)
+                    at(650) {
+                        animateHome {
+                            if (demoRunning) {
+                                releaseFinger()
+                                dim.visibility = View.GONE
+                                openModal { showHomeDialog() }
+                                (lastDialogCard?.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).setStroke(dp(3), DEMO_YELLOW.toColorInt()) }
+                            }
+                        }
+                    }
                     at(3600) { endDemo() }
                 }
                 2 -> {
@@ -475,30 +496,41 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
                             }
                         }
                     }
+                    // bez ztmaveni problikne Bezne -> Skupiny -> Anonymni
                     at(1500) {
-                        say("Nahoře přepínáš běžné karty…")
-                        DemoMarks.rects["tabs_normal"]?.let { focusScreen(it); moveToRect(it, 500); blinkScreen(it) }
+                        say("Běžné karty…")
+                        DemoMarks.rects["tabs_normal"]?.let { moveToRect(it, 500); blinkScreen(it) }
                     }
-                    at(1500) {
+                    at(1400) {
+                        say("…skupiny karet…")
+                        DemoMarks.rects["tabs_groups"]?.let { moveToRect(it, 500); blinkScreen(it) }
+                    }
+                    at(1400) {
                         say("…a anonymní karty")
-                        DemoMarks.rects["tabs_incog"]?.let { focusScreen(it); moveToRect(it, 500); blinkScreen(it) }
+                        DemoMarks.rects["tabs_incog"]?.let { moveToRect(it, 500); blinkScreen(it) }
                     }
+                    // prehled se stahne dolu do stredu obrazovky a zavre se
                     at(1600) {
-                        // zpet = systemove tlacitko / gesto zpet vlevo dole
-                        dim.visibility = View.GONE
-                        say("Zpět: přehled karet se zavře")
-                        val dm = resources.displayMetrics
-                        val wl = IntArray(2); window.decorView.getLocationOnScreen(wl)
-                        moveXY(wl[0] + dm.widthPixels * 0.22f, wl[1] + window.decorView.height - lastSystemBottom / 2f - dp(18), 600)
+                        tabsView.pivotX = tabsView.width / 2f
+                        tabsView.pivotY = tabsView.height * 0.75f
+                        tabsView.animate().scaleX(0.05f).scaleY(0.05f).alpha(0f).setDuration(420).withEndAction {
+                            if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }
+                            tabsView.scaleX = 1f; tabsView.scaleY = 1f; tabsView.alpha = 1f
+                        }.start()
                     }
-                    at(800) { tap() }
-                    at(250) { if (demoTabsOpen) { hideTabs(); demoTabsOpen = false } }
-                    at(700) { focusViews(btn); say(holdText[2] ?: ""); moveTo(btn, 600) }
+                    at(800) { focusViews(btn); say(holdText[2] ?: ""); moveTo(btn, 600) }   // ztmaveni, prst na tlacitko karet
                     at(800) { holdFinger() }
-                    at(650) { animateTabsButton { }; flyBurst("+", "#00B055") }   // nova karta (jen vizualne)
-                    at(1300) { releaseFinger(); say("Nová karta: nahoře pole pro adresu…"); focusViews(urlBox); blinkView(urlBox) }
-                    at(1500) { say("…a dole pole pro hledání"); focusViews(etSearchMain); blinkView(etSearchMain) }
-                    at(1700) { endDemo() }
+                    at(650) {
+                        // drzeni = okno nove karty (skutecna nova karta, po ukazce se zavre)
+                        animateTabsButton { }
+                        flyBurst("+", "#00B055")
+                        dim.visibility = View.GONE
+                        demoPrevTabId = tabs.activeId
+                        openStartTab()
+                        demoNewTabId = tabs.activeId
+                    }
+                    at(700) { releaseFinger(); say("Nová karta je otevřená") }
+                    at(2200) { endDemo() }
                 }
                 3 -> {
                     at(150) {

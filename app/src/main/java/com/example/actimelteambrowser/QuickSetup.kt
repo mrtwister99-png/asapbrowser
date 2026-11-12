@@ -10,6 +10,9 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.constraintlayout.widget.ConstraintLayout
+import android.view.Gravity
+import android.graphics.Typeface
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import com.example.actimelteambrowser.core.settings.AppSettings
@@ -25,6 +28,51 @@ import com.example.actimelteambrowser.core.settings.ButtonFunction
 
 // 0 = nic, 2 = ceka se na klepnuti na tlacitko gest, 21 = bezi ukazka gest
 internal var quickSetupStage = 0
+
+// Ztmaveni rychleho nastaveni (vse tmave krome [targets], tip nahore); zavola se pro odstraneni
+internal var quickSpotOff: (() -> Unit)? = null
+
+private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle: Boolean = false) {
+    quickSpotOff?.invoke()
+    val parent = root as ConstraintLayout
+    val dim = DemoDim(this)
+    dim.passHoles = true   // na ukazovany prvek jde klepnout
+    dim.circle = circle
+    val lp = ConstraintLayout.LayoutParams(0, 0)
+    lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+    dim.elevation = dp(100).toFloat()
+    parent.addView(dim, lp)
+    val cap = TextView(this)
+    cap.text = tip
+    cap.setTextColor(Color.WHITE)
+    cap.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    cap.gravity = Gravity.CENTER
+    cap.setPadding(dp(18), dp(14), dp(18), dp(14))
+    cap.background = demoCaptionBg(this)
+    cap.elevation = dp(101).toFloat()
+    val clp = ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    clp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+    clp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+    clp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+    clp.topMargin = lastSystemTopPx + dp(80)
+    clp.marginStart = dp(28); clp.marginEnd = dp(28)
+    parent.addView(cap, clp)
+    dim.post {
+        dim.holes.clear()
+        for (t in targets) if (t.isShown) dim.holes.add(rectOf(t).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) })
+        dim.invalidate()
+    }
+    quickSpotOff = { parent.removeView(dim); parent.removeView(cap); quickSpotOff = null }
+}
+
+private fun MainActivity.gestureTarget(): View? {
+    val n = gestureButtonN()
+    if (n == 0) return null
+    return orbView?.takeIf { it.isShown } ?: buttonView(n)
+}
 
 private fun MainActivity.bodyText(t: String): TextView {
     val tv = TextView(this)
@@ -164,7 +212,10 @@ private fun MainActivity.quickStage2() {
     startLiveTutorial()
     if (gestureButtonN() == 0) { quickStage3(); return }
     quickSetupStage = 2
-    AppToast.show(this, "2/5  Gesta: klepni na blikající tlačítko gest", true, AppToast.Kind.INFO)
+    // vse ztmavene, videt je jen kulicka gest (na ni jde klepnout) a tip nahore
+    window.decorView.postDelayed({
+        if (quickSetupStage == 2) gestureTarget()?.let { quickSpotlight(listOf(it), "2/5  Klikni na kuličku 👆", circle = it === orbView) }
+    }, 350)
 }
 
 /** Volano z endDemo: skoncila ukazka gest v rychlem nastaveni. */
@@ -190,12 +241,48 @@ internal fun MainActivity.onQuickSetupDemoEnded() {
 
 // 3) pridatelna tlacitka: 2 + 2, kazde umi klepnuti i drzeni
 private fun MainActivity.quickStage3() {
-    choiceDialog(
-        "3/5  Tlačítka",
-        "Na každou stranu můžeš přidat až 2 další tlačítka – žluté „+“ nad bočními tlačítky.\n\nKaždé tlačítko umí dvě věci: klepnutí a podržení. Obojí si nastavíš v Nastavení → Tlačítka.",
-        null,
-        "Dále" to { quickStage4() }
-    )
+    // vse ztmavene, videt je tlacitko listy a gest; nad bocnimi tlacitky vyjedou 2 + 2 ukazkova tlacitka
+    quickSpotlight(listOfNotNull(buttonView(defaultBarOrigin()), gestureTarget()), "3/5  Na každou stranu přidáš 2 tlačítka")
+    val parent = root as ConstraintLayout
+    val ghosts = ArrayList<View>()
+    var delay = 500L
+    val yellow = "#FFD600".toColorInt()
+    for (left in listOf(true, false)) {
+        val anchor = findViewById<View>(if (left) R.id.btnSideLeftMain else R.id.btnSideRightMain) ?: continue
+        if (!anchor.isShown) continue
+        val ar = rectOf(anchor)
+        for (k in 1..2) {
+            val v = TextView(this)
+            v.text = getString(R.string.plus_sign)
+            v.setTextColor(yellow)
+            v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            v.setTypeface(v.typeface, Typeface.BOLD)
+            v.gravity = Gravity.CENTER
+            val bg = GradientDrawable()
+            bg.setColor("#1E1E1E".toColorInt())
+            bg.cornerRadius = dp(18).toFloat()
+            bg.setStroke(dp(2), yellow, dp(8).toFloat(), dp(5).toFloat())
+            v.background = bg
+            v.elevation = dp(102).toFloat()   // nad ztmavenim
+            parent.addView(v, ConstraintLayout.LayoutParams(dp(56), dp(56)))
+            v.translationX = ar.centerX() - dp(28)
+            v.translationY = ar.top
+            v.alpha = 0f; v.scaleX = 0.5f; v.scaleY = 0.5f
+            v.animate().setStartDelay(delay).translationY(ar.top - k * (dp(56) + dp(12))).alpha(1f).scaleX(1f).scaleY(1f).setDuration(380).start()
+            delay += 350
+            ghosts.add(v)
+        }
+    }
+    val off = quickSpotOff
+    quickSpotOff = { ghosts.forEach { parent.removeView(it) }; off?.invoke() }
+    window.decorView.postDelayed({
+        choiceDialog(
+            "3/5  Tlačítka",
+            "Na každou stranu můžeš přidat až 2 další tlačítka – žluté „+“ nad bočními tlačítky.\n\nKaždé tlačítko umí dvě věci: klepnutí a podržení. Obojí si nastavíš v Nastavení → Tlačítka.",
+            null,
+            "Dále" to { quickSpotOff?.invoke(); quickStage4() }
+        )
+    }, delay + 900)
 }
 
 // 4) bocni lista + pravidlo lista / gesta (ukazka listy)

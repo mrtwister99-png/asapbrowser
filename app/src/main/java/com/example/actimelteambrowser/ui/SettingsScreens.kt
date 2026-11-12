@@ -74,6 +74,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.DisposableEffect
+import com.example.actimelteambrowser.DemoMarks
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -382,7 +384,7 @@ private fun SettingsRoot(
             SearchItem("Tlačítka", "Nastavení", "funkce klepnutí podržení držení přidat boční tlačítko zasunutí lišta", onButtons),
             SearchItem("Trezor hesel", "Nastavení", "hesla přihlášení pin otisk 12 slov password", onVault),
             SearchItem("Animace", "Nastavení", "animace tlačítek přechody úvodní intro logo toasty zprávy oznámení", { onSection("anim") }),
-            SearchItem("Zvuky", "Nastavení", "zvuk hudba ztlumit", { onSection("sounds") }),
+            SearchItem("Zvuky", "Nastavení", "zvuk hudba ztlumit gesta screenshot snímek úvodní", { onSection("sounds") }),
             SearchItem("Vibrace", "Nastavení", "vibrovat brnění haptika", { onSection("vibra") }),
             SearchItem("Export", "Nastavení", "uložit záloha zálohovat e-mail poslat soubor", onExport),
             SearchItem("Import", "Nastavení", "načíst nahrát obnovit soubor záloha", onImport),
@@ -413,8 +415,14 @@ private fun SettingsRoot(
             }
             return@ScreenScaffold
         }
+        val mainScroll = rememberScrollState()
+        val demoScope = rememberCoroutineScope()
+        DisposableEffect(Unit) {
+            DemoMarks.scrollBy = { px -> demoScope.launch { mainScroll.animateScrollTo((mainScroll.value + px).toInt()) } }
+            onDispose { DemoMarks.scrollBy = null }
+        }
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),   // aby se vsechno vlezlo i na male displeje
+            Modifier.verticalScroll(mainScroll).padding(horizontal = 16.dp),   // aby se vsechno vlezlo i na male displeje
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             GroupLabel("Prohlížení")
@@ -431,7 +439,7 @@ private fun SettingsRoot(
             SettingsRow("Trezor hesel", "Hesla zašifrovaná jen v tomto telefonu, odemyká se PINem nebo 12 slovy", onVault)
             GroupLabel("Odezva")
             SettingsRow("Animace", "Animace tlačítek, úvodní animace, toasty", { onSection("anim") })
-            SettingsRow("Zvuky", "Zvuky gest a screenshotu", { onSection("sounds") })
+            SettingsRow("Zvuky", "Gesta, screenshot, úvodní hudba", { onSection("sounds") })
             SettingsRow("Vibrace", "Odezva při držení tlačítek a po gestu", { onSection("vibra") })
             GroupLabel("Aplikace")
             SettingsRow("Export", "Uložit nastavení, záložky a historii do telefonu nebo poslat na e-mail", onExport)
@@ -442,16 +450,17 @@ private fun SettingsRoot(
             Column(
                 Modifier
                     .fillMaxWidth()
+                    .demoMark("row:Restartovat vše")
                     .clip(RoundedCornerShape(16.dp))
                     .background(DANGER)
                     .clickable { resetStep = 1 }
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
-                Text("Restartovat vše", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("♻️  Restartovat vše", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(2.dp))
                 Text("Smazat všechna data a nastavení a začít od nuly", color = Color(0xFFFFCDD2), fontSize = 13.sp)
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(if (DemoMarks.demo) 240.dp else 16.dp))   // ukazka: posledni radky vyjedou nad popisek
         }
     }
     if (resetStep == 1) {
@@ -628,20 +637,38 @@ fun ImportChooserDialog(available: Set<String>, onImport: (Set<String>, Set<Stri
 
 @Composable
 internal fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
             .demoMark("row:$title")
             .clip(RoundedCornerShape(16.dp))
             .background(PANEL)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 16.dp)
+            .padding(start = 14.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(2.dp))
-        Text(subtitle, color = MUTED, fontSize = 13.sp)
+        ROW_ICONS[title]?.let { icon ->
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(ROW), contentAlignment = Alignment.Center) {
+                Text(icon, fontSize = 20.sp)
+            }
+            Spacer(Modifier.width(14.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(2.dp))
+            Text(subtitle, color = MUTED, fontSize = 13.sp)
+        }
     }
 }
+
+// Ikona ke kazde polozce Nastaveni (i ve vysledcich hledani)
+private val ROW_ICONS = mapOf(
+    "Domovská stránka" to "🏠", "Výchozí prohlížeč" to "🌐", "Obnovit stránku tažením dolů" to "🔄",
+    "Vyhledávač" to "🔍", "Záložky" to "🗂️", "Lišta záložek" to "📑", "Oblíbené" to "⭐",
+    "Stažené položky" to "⬇️", "Historie" to "🕘", "Gesta" to "✋", "Tlačítka" to "🔘",
+    "Trezor hesel" to "🔐", "Animace" to "✨", "Zvuky" to "🔊", "Vibrace" to "📳",
+    "Export" to "📤", "Import" to "📥", "Tutoriály" to "🎓", "O aplikaci" to "ℹ️", "Restartovat vše" to "♻️"
+)
 
 /** Ikona funkce tlacitka (bila vektorova ikona ze sady ikon). */
 @Composable

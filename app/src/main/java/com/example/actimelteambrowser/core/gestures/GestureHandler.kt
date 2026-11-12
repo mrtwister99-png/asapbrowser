@@ -48,7 +48,6 @@ private fun playGestureSound(context: Context) = playRawSound(context, "orb")
 @SuppressLint("DiscouragedApi")   // nazev zvuku je dynamicky (res/raw/<name>)
 fun playRawSound(context: Context, name: String) {
     AppSettings.init(context)
-    if (!AppSettings.soundsOn.get()) return   // zvuky vypnute v Konfiguraci
     quiet {
         val resId = context.resources.getIdentifier(name, "raw", context.packageName)
         if (resId == 0) {

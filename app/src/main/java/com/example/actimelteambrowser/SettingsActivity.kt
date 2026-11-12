@@ -128,6 +128,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppSettings.init(this)
+        DemoMarks.demo = intent.hasExtra(EXTRA_DEMO)
         // obsah nesmi zajizdet pod stavovy radek a navigacni listu (odsazeni resi Compose)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
 
@@ -228,8 +229,8 @@ class SettingsActivity : ComponentActivity() {
         fun mark(k: String): android.graphics.RectF? = DemoMarks.rects[k]
         val screenH = resources.displayMetrics.heightPixels
         // sipka zpet: prst na ni klepne a ukazka se vrati do prohlizece
-        fun goBack() {
-            st.at(1300) { st.say("Šipkou zpět se vrátíš do prohlížeče"); mark("back")?.let { st.focus(it); st.moveTo(it, 600) } }
+        fun goBack(dim: Boolean = true, wait: Long = 1300) {
+            st.at(wait) { st.say("Šipkou zpět se vrátíš do prohlížeče"); mark("back")?.let { if (dim) st.focus(it) else st.focus(null); st.moveTo(it, 600) } }
             st.at(900) { st.tap() }
             st.at(350) { st.end(); finishDemo(DEMO_DONE) }
         }
@@ -243,24 +244,26 @@ class SettingsActivity : ComponentActivity() {
                 goBack()
             }
             DEMO_SETTINGS -> {
-                st.at(0) { st.say("Nastavení: všechno na jednom místě") }
-                // radky se prolinkou zlute shora dolu (jen ty, ktere jsou videt)
-                val rows = listOf("Domovská stránka", "Vyhledávač", "Záložky", "Lišta záložek", "Oblíbené", "Stažené položky", "Historie", "Gesta", "Tlačítka", "Trezor hesel", "Animace", "Zvuky", "Vibrace", "Export", "Import", "Tutoriály", "O aplikaci")
+                st.at(0) { st.focus(null); st.say("Nastavení: všechno na jednom místě") }
+                // vse je videt; radky problikaji zlute shora dolu, seznam se pri tom posouva az na konec
+                val rows = listOf("Domovská stránka", "Vyhledávač", "Záložky", "Lišta záložek", "Oblíbené", "Stažené položky", "Historie", "Gesta", "Tlačítka", "Trezor hesel", "Animace", "Zvuky", "Vibrace", "Export", "Import", "Tutoriály", "O aplikaci", "Restartovat vše")
+                val limit = screenH - 230 * resources.displayMetrics.density   // pod tim je popisek a Preskocit
                 var first = true
                 for (r in rows) {
-                    st.at(if (first) 900 else 420) {
+                    st.at(if (first) 900 else 300) {
                         val rect = mark("row:$r") ?: return@at
-                        if (rect.bottom < screenH - 16 * resources.displayMetrics.density) st.blink(rect)
+                        if (rect.bottom > limit) DemoMarks.scrollBy?.invoke(rect.bottom - limit + 12 * resources.displayMetrics.density)
                     }
+                    st.at(220) { mark("row:$r")?.let { st.blinkOnly(it) } }
                     first = false
                 }
-                goBack()
+                goBack(dim = false, wait = 1800)   // dole chvili pocka, pak prst na sipku zpet
             }
             DEMO_FEEDBACK -> {
-                st.at(0) { st.say("Hodnocení a chyby: napiš recenzi nebo nahlas chybu") }
-                st.at(1300) { mark("fb_review")?.let { st.moveTo(it, 500); st.blink(it) } }
-                st.at(1300) { mark("fb_bug")?.let { st.moveTo(it, 500); st.blink(it) } }
-                goBack()
+                st.at(0) { st.focus(null); st.say("Hodnocení a chyby: napiš recenzi nebo nahlas chybu") }
+                st.at(1300) { mark("fb_review")?.let { st.moveTo(it, 500); st.blinkOnly(it) } }
+                st.at(1300) { mark("fb_bug")?.let { st.moveTo(it, 500); st.blinkOnly(it) } }
+                st.at(1600) { st.end(); finishDemo(DEMO_DONE) }
             }
             else -> { st.end(); finishDemo(DEMO_SKIP) }
         }

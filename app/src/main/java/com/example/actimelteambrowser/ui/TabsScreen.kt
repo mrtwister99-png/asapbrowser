@@ -338,7 +338,7 @@ fun TabsScreen(
                 ModeChip("Běžné ($normalCount)", !incognito && !groupsMode, Modifier.weight(1f).demoMark("tabs_normal")) {
                     endSelect(); openFolderId = null; onToggleIncognito(false)
                 }
-                ModeChip("Skupiny", groupsMode, Modifier.weight(1f), yellow = true) {
+                ModeChip("Skupiny", groupsMode, Modifier.weight(1f).demoMark("tabs_groups"), yellow = true) {
                     endSelect(); openFolderId = null; onGroupsMode()
                 }
                 ModeChip("🕶 Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f).demoMark("tabs_incog"), blue = true) {
