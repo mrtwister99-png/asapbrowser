@@ -365,7 +365,59 @@ private fun SettingsRoot(
     val resetContext = LocalContext.current
     val hasVault = remember { VaultManager.isCreated(resetContext) }
     var keepVault by remember { mutableStateOf(true) }   // zaloha trezoru pred smazanim
+    // hledani v nastaveni: kazda polozka = nazev, kde je, klicova slova a kam vede
+    var query by remember { mutableStateOf("") }
+    val index = remember {
+        listOf(
+            SearchItem("Záložky", "Nastavení", "oblíbené složky uložené stránky bookmarky", onBookmarks),
+            SearchItem("Historie", "Nastavení", "navštívené stránky mazání vymazat", onHistory),
+            SearchItem("Stahování", "Nastavení", "stažené soubory download", onDownloads),
+            SearchItem("Tlačítka", "Nastavení", "funkce klepnutí podržení držení přidat boční tlačítko zasunutí", onButtons),
+            SearchItem("Gesta", "Nastavení", "plocha gest kódy vzhled velikost čtverečky kolečka číslice tah", onGestures),
+            SearchItem("Export", "Nastavení", "uložit záloha zálohovat e-mail poslat soubor", onExport),
+            SearchItem("Import", "Nastavení", "načíst nahrát obnovit soubor záloha", onImport),
+            SearchItem("Výchozí prohlížeč", "Nastavení", "odkazy z jiných aplikací default", onDefaultBrowser),
+            SearchItem("Tutoriály", "Nastavení", "ukázky návod nápověda demo", onTutorials),
+            SearchItem("Konfigurace", "Nastavení", "další nastavení", onOther),
+            SearchItem("Animace tlačítek", "Nastavení › Konfigurace", "animace přechody", onOther),
+            SearchItem("Úvodní animace při spuštění", "Nastavení › Konfigurace", "intro logo start", onOther),
+            SearchItem("Informační toasty", "Nastavení › Konfigurace", "oznámení zprávy upozornění", onOther),
+            SearchItem("Spodní lišta karet", "Nastavení › Konfigurace", "lista karet záložky dole", onOther),
+            SearchItem("Horní lišta karet", "Nastavení › Konfigurace", "lista karet záložky nahoře", onOther),
+            SearchItem("Zvuky", "Nastavení › Konfigurace", "zvuk hudba ztlumit", onOther),
+            SearchItem("Vibrace", "Nastavení › Konfigurace", "vibrovat brnění haptika", onOther),
+            SearchItem("Skrývat lišty při posouvání", "Nastavení › Konfigurace", "procházení scroll", onOther),
+            SearchItem("Obnovit stránku tažením dolů", "Nastavení › Konfigurace", "pull refresh obnovení", onOther),
+            SearchItem("Náhledy a ikony webů", "Nastavení › Konfigurace", "obrázky favicon", onOther),
+            SearchItem("Vyhledávač", "Nastavení › Konfigurace", "google seznam duckduckgo hledání", onOther),
+            SearchItem("Úklid", "Nastavení › Konfigurace", "smazat cache data cookies", onOther),
+            SearchItem("O aplikaci", "Nastavení", "verze hudba informace licence", onAbout),
+            SearchItem("Trezor hesel", "Nastavení", "hesla přihlášení pin otisk 12 slov password", onVault),
+            SearchItem("Restartovat vše", "Nastavení", "smazat všechno reset tovární", { resetStep = 1 })
+        )
+    }
+    val found = remember(query) { if (query.isBlank()) emptyList() else index.filter { it.matches(query) } }
     ScreenScaffold(title = "Nastavení", onBack = onBack) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it.take(60) },
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+            singleLine = true,
+            placeholder = { Text("Prohledat nastavení") },
+            leadingIcon = { Text("🔍", fontSize = 16.sp) },
+            trailingIcon = if (query.isNotEmpty()) ({ Text("✕", color = MUTED, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { query = "" }.padding(10.dp)) }) else null
+        )
+        if (query.isNotBlank()) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (found.isEmpty()) Text("Nic nenalezeno – zkus jiné slovo.", color = MUTED, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
+                for (it in found) SettingsRow(it.title, it.path, it.action)
+                Spacer(Modifier.height(16.dp))
+            }
+            return@ScreenScaffold
+        }
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),   // aby se vsechno vlezlo i na male displeje
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -623,3 +675,14 @@ internal fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChan
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
+
+
+/** Polozka hledani v nastaveni. */
+private class SearchItem(val title: String, val path: String, val keywords: String, val action: () -> Unit) {
+    private val hay = norm("$title $path $keywords")
+    /** Kazde slovo dotazu musi byt v nazvu, ceste nebo klicovych slovech (bez ohledu na diakritiku a velikost pismen). */
+    fun matches(q: String): Boolean = norm(q).split(' ').filter { it.isNotBlank() }.all { hay.contains(it) }
+}
+
+private fun norm(s: String): String =
+    java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")

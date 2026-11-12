@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -368,6 +369,33 @@ private fun VaultField(label: String, value: String) {
     }
 }
 
+// Radek detailu: popisek + hodnota vlevo, ikony (oko, kopirovat) vpravo
+@Composable
+private fun VaultValueRow(label: String, value: String, actions: @Composable () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(V_PANEL).padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = V_MUTED, fontSize = 12.sp)
+            Text(value, color = Color.White, fontSize = 16.sp)
+        }
+        actions()
+    }
+}
+
+@Composable
+private fun VaultIconButton(res: Int, desc: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(res), contentDescription = desc, modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
 @Composable
 private fun VaultDetail(entry: VaultEntry, onBack: () -> Unit, onEdit: () -> Unit, onDeleted: () -> Unit) {
     val context = LocalContext.current
@@ -375,15 +403,45 @@ private fun VaultDetail(entry: VaultEntry, onBack: () -> Unit, onEdit: () -> Uni
     var show by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     ScreenScaffold(title = entry.domain, onBack = onBack) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            VaultField("Uživatel", entry.username.ifEmpty { "—" })
-            VaultField("Heslo", if (show) entry.password else "••••••••••")
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // prihlasovaci jmeno + kopirovat
+            VaultValueRow("Přihlašovací jméno", entry.username.ifEmpty { "—" }) {
+                if (entry.username.isNotEmpty()) {
+                    VaultIconButton(com.example.actimelteambrowser.R.drawable.ic_copy_url, "Kopírovat jméno") {
+                        copySecret(context, entry.username)
+                        com.example.actimelteambrowser.AppToast.show(context, "Jméno zkopírováno")
+                    }
+                }
+            }
+            // heslo + oko (zobrazit / skryt) + kopirovat
+            VaultValueRow("Heslo", if (show) entry.password else "••••••••••") {
+                VaultIconButton(
+                    if (show) com.example.actimelteambrowser.R.drawable.ic_eye_off else com.example.actimelteambrowser.R.drawable.ic_eye,
+                    if (show) "Skrýt heslo" else "Zobrazit heslo"
+                ) { show = !show }
+                VaultIconButton(com.example.actimelteambrowser.R.drawable.ic_copy_url, "Kopírovat heslo") {
+                    copySecret(context, entry.password)
+                    com.example.actimelteambrowser.AppToast.show(context, "Heslo zkopírováno (schránka se za minutu vymaže)")
+                }
+            }
             if (entry.note.isNotEmpty()) VaultField("Poznámka", entry.note)
-            BigButton("Kopírovat heslo", V_ACCENT, V_ON_ACCENT) { copySecret(context, entry.password) }
-            BigButton("Kopírovat uživatele", V_ROW, Color.White) { copySecret(context, entry.username) }
-            BigButton(if (show) "Skrýt heslo" else "Zobrazit heslo", V_ROW, Color.White) { show = !show }
-            BigButton("Upravit", V_ROW, Color.White, onClick = onEdit)
-            BigButton("Smazat", V_DANGER, Color.White) { confirm = true }
+            Spacer(Modifier.height(8.dp))
+            Text("Smazat toto přihlášení", color = Color(0xFFEF5350), fontSize = 13.sp,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { confirm = true }.padding(8.dp))
+        }
+        // dole: Upravit (prepsat a ulozit) + Zpet
+        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(16.dp)).background(V_ROW).clickable(onClick = onBack),
+                contentAlignment = Alignment.Center
+            ) { Text("Zpět", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Box(
+                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(16.dp)).background(V_ACCENT).clickable(onClick = onEdit),
+                contentAlignment = Alignment.Center
+            ) { Text("Upravit", color = V_ON_ACCENT, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
     }
     if (confirm) {
@@ -437,12 +495,15 @@ private fun VaultEdit(entry: VaultEntry?, onBack: () -> Unit, onSaved: () -> Uni
                 label = { Text("Heslo") }, singleLine = true,
                 visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                trailingIcon = {
+                    VaultIconButton(
+                        if (show) com.example.actimelteambrowser.R.drawable.ic_eye_off else com.example.actimelteambrowser.R.drawable.ic_eye,
+                        if (show) "Skrýt heslo" else "Zobrazit heslo"
+                    ) { show = !show }
+                },
                 modifier = Modifier.fillMaxWidth()
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                VaultSmallButton(if (show) "Skrýt" else "Zobrazit", Modifier.weight(1f)) { show = !show }
-                VaultSmallButton("Vygenerovat heslo", Modifier.weight(1f)) { password = VaultCrypto.generatePassword(); show = true; error = null }
-            }
+            VaultSmallButton("Vygenerovat heslo", Modifier.fillMaxWidth()) { password = VaultCrypto.generatePassword(); show = true; error = null }
             OutlinedTextField(
                 value = note, onValueChange = { note = it },
                 label = { Text("Poznámka") },
@@ -465,6 +526,7 @@ private fun VaultEdit(entry: VaultEntry?, onBack: () -> Unit, onSaved: () -> Uni
                     }
                 }
             }
+            BigButton("Zpět", V_ROW, Color.White, onClick = onBack)
         }
     }
 }
