@@ -447,18 +447,23 @@ private fun SettingsRoot(
             SettingsRow("Tutoriály", "Krátké ukázky, jak jednotlivé funkce fungují", onTutorials)
             SettingsRow("O aplikaci", "Verze, popis, co umí a použité součásti", onAbout)
             // nebezpecna akce uplne dole, cervene; vyzaduje dve potvrzeni
-            Column(
+            Row(
                 Modifier
                     .fillMaxWidth()
                     .demoMark("row:Restartovat vše")
                     .clip(RoundedCornerShape(16.dp))
                     .background(DANGER)
                     .clickable { resetStep = 1 }
-                    .padding(horizontal = 18.dp, vertical = 16.dp)
+                    .padding(start = 14.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("♻️  Restartovat vše", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(2.dp))
-                Text("Smazat všechna data a nastavení a začít od nuly", color = Color(0xFFFFCDD2), fontSize = 13.sp)
+                RowIcon(R.drawable.ic_reset, Color(0x33000000))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Restartovat vše", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(2.dp))
+                    Text("Smazat všechna data a nastavení a začít od nuly", color = Color(0xFFFFCDD2), fontSize = 13.sp)
+                }
             }
             Spacer(Modifier.height(if (DemoMarks.demo) 240.dp else 16.dp))   // ukazka: posledni radky vyjedou nad popisek
         }
@@ -648,9 +653,7 @@ internal fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         ROW_ICONS[title]?.let { icon ->
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(ROW), contentAlignment = Alignment.Center) {
-                Text(icon, fontSize = 20.sp)
-            }
+            RowIcon(icon)
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -661,14 +664,23 @@ internal fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
     }
 }
 
-// Ikona ke kazde polozce Nastaveni (i ve vysledcich hledani)
+// Ikona ke kazde polozce Nastaveni (i ve vysledcich hledani): tenke bile linkove ikony appky, nikdy barevne
 private val ROW_ICONS = mapOf(
-    "Domovská stránka" to "🏠", "Výchozí prohlížeč" to "🌐", "Obnovit stránku tažením dolů" to "🔄",
-    "Vyhledávač" to "🔍", "Záložky" to "🗂️", "Lišta záložek" to "📑", "Oblíbené" to "⭐",
-    "Stažené položky" to "⬇️", "Historie" to "🕘", "Gesta" to "✋", "Tlačítka" to "🔘",
-    "Trezor hesel" to "🔐", "Animace" to "✨", "Zvuky" to "🔊", "Vibrace" to "📳",
-    "Export" to "📤", "Import" to "📥", "Tutoriály" to "🎓", "O aplikaci" to "ℹ️", "Restartovat vše" to "♻️"
+    "Domovská stránka" to R.drawable.ic_home, "Výchozí prohlížeč" to R.drawable.ic_set_globe, "Obnovit stránku tažením dolů" to R.drawable.ic_refresh,
+    "Vyhledávač" to R.drawable.ic_set_search, "Záložky" to R.drawable.ic_tabs_overview, "Lišta záložek" to R.drawable.ic_tab_strip,
+    "Oblíbené" to R.drawable.ic_bookmarks, "Stažené položky" to R.drawable.ic_download, "Historie" to R.drawable.ic_history,
+    "Gesta" to R.drawable.ic_gestures, "Tlačítka" to R.drawable.ic_button_settings, "Trezor hesel" to R.drawable.ic_vault,
+    "Animace" to R.drawable.ic_animation, "Zvuky" to R.drawable.ic_sound, "Vibrace" to R.drawable.ic_vibration,
+    "Export" to R.drawable.ic_export, "Import" to R.drawable.ic_import, "Tutoriály" to R.drawable.ic_tutorial,
+    "O aplikaci" to R.drawable.ic_info, "Restartovat vše" to R.drawable.ic_reset
 )
+
+@Composable
+private fun RowIcon(res: Int, bg: Color = ROW) {
+    Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(bg), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Image(painterResource(res), contentDescription = null, modifier = Modifier.size(24.dp))
+    }
+}
 
 /** Ikona funkce tlacitka (bila vektorova ikona ze sady ikon). */
 @Composable

@@ -425,20 +425,56 @@ internal fun MainActivity.updateTopClear() {
     cp.strokeWidth = dp(2).toFloat() * 0.8f
     cc.drawRoundRect(cs * 0.12f, cs * 0.12f, cs * 0.62f, cs * 0.62f, dp(3).toFloat(), dp(3).toFloat(), cp)
     cc.drawRoundRect(cs * 0.38f, cs * 0.38f, cs * 0.88f, cs * 0.88f, dp(3).toFloat(), dp(3).toFloat(), cp)
+    etTopUrl.setCompoundDrawablesRelativeWithIntrinsicBounds(cbmp.toDrawable(resources), null, clearIcon(0f).toDrawable(resources), null)
+    etTopUrl.compoundDrawablePadding = dp(6)
+}
+
+// Krizek v kolecku: tenky cerveny obrys, [fill] 0..1 = jak daleko se kolecko zevnitr vyplnilo cervenou
+private fun MainActivity.clearIcon(fill: Float): android.graphics.Bitmap {
     val size = dp(22)
     val bmp = createBitmap(size, size)
     val c = Canvas(bmp)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    p.color = "#888888".toColorInt()
-    c.drawCircle(size / 2f, size / 2f, size / 2f, p)
+    val red = "#FF3B30".toColorInt()
+    val stroke = dp(2) * 0.75f
+    val r = size / 2f - stroke / 2
+    if (fill > 0f) {
+        p.style = Paint.Style.FILL
+        p.color = red
+        c.drawCircle(size / 2f, size / 2f, r * fill, p)
+    }
+    p.style = Paint.Style.STROKE
+    p.color = red
+    p.strokeWidth = stroke
+    c.drawCircle(size / 2f, size / 2f, r, p)
     p.color = Color.WHITE
-    p.strokeWidth = dp(2).toFloat()
+    p.strokeWidth = dp(2) * 0.8f
     p.strokeCap = Paint.Cap.ROUND
-    val m = size * 0.32f
+    val m = size * 0.34f
     c.drawLine(m, m, size - m, size - m, p)
     c.drawLine(size - m, m, m, size - m, p)
-    etTopUrl.setCompoundDrawablesRelativeWithIntrinsicBounds(cbmp.toDrawable(resources), null, bmp.toDrawable(resources), null)
-    etTopUrl.compoundDrawablePadding = dp(6)
+    return bmp
+}
+
+private var clearAnimating = false
+
+// Klepnuti na krizek: kolecko se zevnitr vyplni cervenou, pak se text smaze
+private fun MainActivity.animateTopClear(done: () -> Unit) {
+    if (clearAnimating) return
+    if (!com.example.actimelteambrowser.core.settings.AppSettings.animationsOn.get()) { done(); return }
+    clearAnimating = true
+    val a = android.animation.ValueAnimator.ofFloat(0f, 1f)
+    a.duration = 260
+    a.addUpdateListener {
+        val start = etTopUrl.compoundDrawablesRelative[0]
+        etTopUrl.setCompoundDrawablesRelativeWithIntrinsicBounds(start, null, clearIcon(it.animatedValue as Float).toDrawable(resources), null)
+    }
+    a.addListener(object : android.animation.AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: android.animation.Animator) {
+            etTopUrl.postDelayed({ clearAnimating = false; done() }, 90)
+        }
+    })
+    a.start()
 }
 
 @SuppressLint("ClickableViewAccessibility")   // tap na ikony v poli, klik na pole zustava
@@ -457,8 +493,10 @@ internal fun MainActivity.setupTopClear() {
         if (ev.actionMasked == MotionEvent.ACTION_UP && etTopUrl.compoundDrawablesRelative[2] != null) {
             val w = etTopUrl.compoundDrawablesRelative[2].bounds.width() + dp(14)
             if (ev.x >= v.width - v.paddingRight - w) {
-                etTopUrl.setText("")
-                v.performClick()
+                animateTopClear {
+                    etTopUrl.setText("")
+                    v.performClick()
+                }
                 return@setOnTouchListener true
             }
         }

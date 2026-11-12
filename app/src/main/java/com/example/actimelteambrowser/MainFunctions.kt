@@ -41,6 +41,7 @@ internal fun MainActivity.openSettingsAt(start: String?) {
 }
 
 internal fun MainActivity.toggleAdBlock() {
+    if (isDemoRunning()) return   // behem ukazky AdBlock prepina jen ukazka
     isAdBlockOn = !isAdBlockOn
     AppSettings.adBlockOn.set(isAdBlockOn)
     applyAdBlockUi()

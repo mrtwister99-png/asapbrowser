@@ -117,6 +117,9 @@ private fun MainActivity.raiseLayer() {
     layerDialog = d
 }
 
+/** Bezi ukazka (skutecna tlacitka se behem ni neprepinaji). */
+internal fun isDemoRunning(): Boolean = demoRunning
+
 private fun MainActivity.endDemo() {
     demoHandler.removeCallbacksAndMessages(null)
     demoAdOrig?.let { isAdBlockOn = it; applyAdBlockUi() }   // vrati puvodni vzhled AdBlocku
@@ -318,6 +321,8 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             // vizualne se prepne skutecne tlacitko AdBlock (nic se neulozi, stranka se nenacita znovu)
             val orig = isAdBlockOn
             demoAdOrig = orig
+            // ukazka zacina vzdy ze zapnuteho stavu: vypne a zase zapne (skutecny stav se po ukazce vrati)
+            if (!isAdBlockOn) { isAdBlockOn = true; applyAdBlockUi() }
             fun flip() { isAdBlockOn = !isAdBlockOn; applyAdBlockUi(); AppToast.show(this, if (isAdBlockOn) "AdBlock zapnut" else "AdBlock vypnut") }
             at(0) { say("AdBlock: klepnutím zapneš nebo vypneš blokování reklam"); moveTo(adBtn, 600) }
             at(800) { tap() }
