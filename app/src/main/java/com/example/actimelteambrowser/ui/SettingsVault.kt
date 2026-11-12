@@ -13,6 +13,18 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.RequiresApi
 import javax.crypto.Cipher
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.style.TextAlign
+import com.example.actimelteambrowser.core.settings.AppSettings
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +83,8 @@ private val V_ACCENT = Color(0xFF00B055)
 private val V_ON_ACCENT = Color(0xFF06281D)
 private val V_MUTED = Color(0xFF888888)
 private val V_DANGER = Color(0xFFB91C1C)
+private val V_BG = Color(0xFF0A0A0A)
+private val V_YELLOW = Color(0xFFFFD600)
 
 private enum class VaultStage { INTRO, WORDS, CHECK, LOCKED, LIST }
 
@@ -102,24 +116,106 @@ fun VaultScreen(onBack: () -> Unit) {
     var phrase by remember { mutableStateOf("") }
     var introError by remember { mutableStateOf<String?>(null) }
 
+    // pruvodce "co je trezor": poprve sam, pak kdykoli otaznikem vpravo dole
+    var help by remember { mutableStateOf(!AppSettings.vaultDemoSeen.get()) }
+    Column(Modifier.fillMaxSize().background(V_BG)) {
+        Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) {
+            VaultStages(stage, phrase, introError, onBack, onStage = { stage = it }, onPhrase = { phrase = it }, onIntroError = { introError = it })
+        }
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(end = 16.dp, top = 4.dp, bottom = 10.dp), horizontalArrangement = Arrangement.End) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(V_ROW).border(1.dp, Color(0xFF555555), CircleShape).clickable { help = true },
+                contentAlignment = Alignment.Center
+            ) { Text("?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+    if (help) VaultHelpOverlay(onClose = { help = false; AppSettings.vaultDemoSeen.set(true) })
+}
+
+@Composable
+private fun VaultStages(
+    stage: VaultStage, phrase: String, introError: String?, onBack: () -> Unit,
+    onStage: (VaultStage) -> Unit, onPhrase: (String) -> Unit, onIntroError: (String?) -> Unit
+) {
+    val context = LocalContext.current
     when (stage) {
         VaultStage.INTRO -> VaultIntro(
             error = introError,
             onBack = onBack,
             onStart = {
                 try {
-                    phrase = VaultCrypto.generatePhrase(context)
-                    introError = null
-                    stage = VaultStage.WORDS
+                    onPhrase(VaultCrypto.generatePhrase(context))
+                    onIntroError(null)
+                    onStage(VaultStage.WORDS)
                 } catch (e: Exception) {
-                    introError = e.message ?: "Nepodařilo se vytvořit slova"
+                    onIntroError(e.message ?: "Nepodařilo se vytvořit slova")
                 }
             }
         )
-        VaultStage.WORDS -> VaultWords(phrase, onBack = { phrase = ""; stage = VaultStage.INTRO }, onNext = { stage = VaultStage.CHECK })
-        VaultStage.CHECK -> VaultCheck(phrase, onBack = { stage = VaultStage.WORDS }, onDone = { phrase = ""; stage = VaultStage.LIST })
-        VaultStage.LOCKED -> VaultLocked(onBack = onBack, onUnlocked = { stage = VaultStage.LIST })
-        VaultStage.LIST -> VaultList(onBack = onBack, onLock = { VaultManager.lock(); stage = VaultStage.LOCKED })
+        VaultStage.WORDS -> VaultWords(phrase, onBack = { onPhrase(""); onStage(VaultStage.INTRO) }, onNext = { onStage(VaultStage.CHECK) })
+        VaultStage.CHECK -> VaultCheck(phrase, onBack = { onStage(VaultStage.WORDS) }, onDone = { onPhrase(""); onStage(VaultStage.LIST) })
+        VaultStage.LOCKED -> VaultLocked(onBack = onBack, onUnlocked = { onStage(VaultStage.LIST) })
+        VaultStage.LIST -> VaultList(onBack = onBack, onLock = { VaultManager.lock(); onStage(VaultStage.LOCKED) })
+    }
+}
+
+private class HelpStep(val icon: String, val title: String, val text: String)
+
+private val HELP_STEPS = listOf(
+    HelpStep("🔐", "Tohle je tvůj osobní trezor hesel", "Ukládáš si sem přihlášení k webům. Appka je pak umí sama vyplnit."),
+    HelpStep("📝", "12 náhodně vylosovaných slov", "Při založení trezoru dostaneš 12 náhodných slov. Zapiš si je na papír – jsou jediným klíčem k trezoru. Bez nich se k heslům nedostane nikdo, ani ty."),
+    HelpStep("🙈", "Tvoje hesla se ukládají pouze u tebe!", "Jsou zašifrovaná jen v tomto telefonu a nikam se neposílají. Já je vůbec nevidím!"),
+    HelpStep("💾", "Záloha", "Nastavení → Export → zaškrtni „Trezor hesel“. V souboru je trezor zašifrovaný – bez tvých 12 slov ho nikdo nepřečte."),
+    HelpStep("📲", "Obnova", "Na novém telefonu: Nastavení → Import, vyber soubor a zadej svých 12 slov. PIN nebo otisk si pak nastavíš znovu."),
+    HelpStep("❓", "Nápověda je tu pořád", "Tuhle ukázku si kdykoli pustíš otazníkem vpravo dole.")
+)
+
+// Pruvodce trezorem: ztmaveni, karta se zlutym obrysem; klepnuti = dalsi (samo po 6 s), Preskocit = konec
+@Composable
+private fun VaultHelpOverlay(onClose: () -> Unit) {
+    var i by remember { mutableIntStateOf(0) }
+    val last = HELP_STEPS.lastIndex
+    fun next() { if (i < last) i++ else onClose() }
+    BackHandler { onClose() }
+    LaunchedEffect(i) { delay(6000); if (i < last) i++ }
+    var blinkOn by remember { mutableStateOf(true) }
+    LaunchedEffect(i) { if (i == last) while (true) { delay(350); blinkOn = !blinkOn } }
+    val step = HELP_STEPS[i]
+    Box(
+        Modifier.fillMaxSize().background(Color(0xE0000000))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { next() }
+    ) {
+        Column(
+            Modifier.align(Alignment.Center).padding(horizontal = 28.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp)).background(Color(0xFF242424))
+                .border(2.dp, V_YELLOW, RoundedCornerShape(18.dp)).padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(step.icon, fontSize = 36.sp)
+            Text(step.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(step.text, color = Color(0xFFDDDDDD), fontSize = 15.sp, textAlign = TextAlign.Center)
+            Text("${i + 1} / ${HELP_STEPS.size}", color = V_MUTED, fontSize = 12.sp)
+        }
+        // dole: Preskocit (cerveny obrys) a Dalsi / Hotovo (zlute)
+        Row(
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 70.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).border(2.dp, Color(0xFFE53935), RoundedCornerShape(14.dp)).clickable(onClick = onClose),
+                contentAlignment = Alignment.Center
+            ) { Text("Přeskočit", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Box(
+                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).background(V_YELLOW).clickable { next() },
+                contentAlignment = Alignment.Center
+            ) { Text(if (i < last) "Další" else "Hotovo", color = Color(0xFF1A1A1A), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+        }
+        // posledni krok: zluty blikajici krouzek kolem otazniku vpravo dole
+        if (i == last && blinkOn) Box(
+            Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = 6.dp).size(48.dp)
+                .border(3.dp, V_YELLOW, CircleShape)
+        )
     }
 }
 

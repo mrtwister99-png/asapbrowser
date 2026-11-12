@@ -458,7 +458,11 @@ internal fun MainActivity.setupSideBar() {
         performFunction(ButtonFunction.FIND_IN_PAGE)
     }
     // 6) trezor hesel (posledni v liste): otevre Nastaveni rovnou na trezoru
-    barButton(resIcon(R.drawable.ic_vault)) {
+    var vaultBtn: View? = null
+    vaultBtn = barButton(resIcon(R.drawable.ic_vault)) {
+        // poprve: ukazka (prst najede na tlacitko a otevre trezor s pruvodcem)
+        val vb = vaultBtn
+        if (!AppSettings.vaultDemoSeen.get() && vb != null) { vaultButtonDemo(vb); return@barButton }
         closeLeftBarAndHide()
         openSettingsAt(SettingsActivity.START_VAULT)
     }

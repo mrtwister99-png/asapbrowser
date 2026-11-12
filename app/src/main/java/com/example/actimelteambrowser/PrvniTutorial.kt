@@ -661,3 +661,26 @@ internal fun MainActivity.onDemoSettingsResult(result: String?) {
     if (!demoRunning) return
     if (result == SettingsActivity.DEMO_DONE) { raiseLayer(); r() } else endDemo()
 }
+
+// Prvni klepnuti na tlacitko trezoru v liste: prst na tlacitko, klepnuti a otevre se trezor
+// (v nem se pak sam spusti pruvodce "co je trezor"; pozdeji ho pusti otaznik vpravo dole)
+internal fun MainActivity.vaultButtonDemo(btn: View) {
+    if (demoRunning || !btn.isAttachedToWindow) { closeLeftBarAndHide(); openSettingsAt(SettingsActivity.START_VAULT); return }
+    demoRunning = true
+    val st = DemoStage(this) {
+        demoRunning = false
+        closeLeftBarAndHide()
+        openSettingsAt(SettingsActivity.START_VAULT)
+    }
+    val loc = IntArray(2)
+    btn.getLocationOnScreen(loc)
+    val r = android.graphics.RectF(loc[0].toFloat(), loc[1].toFloat(), (loc[0] + btn.width).toFloat(), (loc[1] + btn.height).toFloat())
+    st.at(0) { st.focus(r); st.say("Trezor hesel – tvoje hesla pod zámkem 🔐"); st.moveTo(r, 650) }
+    st.at(1000) { st.tap(); st.blink(r) }
+    st.at(1300) {
+        st.end()
+        demoRunning = false
+        closeLeftBarAndHide()
+        openSettingsAt(SettingsActivity.START_VAULT)
+    }
+}

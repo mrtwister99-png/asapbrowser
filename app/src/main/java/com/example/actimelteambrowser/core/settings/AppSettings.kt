@@ -84,6 +84,7 @@ object AppSettings {
     val animationsOn = BoolSetting("animations_on", true)              // animace tlacitek a prechodu
     // Zivy tutorial: cisla tlacitek, na ktera uzivatel jeste neklepl (maji zluty obrys); prazdne = hotovo. Neexportuje se.
     val liveTutorial = StringSetting("live_tutorial", "")
+    val vaultDemoSeen = BoolSetting("vault_demo_seen", false)          // pruvodce trezorem uz byl ukazan (pak jen otaznikem); neexportuje se
     val welcomeShown = BoolSetting("welcome_shown", false)             // uvodni zprava (2 strany) uz byla ukazana; neexportuje se
     val introOn = BoolSetting("intro_on", true)                        // uvodni animace pri spusteni
     val soundsOn = BoolSetting("sounds_on", true)                      // vsechny zvuky (gesta, screenshot)

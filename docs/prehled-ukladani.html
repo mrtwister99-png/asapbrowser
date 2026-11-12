@@ -65,8 +65,10 @@
 <tr><td>Automaticky odmítat cookie lišty</td><td class="k">adblock_cookies</td><td class="d">zap.</td></tr>
 <tr><td>Automatická aktualizace seznamů</td><td class="k">adblock_auto_update</td><td class="d">zap.</td></tr>
 <tr><td>Weby, kde je AdBlock vypnutý</td><td class="k">adblock_exceptions</td><td class="d">–</td></tr>
-<tr><td>Celkem zablokováno reklam</td><td class="k">total_blocked</td><td class="d">0</td></tr>
+<tr><td>Celkem zablokováno reklam (chráněno kontrolním kódem <span class="k">podpis</span>)</td><td class="k">total_blocked</td><td class="d">0</td></tr>
 </table>
+
+<div class="note"><b>Kontrolní kód:</b> k počtu zablokovaných reklam a ke koupeným Čtverečkům zapíše export řádek <span class="k">podpis=…</span> (HMAC-SHA256 s klíčem, který je jen v aplikaci). Když někdo číslo v souboru ručně přepíše, kód nesedí a import tyhle dvě hodnoty přeskočí. Import počet nikdy nesníží a koupené Čtverečky nevezme.</div>
 
 <h2>4. Tlačítka</h2>
 <table>

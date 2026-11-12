@@ -86,6 +86,8 @@ object SettingsCodes {
             }
             sb.append(s.key).append('=').append(text).append('\n')
         }
+        // kontrolni kod k poctu reklam a Ctvereckum: rucni prepsani v souboru se pri importu pozna
+        sb.append(SIG_KEY).append('=').append(rewardSig(AppSettings.totalBlocked.get(), AppSettings.squareStyleOwned.get())).append('\n')
         }
 
         if ("za" in parts) {
@@ -275,11 +277,21 @@ object SettingsCodes {
             }
         }
         val byKey = AppSettings.allSettings.associateBy { it.key }
+        // pocet reklam a Ctverecky se nactou jen s platnym kontrolnim kodem (jinak zustane, co je v telefonu)
+        var fileBlocked: Int? = null
+        var fileSquare: Boolean? = null
+        var fileSig: String? = null
         sec["nas"]?.forEach { l ->
             val i = l.indexOf('=')
             if (i <= 0) return@forEach
-            val s = byKey[l.substring(0, i)] ?: return@forEach
+            val k = l.substring(0, i)
             val v = l.substring(i + 1)
+            when (k) {
+                AppSettings.totalBlocked.key -> { fileBlocked = v.toIntOrNull(); return@forEach }
+                AppSettings.squareStyleOwned.key -> { fileSquare = v == "1"; return@forEach }
+                SIG_KEY -> { fileSig = v.trim(); return@forEach }
+            }
+            val s = byKey[k] ?: return@forEach
             val ok = when (s) {
                 is AppSettings.BoolSetting -> s.fromJsonValue(v == "1")
                 is AppSettings.IntSetting -> v.toIntOrNull()?.let { s.fromJsonValue(it) } ?: false
@@ -287,6 +299,17 @@ object SettingsCodes {
                 else -> false
             }
             if (ok) count++
+        }
+        var rewardNote = ""
+        if (fileBlocked != null || fileSquare != null) {
+            val b = fileBlocked ?: 0
+            val q = fileSquare ?: false
+            if (fileSig != null && fileSig == rewardSig(b, q)) {
+                // import pocet nikdy nesnizi a koupene Ctverecky nevezme
+                AppSettings.totalBlocked.set(maxOf(AppSettings.totalBlocked.get(), b))
+                if (q) AppSettings.squareStyleOwned.set(true)
+                count += 2
+            } else rewardNote = " (počet zablokovaných reklam nebyl načten – soubor byl ručně upraven)"
         }
         AppSettings.fixButtons()
         if (!isWebUrl(AppSettings.homeUrl.get())) AppSettings.homeUrl.reset()
@@ -356,7 +379,26 @@ object SettingsCodes {
         return "Import hotový: $count nastavení" +
             (if (hasBookmarks) ", ${folders.size} složek, ${bookmarks.size} záložek" else "") +
             (if (hasHistory) ", ${history.size} záznamů historie" else "") +
-            (if (tabsArr.length() > 0) ", ${tabsArr.length()} karet" else "")
+            (if (tabsArr.length() > 0) ", ${tabsArr.length()} karet" else "") + rewardNote
+    }
+
+    // ---- kontrolni kod (podpis) poctu reklam a Ctverecku ----
+    private const val SIG_KEY = "podpis"
+
+    // tajny klic je jen v aplikaci (poskladany z casti, aby nebyl v souboru appky jako jeden citelny text)
+    private fun sigKey(): ByteArray {
+        val a = intArrayOf(0x41, 0x53, 0x41, 0x50, 0x2d, 0x62, 0x72, 0x77)
+        val b = intArrayOf(0x7e, 0x13, 0x9c, 0x5a, 0xe1, 0x37, 0x08, 0xd4, 0x6b, 0xa2, 0x3f, 0xc9, 0x51, 0x8e, 0x24, 0xf0)
+        val c = intArrayOf(0x92, 0x1d, 0x6e, 0xb7, 0x0c, 0x45, 0xfa, 0x38)
+        return (a + b.map { it xor 0x5c } + c.reversed()).map { it.toByte() }.toByteArray()
+    }
+
+    /** HMAC-SHA256 z hodnot, zkraceny na 24 hex znaku. Kdo zmeni cislo v souboru, nema jak spocitat novy kod. */
+    private fun rewardSig(blocked: Int, square: Boolean): String {
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        mac.init(javax.crypto.spec.SecretKeySpec(sigKey(), "HmacSHA256"))
+        val msg = "asap|total_blocked=$blocked|square_style_owned=${if (square) 1 else 0}"
+        return mac.doFinal(msg.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
     }
 
     private fun isWebUrl(url: String) = url.startsWith("https://") || url.startsWith("http://")
