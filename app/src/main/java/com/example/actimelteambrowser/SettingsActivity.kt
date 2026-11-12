@@ -245,7 +245,7 @@ class SettingsActivity : ComponentActivity() {
             DEMO_SETTINGS -> {
                 st.at(0) { st.say("Nastavení: všechno na jednom místě") }
                 // radky se prolinkou zlute shora dolu (jen ty, ktere jsou videt)
-                val rows = listOf("Záložky", "Historie", "Stahování", "Tlačítka", "Gesta", "Export", "Import", "Výchozí prohlížeč", "Tutoriály", "Konfigurace", "O aplikaci", "Trezor hesel")
+                val rows = listOf("Domovská stránka", "Vyhledávač", "Záložky", "Lišta záložek", "Oblíbené", "Stažené položky", "Historie", "Gesta", "Tlačítka", "Trezor hesel", "Animace", "Zvuky", "Vibrace", "Export", "Import", "Tutoriály", "O aplikaci")
                 var first = true
                 for (r in rows) {
                     st.at(if (first) 900 else 420) {

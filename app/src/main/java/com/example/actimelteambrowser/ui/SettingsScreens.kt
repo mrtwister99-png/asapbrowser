@@ -141,7 +141,7 @@ sealed class Route {
     object Buttons : Route()
     object Gestures : Route()
     object Downloads : Route()
-    object Other : Route()
+    data class Section(val key: String) : Route()   // jedna skupina nastaveni (home, search, tabs, strip, anim, sounds, vibra)
     object Tutorials : Route()
     object About : Route()
     object Feedback : Route()
@@ -182,7 +182,7 @@ fun SettingsApp(
             onExport = onExport,
             onImport = onImport,
             onDownloads = { route = Route.Downloads },
-            onOther = { route = Route.Other },
+            onSection = { route = Route.Section(it) },
             onTutorials = { route = Route.Tutorials },
             onAbout = { route = Route.About },
             onVault = { route = Route.Vault },
@@ -210,7 +210,7 @@ fun SettingsApp(
         is Route.Buttons -> ButtonsConfigScreen(onBack = { route = Route.Main })
         is Route.Gestures -> GesturesScreen(onBack = { route = Route.Main })
         is Route.Downloads -> DownloadsScreen(onBack = { route = Route.Main })
-        is Route.Other -> OtherSettingsScreen(onBack = { route = Route.Main })
+        is Route.Section -> OtherSettingsScreen(section = r.key, isDefaultBrowser = isDefaultBrowser, onDefaultBrowser = onDefaultBrowser, onBack = { route = Route.Main })
         is Route.Tutorials -> TutorialsScreen(onBack = { route = Route.Main })
         is Route.About -> AboutScreen(onBack = { route = Route.Main })
         is Route.Vault -> VaultScreen(onBack = { if (startRoute == Route.Vault) onClose() else route = Route.Main })
@@ -352,7 +352,7 @@ private fun SettingsRoot(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onDownloads: () -> Unit,
-    onOther: () -> Unit,
+    onSection: (String) -> Unit,
     onTutorials: () -> Unit,
     onAbout: () -> Unit,
     onVault: () -> Unit,
@@ -369,30 +369,25 @@ private fun SettingsRoot(
     var query by remember { mutableStateOf("") }
     val index = remember {
         listOf(
-            SearchItem("Záložky", "Nastavení", "oblíbené složky uložené stránky bookmarky", onBookmarks),
+            SearchItem("Domovská stránka", "Nastavení", "home domů adresa start výchozí prohlížeč odkazy tažením obnovit pull refresh verze pro počítač", { onSection("home") }),
+            SearchItem("Výchozí prohlížeč", "Nastavení › Domovská stránka", "odkazy z jiných aplikací default", onDefaultBrowser),
+            SearchItem("Obnovit stránku tažením dolů", "Nastavení › Domovská stránka", "pull refresh obnovení citlivost", { onSection("home") }),
+            SearchItem("Vyhledávač", "Nastavení", "google seznam duckduckgo hledání", { onSection("search") }),
+            SearchItem("Záložky", "Nastavení", "karty otevřené po spuštění obnovit nová karta nejnavštěvovanější náhledy ikony úklid", { onSection("tabs") }),
+            SearchItem("Lišta záložek", "Nastavení", "lišta karet spodní horní skrývat lišty posouvání scroll", { onSection("strip") }),
+            SearchItem("Oblíbené", "Nastavení", "složky uložené stránky bookmarky záložky", onBookmarks),
+            SearchItem("Stažené položky", "Nastavení", "stahování stažené soubory download", onDownloads),
             SearchItem("Historie", "Nastavení", "navštívené stránky mazání vymazat", onHistory),
-            SearchItem("Stahování", "Nastavení", "stažené soubory download", onDownloads),
-            SearchItem("Tlačítka", "Nastavení", "funkce klepnutí podržení držení přidat boční tlačítko zasunutí", onButtons),
             SearchItem("Gesta", "Nastavení", "plocha gest kódy vzhled velikost čtverečky kolečka číslice tah", onGestures),
+            SearchItem("Tlačítka", "Nastavení", "funkce klepnutí podržení držení přidat boční tlačítko zasunutí lišta", onButtons),
+            SearchItem("Trezor hesel", "Nastavení", "hesla přihlášení pin otisk 12 slov password", onVault),
+            SearchItem("Animace", "Nastavení", "animace tlačítek přechody úvodní intro logo toasty zprávy oznámení", { onSection("anim") }),
+            SearchItem("Zvuky", "Nastavení", "zvuk hudba ztlumit", { onSection("sounds") }),
+            SearchItem("Vibrace", "Nastavení", "vibrovat brnění haptika", { onSection("vibra") }),
             SearchItem("Export", "Nastavení", "uložit záloha zálohovat e-mail poslat soubor", onExport),
             SearchItem("Import", "Nastavení", "načíst nahrát obnovit soubor záloha", onImport),
-            SearchItem("Výchozí prohlížeč", "Nastavení", "odkazy z jiných aplikací default", onDefaultBrowser),
             SearchItem("Tutoriály", "Nastavení", "ukázky návod nápověda demo", onTutorials),
-            SearchItem("Konfigurace", "Nastavení", "další nastavení", onOther),
-            SearchItem("Animace tlačítek", "Nastavení › Konfigurace", "animace přechody", onOther),
-            SearchItem("Úvodní animace při spuštění", "Nastavení › Konfigurace", "intro logo start", onOther),
-            SearchItem("Informační toasty", "Nastavení › Konfigurace", "oznámení zprávy upozornění", onOther),
-            SearchItem("Spodní lišta karet", "Nastavení › Konfigurace", "lista karet záložky dole", onOther),
-            SearchItem("Horní lišta karet", "Nastavení › Konfigurace", "lista karet záložky nahoře", onOther),
-            SearchItem("Zvuky", "Nastavení › Konfigurace", "zvuk hudba ztlumit", onOther),
-            SearchItem("Vibrace", "Nastavení › Konfigurace", "vibrovat brnění haptika", onOther),
-            SearchItem("Skrývat lišty při posouvání", "Nastavení › Konfigurace", "procházení scroll", onOther),
-            SearchItem("Obnovit stránku tažením dolů", "Nastavení › Konfigurace", "pull refresh obnovení", onOther),
-            SearchItem("Náhledy a ikony webů", "Nastavení › Konfigurace", "obrázky favicon", onOther),
-            SearchItem("Vyhledávač", "Nastavení › Konfigurace", "google seznam duckduckgo hledání", onOther),
-            SearchItem("Úklid", "Nastavení › Konfigurace", "smazat cache data cookies", onOther),
             SearchItem("O aplikaci", "Nastavení", "verze hudba informace licence", onAbout),
-            SearchItem("Trezor hesel", "Nastavení", "hesla přihlášení pin otisk 12 slov password", onVault),
             SearchItem("Restartovat vše", "Nastavení", "smazat všechno reset tovární", { resetStep = 1 })
         )
     }
@@ -422,35 +417,27 @@ private fun SettingsRoot(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),   // aby se vsechno vlezlo i na male displeje
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SettingsRow("Záložky", "Složky a uložené stránky", onBookmarks)
+            GroupLabel("Prohlížení")
+            SettingsRow("Domovská stránka", "Adresa domů, výchozí prohlížeč, obnovení tažením", { onSection("home") })
+            SettingsRow("Vyhledávač", "Google, Seznam nebo DuckDuckGo", { onSection("search") })
+            SettingsRow("Záložky", "Karty po spuštění, nová karta, náhledy", { onSection("tabs") })
+            SettingsRow("Lišta záložek", "Spodní a horní lišta karet, skrývání při posouvání", { onSection("strip") })
+            SettingsRow("Oblíbené", "Složky a uložené stránky", onBookmarks)
+            SettingsRow("Stažené položky", "Stažené a probíhající soubory", onDownloads)
             SettingsRow("Historie", "Navštívené stránky, mazání", onHistory)
-            SettingsRow("Stahování", "Stažené a probíhající soubory", onDownloads)
-            SettingsRow("Tlačítka", "Funkce tlačítek (klepnutí a držení), přidání bočních tlačítek", onButtons)
+            GroupLabel("Ovládání")
             SettingsRow("Gesta", "Plocha pro gesta, vzhled, velikost a kódy gest", onGestures)
-            SettingsRow("Export", "Uložit nastavení, záložky a historii do telefonu nebo poslat na e-mail", onExport)
-            SettingsRow("Import", "Načíst nastavení ze souboru (nahradí záložky a historii)", onImport)
-            SettingsRow(
-                "Výchozí prohlížeč",
-                if (isDefaultBrowser) "ASAP Browser je výchozí prohlížeč. Odkazy z jiných aplikací se otevírají tady." else "Nastavit ASAP Browser jako výchozí, odkazy z jiných aplikací se pak otevřou tady",
-                onDefaultBrowser
-            )
-            SettingsRow("Tutoriály", "Krátké ukázky, jak jednotlivé funkce fungují", onTutorials)
-            // konfigurace: vsechno zbyle (animace, zvuky, vibrace, vyhledavac, ...)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .demoMark("row:Konfigurace")
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(ACCENT)
-                    .clickable(onClick = onOther)
-                    .padding(horizontal = 18.dp, vertical = 16.dp)
-            ) {
-                Text("Konfigurace", color = Color(0xFF06281D), fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(2.dp))
-                Text("Animace, zvuky, vibrace, vyhledávač a další nastavení", color = Color(0xFF0B3D2A), fontSize = 13.sp)
-            }
-            SettingsRow("O aplikaci", "Verze, popis, co umí a použité součásti", onAbout)
+            SettingsRow("Tlačítka", "Funkce tlačítek (klepnutí a držení), přidání bočních tlačítek", onButtons)
             SettingsRow("Trezor hesel", "Hesla zašifrovaná jen v tomto telefonu, odemyká se PINem nebo 12 slovy", onVault)
+            GroupLabel("Odezva")
+            SettingsRow("Animace", "Animace tlačítek, úvodní animace, toasty", { onSection("anim") })
+            SettingsRow("Zvuky", "Zvuky gest a screenshotu", { onSection("sounds") })
+            SettingsRow("Vibrace", "Odezva při držení tlačítek a po gestu", { onSection("vibra") })
+            GroupLabel("Aplikace")
+            SettingsRow("Export", "Uložit nastavení, záložky a historii do telefonu nebo poslat na e-mail", onExport)
+            SettingsRow("Import", "Načíst nastavení ze souboru", onImport)
+            SettingsRow("Tutoriály", "Krátké ukázky, jak jednotlivé funkce fungují", onTutorials)
+            SettingsRow("O aplikaci", "Verze, popis, co umí a použité součásti", onAbout)
             // nebezpecna akce uplne dole, cervene; vyzaduje dve potvrzeni
             Column(
                 Modifier
@@ -686,3 +673,10 @@ private class SearchItem(val title: String, val path: String, val keywords: Stri
 
 private fun norm(s: String): String =
     java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+
+
+// Nadpis skupiny v hlavnim Nastaveni
+@Composable
+private fun GroupLabel(text: String) {
+    Text(text.uppercase(), color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp, start = 4.dp))
+}

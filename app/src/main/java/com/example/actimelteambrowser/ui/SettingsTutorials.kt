@@ -173,7 +173,7 @@ private val TUTORIALS get() = listOf(
         steps = listOf(
             "Gesta ovládáš kuličkou. Je na tlačítku, které má funkci „Gesta“ (ve výchozím stavu tlačítko 6).",
             "Polož prst na kuličku a bez zvednutí táhni po ploše 3×3. Políčka jsou očíslovaná 1–9: 1 vlevo nahoře, 9 vpravo dole.",
-            "Po zvednutí prstu se gesto vyhodnotí a spustí se jeho funkce. Telefon zabrní a ozve se zvuk (vypnout jde v Konfiguraci).",
+            "Po zvednutí prstu se gesto vyhodnotí a spustí se jeho funkce. Telefon zabrní a ozve se zvuk (vypnout jde v Nastavení → Zvuky a Vibrace).",
             "Výchozí gesta: 9-8-5-2 nová karta, 9-8-7-4-7 zavřít kartu, 9-8-5-4 zpět, 9-8-5-6 vpřed.",
             "Vlastní gesta, velikost a polohu plochy upravíš v Nastavení → Gesta."
         ),

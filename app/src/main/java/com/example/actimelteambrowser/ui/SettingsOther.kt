@@ -134,7 +134,7 @@ private val DANGER = Color(0xFFB91C1C)
 
 /** Konfigurace: zbyla nastaveni na jednom miste (animace, zvuky, vibrace, vyhledavac, skryvani listy, uklid). */
 @Composable
-internal fun OtherSettingsScreen(onBack: () -> Unit) {
+internal fun OtherSettingsScreen(section: String, isDefaultBrowser: Boolean, onDefaultBrowser: () -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var animations by remember { mutableStateOf(AppSettings.animationsOn.get()) }
     var infoToasts by remember { mutableStateOf(AppSettings.infoToasts.get()) }
@@ -162,13 +162,48 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
     }
     var engine by remember { mutableStateOf(SearchEngines.current().key) }
     var clearStep by remember { mutableStateOf(false) }
+    var restoreTabs by remember { mutableStateOf(AppSettings.startupRestoreTabs.get()) }
+    var startFav by remember { mutableStateOf(AppSettings.startShowFavorites.get()) }
+    var home by remember { mutableStateOf(AppSettings.homeUrl.get()) }
+    val title = when (section) {
+        "home" -> "Domovská stránka"; "search" -> "Vyhledávač"; "tabs" -> "Záložky"; "strip" -> "Lišta záložek"
+        "anim" -> "Animace"; "sounds" -> "Zvuky"; "vibra" -> "Vibrace"; else -> "Nastavení"
+    }
 
-    ScreenScaffold(title = "Konfigurace", onBack = onBack) {
+    ScreenScaffold(title = title, onBack = onBack) {
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("ANIMACE", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (section == "home") {
+                // domovska stranka: adresa (uklada se po kazde zmene, kdyz je platna)
+                OutlinedTextField(
+                    value = home,
+                    onValueChange = {
+                        home = it.take(300)
+                        var u = home.trim()
+                        if (u.isNotEmpty() && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://$u"
+                        if (u.substringAfter("://").substringBefore('/').contains('.')) AppSettings.homeUrl.set(u)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Adresa domovské stránky") }
+                )
+                SettingsRow(
+                    "Výchozí prohlížeč",
+                    if (isDefaultBrowser) "ASAP Browser je výchozí prohlížeč. Odkazy z jiných aplikací se otevírají tady." else "Nastavit ASAP Browser jako výchozí, odkazy z jiných aplikací se pak otevřou tady",
+                    onDefaultBrowser
+                )
+            }
+            if (section == "tabs") {
+                SwitchRow("Po spuštění obnovit poslední karty", "Vypnuto: otevře se jedna nová karta s domovskou stránkou", restoreTabs) {
+                    restoreTabs = it; AppSettings.startupRestoreTabs.set(it)
+                }
+                SwitchRow("Nová karta: Oblíbené", "Na nové kartě ukazovat Oblíbené místo nejnavštěvovanějších stránek", startFav) {
+                    startFav = it; AppSettings.startShowFavorites.set(it)
+                }
+            }
+            if (section == "anim") {
             SwitchRow("Animace tlačítek", "Probliknutí, otočení, hvězdička, kolečko → logo", animations) {
                 animations = it; AppSettings.animationsOn.set(it)
             }
@@ -179,23 +214,24 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
             SwitchRow("Zobrazovat informační toasty", "Krátké zprávy vpravo nahoře (uloženo, přidáno…). Chyby se ukazují vždy", infoToasts) {
                 infoToasts = it; AppSettings.infoToasts.set(it)
             }
+            }
 
-            Text("LIŠTY KARET", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (section == "strip") {
             SwitchRow("Spodní lišta karet", "Barevné dlaždice s ikonami webů nad spodním polem (první 5 karet)", stripBottom) {
                 stripBottom = it; AppSettings.tabStripBottom.set(it)
             }
             SwitchRow("Horní lišta karet", "Dlaždice karet pod horním polem (karty od šesté). Jde mít jen jednu z lišt", stripTop) {
                 stripTop = it; AppSettings.tabStripTop.set(it)
             }
-
-            Text("ZVUKY A VIBRACE", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            SwitchRow("Zvuky", "Gesta, screenshot", sounds) { sounds = it; AppSettings.soundsOn.set(it) }
-            SwitchRow("Vibrace", "Odezva při držení tlačítek a po gestu", vibration) { vibration = it; AppSettings.vibrationOn.set(it) }
-
-            Text("PROCHÁZENÍ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             SwitchRow("Skrývat lišty při posouvání", "Horní, dolní lišta i boční tlačítka se schovají, když čteš", hideBars) {
                 hideBars = it; AppSettings.hideBarsOnScroll.set(it)
             }
+            }
+
+            if (section == "sounds") SwitchRow("Zvuky", "Gesta, screenshot", sounds) { sounds = it; AppSettings.soundsOn.set(it) }
+            if (section == "vibra") SwitchRow("Vibrace", "Odezva při držení tlačítek, po gestu, nová karta, uložení do Oblíbených", vibration) { vibration = it; AppSettings.vibrationOn.set(it) }
+
+            if (section == "home") {
             SwitchRow("Obnovit stránku tažením dolů", "Na vrcholu stránky přetáhni prstem dolů, kroužek se zaplní a stránka se načte znovu", pullOn) {
                 pullOn = it; AppSettings.pullRefreshOn.set(it)
             }
@@ -229,13 +265,26 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            Box(
+                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable {
+                    AppSettings.desktopSites.set("")
+                    AppToast.show(ctx, "Weby s verzí pro počítač zapomenuty")
+                },
+                contentAlignment = Alignment.Center
+            ) { Text("Zapomenout weby s verzí pro počítač", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            }
+            if (section == "tabs") {
             SwitchRow("Ukládat náhledy a ikony webů", usage, thumbsOn) {
                 thumbsOn = it; AppSettings.thumbsOn.set(it)
             }
             Text("Vypnuto: nové náhledy se neukládají a nezobrazují (nová karta, Historie, Oblíbené).", color = MUTED, fontSize = 12.sp)
+            Box(
+                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { clearStep = true },
+                contentAlignment = Alignment.Center
+            ) { Text("Smazat uložené náhledy a ikony webů", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            }
 
-            Text("VYHLEDÁVAČ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            for (e in SearchEngines.list) {
+            if (section == "search") for (e in SearchEngines.list) {
                 val on = engine == e.key
                 Row(
                     Modifier
@@ -252,18 +301,6 @@ internal fun OtherSettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            Text("ÚKLID", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Box(
-                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { clearStep = true },
-                contentAlignment = Alignment.Center
-            ) { Text("Smazat uložené náhledy a ikony webů", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-            Box(
-                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable {
-                    AppSettings.desktopSites.set("")
-                    AppToast.show(ctx, "Weby s verzí pro počítač zapomenuty")
-                },
-                contentAlignment = Alignment.Center
-            ) { Text("Zapomenout weby s verzí pro počítač", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.height(16.dp))
         }
     }
