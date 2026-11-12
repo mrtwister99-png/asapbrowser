@@ -958,12 +958,11 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
 }
 
 
-// Obrys kolem karet jedne skupiny v barve skupiny. Skupina rozdelena mezi listy je na tom konci otevrena:
-// dole pokracuje doprava (za okraj), nahore prichazi zleva.
+// Skupina v liste: cara v barve skupiny pres vsechny jeji karty - u spodni listy dole, u horni nahore.
+// Skupina rozdelena mezi listy: cara dojede az na okraj (dole vpravo, nahore vlevo).
 private fun MainActivity.drawGroupOutlines(top: Boolean, list: List<BrowserTab>, row: LinearLayout) {
     row.overlay.clear()
-    val stroke = dp(2)
-    val r = dp(9).toFloat()
+    val th = dp(3)
     var i = 0
     while (i < list.size) {
         val g = groupOf(list[i].id)
@@ -976,21 +975,13 @@ private fun MainActivity.drawGroupOutlines(top: Boolean, list: List<BrowserTab>,
         for (k in i..j) row.getChildAt(k)?.let { t = minOf(t, it.top); b = maxOf(b, it.bottom) }
         val other = if (top) shownBottomIds else shownTopIds
         val split = g.members.any { it in other }
-        val openLeft = top && split
-        val openRight = !top && split
         val d = GradientDrawable()
-        d.setColor(Color.TRANSPARENT)
-        d.setStroke(stroke, g.color)
-        val l = if (openLeft) 0f else r
-        val rr = if (openRight) 0f else r
-        d.cornerRadii = floatArrayOf(l, l, rr, rr, rr, rr, l, l)
-        val half = stroke / 2
-        d.setBounds(
-            if (openLeft) first.left - dp(6) else first.left + half,
-            t + half,
-            if (openRight) last.right + dp(6) else last.right - half,
-            b - half
-        )
+        d.setColor(g.color)
+        val rr = th / 2f
+        d.cornerRadius = rr
+        val l = if (top && split) first.left else first.left + dp(4)
+        val r = if (!top && split) last.right else last.right - dp(4)
+        if (top) d.setBounds(l, t, r, t + th) else d.setBounds(l, b - th, r, b)
         row.overlay.add(d)
         i = j + 1
     }

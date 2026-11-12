@@ -150,65 +150,9 @@ internal fun appVersionText(ctx: android.content.Context): String = try {
 internal fun AboutScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val version = remember { appVersionText(ctx) }
-    // hudba bez_zastaveni_full.mp3 hraje po dobu, co je obrazovka otevrena; po odchodu se zastavi (prepinac zvuku se nekontroluje).
-    // Vpravo nahore cas prehravani a tlacitko pauza / prehrat.
-    var player by remember { mutableStateOf<MediaPlayer?>(null) }
-    var playing by remember { mutableStateOf(false) }
-    var posMs by remember { mutableStateOf(0) }
-    var durMs by remember { mutableStateOf(0) }
-    DisposableEffect(Unit) {
-        var mp: MediaPlayer? = null
-        try {
-            @Suppress("DiscouragedApi")
-            val resId = ctx.resources.getIdentifier("bez_zastaveni_full", "raw", ctx.packageName)
-            if (resId != 0) {
-                val attrs = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-                mp = MediaPlayer.create(ctx.applicationContext, resId, attrs, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)
-                mp?.setOnCompletionListener { playing = false; posMs = 0; runCatching { it.seekTo(0) } }
-                mp?.start()
-                durMs = mp?.duration ?: 0
-                playing = mp != null
-                player = mp
-            }
-        } catch (e: Exception) {
-            android.util.Log.d("about", e.toString())   // hudba je jen bonus, nesmi shodit obrazovku
-        }
-        onDispose {
-            player = null
-            try { mp?.stop() } catch (_: Exception) { }
-            mp?.release()
-            mp = null
-        }
-    }
-    // casovac: obnovuje se 2x za sekundu, jen kdyz hraje
-    LaunchedEffect(playing) {
-        while (playing) {
-            posMs = runCatching { player?.currentPosition ?: 0 }.getOrDefault(0)
-            kotlinx.coroutines.delay(500)
-        }
-    }
-    fun mmss(ms: Int): String { val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60) }
-    val musicControl: (@Composable () -> Unit)? = if (player == null) null else ({
-        Row(
-            Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xD92A2A2A)).padding(start = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(mmss(posMs) + (if (durMs > 0) " / " + mmss(durMs) else ""), color = Color(0xFFDDDDDD), fontSize = 13.sp)
-            Box(
-                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).clickable {
-                    val mp = player ?: return@clickable
-                    runCatching { if (playing) mp.pause() else mp.start() }
-                    playing = runCatching { mp.isPlaying }.getOrDefault(false)
-                },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(if (playing) "❚❚" else "▶", color = Color(0xFF00B055), fontSize = if (playing) 14.sp else 18.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-    })
+    // hudba hraje po dobu, co je obrazovka otevrena; vpravo nahore cas a pauza / prehrat
+    val music = rememberMusic()
+    val musicControl: (@Composable () -> Unit)? = if (music.player == null) null else ({ MusicControl(music) })
     // pozadi UFO Field pod celou obrazovkou, obsah je pres nej (karty jsou polopruhledne)
     UfoBackground {
     ScreenScaffold(title = "O aplikaci", onBack = onBack, containerColor = Color.Transparent, trailing = musicControl) {
@@ -272,5 +216,82 @@ private fun AboutCard(title: String, lines: List<String>) {
     ) {
         Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         lines.forEach { Text("•  $it", color = Color(0xFFCCCCCC), fontSize = 13.sp, lineHeight = 19.sp) }
+    }
+}
+
+
+/** Stav hudby na obrazovce (bez_zastaveni_full.mp3). */
+internal class MusicState {
+    var player by mutableStateOf<MediaPlayer?>(null)
+    var playing by mutableStateOf(false)
+    var posMs by mutableStateOf(0)
+    var durMs by mutableStateOf(0)
+}
+
+/**
+ * Hudba hraje, dokud je obrazovka otevrena; po odchodu se zastavi (prepinac zvuku se nekontroluje).
+ * [volume] 0..1 (Hodnoceni a chyby hraje potise), [enabled] = false: nic nehraje (napr. ukazka).
+ */
+@Composable
+internal fun rememberMusic(volume: Float = 1f, enabled: Boolean = true): MusicState {
+    val ctx = LocalContext.current
+    val st = remember { MusicState() }
+    DisposableEffect(Unit) {
+        var mp: MediaPlayer? = null
+        if (enabled) try {
+            @Suppress("DiscouragedApi")
+            val resId = ctx.resources.getIdentifier("bez_zastaveni_full", "raw", ctx.packageName)
+            if (resId != 0) {
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                mp = MediaPlayer.create(ctx.applicationContext, resId, attrs, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)
+                mp?.setVolume(volume, volume)
+                mp?.setOnCompletionListener { st.playing = false; st.posMs = 0; runCatching { it.seekTo(0) } }
+                mp?.start()
+                st.durMs = mp?.duration ?: 0
+                st.playing = mp != null
+                st.player = mp
+            }
+        } catch (e: Exception) {
+            android.util.Log.d("music", e.toString())   // hudba je jen bonus, nesmi shodit obrazovku
+        }
+        onDispose {
+            st.player = null
+            try { mp?.stop() } catch (_: Exception) { }
+            mp?.release()
+            mp = null
+        }
+    }
+    // casovac: obnovuje se 2x za sekundu, jen kdyz hraje
+    LaunchedEffect(st.playing) {
+        while (st.playing) {
+            st.posMs = runCatching { st.player?.currentPosition ?: 0 }.getOrDefault(0)
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    return st
+}
+
+/** Vpravo nahore: cas prehravani a pauza / prehrat. */
+@Composable
+internal fun MusicControl(st: MusicState) {
+    fun mmss(ms: Int): String { val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60) }
+    Row(
+        Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xD92A2A2A)).padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(mmss(st.posMs) + (if (st.durMs > 0) " / " + mmss(st.durMs) else ""), color = Color(0xFFDDDDDD), fontSize = 13.sp)
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).clickable {
+                val mp = st.player ?: return@clickable
+                runCatching { if (st.playing) mp.pause() else mp.start() }
+                st.playing = runCatching { mp.isPlaying }.getOrDefault(false)
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(if (st.playing) "❚❚" else "▶", color = Color(0xFF00B055), fontSize = if (st.playing) 14.sp else 18.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }

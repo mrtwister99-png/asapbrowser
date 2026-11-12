@@ -216,6 +216,8 @@ private fun postFeedback(ctx: android.content.Context, rating: Int, type: String
 @Composable
 internal fun FeedbackScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
+    // stejna hudba jako v O aplikaci, jen potise (v ukazce prvniho tutorialu nehraje)
+    val music = rememberMusic(volume = 0.35f, enabled = !com.example.actimelteambrowser.DemoMarks.demo)
     val scope = rememberCoroutineScope()
     var rating by remember { mutableStateOf(0) }
     var type by remember { mutableStateOf(0) }            // 0 = recenze, 1 = chyba
@@ -232,7 +234,8 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
 
     UfoBackground {
-        ScreenScaffold(title = "Hodnocení a chyby", onBack = onBack, containerColor = Color.Transparent) {
+        ScreenScaffold(title = "Hodnocení a chyby", onBack = onBack, containerColor = Color.Transparent,
+            trailing = if (music.player == null) null else ({ MusicControl(music) })) {
             Column(
                 Modifier.weight(1f).fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
