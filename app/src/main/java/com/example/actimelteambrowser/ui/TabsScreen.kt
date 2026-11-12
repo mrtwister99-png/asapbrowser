@@ -143,8 +143,9 @@ fun TabsScreen(
     onExtract: (List<Long>) -> Unit,
     onFolderColor: (Long, Int) -> Unit,           // (složka, nová barva)
     onFolderRename: (Long, String) -> Unit,       // (složka, nový název)
-    onNew: () -> Unit,
+    onNew: (Long?) -> Unit,                       // nova karta; id otevrene slozky = karta se prida do ni
     onDismiss: () -> Unit,
+    session: Int = 0,                             // kazde otevreni prehledu = nova hodnota (slozka se zavre)
     groupsMode: Boolean = false,                  // zalozka Skupiny: jen skupiny karet
     onGroupsMode: () -> Unit = {},
     onNewGroup: () -> Unit = {},
@@ -164,6 +165,7 @@ fun TabsScreen(
     val openFolder = tiles.firstOrNull { it.folder && it.id == openFolderId }
     val openFolderNow by rememberUpdatedState(openFolder)
     val shown = openFolder?.members ?: tiles
+    LaunchedEffect(session) { openFolderId = null }   // prehled se vzdy otevre na hlavni urovni, ne ve slozce
 
     // tazeni panelu slozky dolu = zavrit (jako v Chromu)
     var sheetDrag by remember { mutableFloatStateOf(0f) }
@@ -684,7 +686,7 @@ fun TabsScreen(
                         .height(54.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (groupsMode) YELLOW else accent)
-                        .clickable(onClick = if (groupsMode) onNewGroup else onNew),
+                        .clickable { if (groupsMode) onNewGroup() else onNew(openFolderId) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

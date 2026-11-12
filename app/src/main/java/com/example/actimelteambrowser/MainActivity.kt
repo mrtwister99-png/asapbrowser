@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     internal var lastSystemBottom = 0
     internal val tabs = BrowserTabs()
     internal val tabTiles = mutableStateOf<List<TabTile>>(emptyList())
+    internal val overviewSession = androidx.compose.runtime.mutableIntStateOf(0)
 
     // Slozky v prehledu karet: skupina karet (id karet), v prehledu se ukaze jako jedna dlazdice na miste prvni karty
     // (logika slozek je v TabManager.kt; karty samotne jsou v `tabs`)
@@ -430,6 +431,7 @@ class MainActivity : AppCompatActivity() {
         // vsech 8 tlacitek se nastavuje v Nastaveni -> Tlacitka
         wireButtons()
         setupNavArrows()   // krok zpet / vpred ve spodnim poli
+        setupFieldSwipe()  // tah po spodnim poli = jina karta (horni pole to ma v setupTopClear)
     }
 
     override fun onStart() {
@@ -813,8 +815,13 @@ class MainActivity : AppCompatActivity() {
                 injectYoutubeAdBlock(view, url)
                 injectCosmetic(view, url)
             }
+            // zmena historie (i u webu bez nacteni nove stranky) = sipky zpet / vpred sedi
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                if (tab.id == tabs.activeId) updateNavArrows()
+            }
             override fun onPageFinished(view: WebView?, url: String?) {
-                if (tab.id == tabs.activeId) finishPullLoading()
+                if (tab.id == tabs.activeId) { finishPullLoading(); updateNavArrows() }
                 tab.url = url.orEmpty()
                 tab.title = view?.title.orEmpty()
                 if (tab.id == tabs.activeId) {

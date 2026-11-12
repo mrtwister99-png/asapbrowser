@@ -46,12 +46,27 @@ internal fun MainActivity.onWebLongPress(wv: WebView): Boolean {
     return false   // ostatni (text, prazdne misto) nechat na systemu
 }
 
-internal fun MainActivity.openInNewTab(url: String, incognito: Boolean) {
+internal fun MainActivity.openInNewTab(url: String, incognito: Boolean, background: Boolean = false) {
     if (!isWebUrl(url)) {
         AppToast.show(this, "Tuhle adresu nelze otevřít")
         return
     }
     val active = tabs.active()
+    if (background) {
+        // odkaz z webu: nova karta se otevre na pozadi hned za aktualni, uzivatel zustava na strance
+        val t = createTab(url, activate = false, incognito = incognito, fly = false)
+        val at = tabs.list.indexOfFirst { it.id == active?.id }
+        if (at >= 0) { tabs.list.remove(t); tabs.list.add(at + 1, t) }
+        // karta ze skupiny: nova karta patri do stejne skupiny
+        if (active != null && active.incognito == incognito) groupOf(active.id)?.let { g ->
+            g.members.add(g.members.indexOf(active.id) + 1, t.id)
+        }
+        updateTabStrips()
+        saveTabs()
+        softBuzz()
+        AppToast.show(this, if (incognito) "Otevřeno v anonymní kartě na pozadí" else "Otevřeno v nové kartě na pozadí")
+        return
+    }
     val open = { createTab(url, incognito = incognito); Unit }
     if (active != null) capturePreview(active) { open() } else open()
 }
@@ -127,8 +142,8 @@ internal fun MainActivity.showIconMenu(title: String, rows: List<MainActivity.Me
 internal fun MainActivity.showLinkMenu(url: String, text: String?, imageSrc: String?) {
     val addr = com.example.actimelteambrowser.ui.prettyUrl(url)
     val rows = ArrayList<MainActivity.MenuRow>()
-    rows.add(MainActivity.MenuRow("Nová karta", addr, R.drawable.ic_new_tab, true) { openInNewTab(url, false) })
-    rows.add(MainActivity.MenuRow("Anonymní karta", addr, R.drawable.ic_incognito) { openInNewTab(url, true) })
+    rows.add(MainActivity.MenuRow("Nová karta", addr, R.drawable.ic_new_tab, true) { openInNewTab(url, false, background = true) })
+    rows.add(MainActivity.MenuRow("Anonymní karta", addr, R.drawable.ic_incognito) { openInNewTab(url, true, background = true) })
     rows.add(MainActivity.MenuRow("Uložit do Oblíbených", addr, R.drawable.ic_quick_favorite) { saveLinkToFavorites(url, text) })
     if (!text.isNullOrBlank()) {
         rows.add(MainActivity.MenuRow("Kopírovat text", text.trim(), R.drawable.ic_copy_url) { copyToClipboard("text", text.trim(), "Text zkopírován") })
@@ -160,7 +175,7 @@ internal fun MainActivity.showImageMenu(src: String) {
     showIconMenu(
         "Obrázek",
         listOf(
-            MainActivity.MenuRow("Nová karta", addr, R.drawable.ic_new_tab, true) { openInNewTab(src, false) },
+            MainActivity.MenuRow("Nová karta", addr, R.drawable.ic_new_tab, true) { openInNewTab(src, false, background = true) },
             MainActivity.MenuRow("Stáhnout", addr, R.drawable.ic_import) { startDownload(src, webView.settings.userAgentString, null, null) },
             MainActivity.MenuRow("Sdílet", addr, R.drawable.ic_share_url) { shareImage(src) }
         )

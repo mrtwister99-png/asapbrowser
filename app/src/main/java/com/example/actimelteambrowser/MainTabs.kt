@@ -89,6 +89,7 @@ internal fun MainActivity.switchTo(tab: BrowserTab) {
     updateTabCount()
     updateStartPage()
     updateDeskBtn()
+    updateNavArrows()
     // anonymni karta: zakaz screenshotu a nahledu v seznamu aplikaci (jako ostatni prohlizece)
     if (tab.incognito) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
     else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
@@ -550,11 +551,22 @@ internal fun MainActivity.setupTabsOverlay() {
                 tabManager.groupByTile(tileId)?.name = name.trim().take(40)
                 refreshTiles()
             },
-            onNew = {
+            onNew = { folderId ->
                 if (overviewIncognito) createTab(homeUrl, incognito = true) else openStartTab()
+                // otevrena slozka: nova karta patri do ni (v poradi hned za jeji posledni kartou)
+                val g = folderId?.let { tabManager.groupByTile(it) }
+                val t = tabs.active()
+                if (g != null && t != null) {
+                    val last = tabs.list.indexOfLast { it.id in g.members }
+                    g.members.add(t.id)
+                    if (last >= 0) { tabs.list.remove(t); tabs.list.add((last + 1).coerceAtMost(tabs.list.size), t) }
+                    updateTabStrips()
+                    saveTabs()
+                }
                 hideTabs()
             },
-            onDismiss = { hideTabs() }
+            onDismiss = { hideTabs() },
+            session = overviewSession.intValue
         )
     }
 }
@@ -569,6 +581,7 @@ internal fun MainActivity.openTabsOverview() {
 }
 
 internal fun MainActivity.showTabs() {
+    overviewSession.intValue++   // prehled zacina na hlavni urovni (zadna otevrena slozka)
     refreshTiles()
     tabsView.visibility = View.VISIBLE
 }
@@ -818,12 +831,14 @@ internal fun MainActivity.updateTabStrips() {
         // pripnuta karta zustava v te liste, kde byla pri pripnuti (na svem miste v poradi)
         val bottomSet = list.filter { it in base || (it.pinned && !it.pinnedTop && it !in topBase) }.toMutableSet()
         val topSet = list.filter { it in topBase || (it.pinned && it.pinnedTop && it !in base) }.toMutableSet()
-        // skupina, ktera by byla rozdelena mezi spodni a horni listu (nebo by se dole nevesla cela), jde cela nahoru
+        // skupina, ktera se dole nevejde cela: zacina vpravo na spodni liste a pokracuje vlevo na horni
         for (g in groups) {
             val ms = list.filter { it.id in g.members }
-            if (ms.any { it in bottomSet } && ms.any { it !in bottomSet }) {
-                bottomSet.removeAll(ms.toSet())
-                topSet.addAll(ms)
+            val inBottom = ms.filter { it in bottomSet }
+            if (inBottom.isNotEmpty() && inBottom.size < ms.size) {
+                val rest = ms - inBottom.toSet()
+                topSet.removeAll(inBottom.toSet())
+                topSet.addAll(rest)
             }
         }
         bottomList = list.filter { it in bottomSet }
@@ -858,6 +873,7 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
     val keepStart = sv.scrollX
     val keepFromEnd = (row.width - sv.width) - sv.scrollX
     row.removeAllViews()
+    row.overlay.clear()   // stare obrysy skupin
     sv.visibility = View.VISIBLE
     val screenW = resources.displayMetrics.widthPixels - dp(16)
     val gap = dp(3)
@@ -869,8 +885,9 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
         val h = if (active) dp(30) else dp(26)
         val tile = FrameLayout(this)
         val bg = GradientDrawable()
-        val grp = groupOf(tab.id)   // karta ve slozce ma barvu slozky
-        bg.setColor(grp?.color ?: tab.color.takeIf { it != 0 } ?: tabColor(all, tab, incog).toColorInt())
+        val grp = groupOf(tab.id)   // skupina ma jen obrys kolem svych karet, karty si nechavaji svou barvu
+        bg.setColor(tab.color.takeIf { it != 0 } ?: tabColor(all, tab, incog).toColorInt())
+        if (active) bg.setStroke((1.5f * resources.displayMetrics.density).toInt(), Color.WHITE)   // aktualni karta: tenky bily obrys
         // karty jedne skupiny jsou spojene dohromady: mezi nimi zadna mezera a rovne vnitrni rohy
         val joinPrev = grp != null && i > 0 && groupOf(list[i - 1].id) === grp
         val joinNext = grp != null && i < list.size - 1 && groupOf(list[i + 1].id) === grp
@@ -907,21 +924,10 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
         lp.gravity = if (top) Gravity.TOP else Gravity.BOTTOM
         lp.marginEnd = if (joinNext) 0 else gap
         row.addView(tile, lp)
-        if (active) {
-            activeLeft = i * (tileW + gap)
-            if (AppSettings.animationsOn.get()) {
-                // aktivni dlazdice jemne pulzuje
-                val a = ValueAnimator.ofFloat(1f, 0.75f)
-                a.duration = 900
-                a.repeatMode = ValueAnimator.REVERSE
-                a.repeatCount = ValueAnimator.INFINITE
-                a.addUpdateListener { tile.alpha = it.animatedValue as Float }
-                a.start()
-                pulseAnims.add(a)
-            }
-        }
+        if (active) activeLeft = i * (tileW + gap)
     }
     sv.post {
+        drawGroupOutlines(top, list, row)
         val maxScroll = (row.width - sv.width).coerceAtLeast(0)
         val target = when {
             firstBuild -> if (top) maxScroll else 0   // vychozi: horni lista na konci (poslednich 5), spodni na zacatku
@@ -936,6 +942,44 @@ private fun MainActivity.fill(top: Boolean, list: List<BrowserTab>, incog: Boole
     }
 }
 
+
+// Obrys kolem karet jedne skupiny v barve skupiny. Skupina rozdelena mezi listy je na tom konci otevrena:
+// dole pokracuje doprava (za okraj), nahore prichazi zleva.
+private fun MainActivity.drawGroupOutlines(top: Boolean, list: List<BrowserTab>, row: LinearLayout) {
+    row.overlay.clear()
+    val stroke = dp(2)
+    val r = dp(9).toFloat()
+    var i = 0
+    while (i < list.size) {
+        val g = groupOf(list[i].id)
+        if (g == null) { i++; continue }
+        var j = i
+        while (j + 1 < list.size && groupOf(list[j + 1].id) === g) j++
+        val first = row.getChildAt(i) ?: break
+        val last = row.getChildAt(j) ?: break
+        var t = Int.MAX_VALUE; var b = 0
+        for (k in i..j) row.getChildAt(k)?.let { t = minOf(t, it.top); b = maxOf(b, it.bottom) }
+        val other = if (top) shownBottomIds else shownTopIds
+        val split = g.members.any { it in other }
+        val openLeft = top && split
+        val openRight = !top && split
+        val d = GradientDrawable()
+        d.setColor(Color.TRANSPARENT)
+        d.setStroke(stroke, g.color)
+        val l = if (openLeft) 0f else r
+        val rr = if (openRight) 0f else r
+        d.cornerRadii = floatArrayOf(l, l, rr, rr, rr, rr, l, l)
+        val half = stroke / 2
+        d.setBounds(
+            if (openLeft) first.left - dp(6) else first.left + half,
+            t + half,
+            if (openRight) last.right + dp(6) else last.right - half,
+            b - half
+        )
+        row.overlay.add(d)
+        i = j + 1
+    }
+}
 
 // Rychle menu karty z listy (dlouhy stisk na dlazdici)
 internal fun MainActivity.showTabQuickMenu(tab: BrowserTab) {
@@ -1011,8 +1055,23 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
         }
         return null
     }
+    // dlazdice mezi puvodnim mistem a cilem se posunou o jedno misto (je videt, s cim se karta zameni)
+    fun shiftOthers(v: View, ti: Int?) {
+        val from = row.indexOfChild(v)
+        for (j in 0 until row.childCount) {
+            val c = row.getChildAt(j)
+            if (c === v) continue
+            val tx = when {
+                ti != null && from < ti && j in (from + 1)..ti -> row.getChildAt(j - 1).left - c.left
+                ti != null && from > ti && j in ti until from -> row.getChildAt(j + 1).left - c.left
+                else -> 0
+            }.toFloat()
+            if (c.tag != tx) { c.tag = tx; c.animate().translationX(tx).setDuration(140).start() }
+        }
+    }
     fun showGhost(v: View) {
         val t = targetAt(v)
+        shiftOthers(v, t?.first)
         if (t == null) { clearGhost(); return }
         val g = ghost ?: (v.background?.constantState?.newDrawable()?.mutate() ?: return).also {
             it.alpha = 128
@@ -1024,6 +1083,7 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
     }
     fun resetVisual() {
         clearGhost()
+        for (j in 0 until row.childCount) row.getChildAt(j).let { it.animate().cancel(); it.translationX = 0f; it.tag = null }
         tile.translationX = 0f; tile.scaleX = 1f; tile.scaleY = 1f; tile.elevation = 0f
     }
     tile.setOnTouchListener { v, ev ->
@@ -1203,4 +1263,58 @@ internal fun MainActivity.showNewGroupDialog() {
         scroll.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, minOf(dp(52) * free.size, dp(360)))
         scroll
     }
+}
+
+// Tazeni prstem doleva / doprava po hornim nebo spodnim textovem poli = prepnuti na vedlejsi kartu
+private class FieldSwipe { var x = 0f; var y = 0f; var done = false }
+private val fieldSwipes = HashMap<Int, FieldSwipe>()
+
+/** Vraci true, kdyz dotek patri posunu mezi kartami (pole ho pak nema zpracovat). */
+internal fun MainActivity.handleFieldSwipe(v: View, ev: MotionEvent): Boolean {
+    if (v.hasFocus()) return false   // v poli se pise: tah = vyber textu
+    val st = fieldSwipes.getOrPut(v.id) { FieldSwipe() }
+    when (ev.actionMasked) {
+        MotionEvent.ACTION_DOWN -> { st.x = ev.rawX; st.y = ev.rawY; st.done = false }
+        MotionEvent.ACTION_MOVE -> if (!st.done) {
+            val dx = ev.rawX - st.x
+            val dy = ev.rawY - st.y
+            if (kotlin.math.abs(dx) > dp(48) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 2) {
+                st.done = true
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+                // pole dostane zruseni doteku (zadne klepnuti, zadny focus)
+                val c = MotionEvent.obtain(ev)
+                c.action = MotionEvent.ACTION_CANCEL
+                v.onTouchEvent(c)
+                c.recycle()
+                swipeTab(if (dx < 0) 1 else -1)
+            }
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (st.done) { st.done = false; return true }
+    }
+    return st.done
+}
+
+// Prepne na kartu vlevo (-1) / vpravo (+1) v poradi listy karet
+internal fun MainActivity.swipeTab(dir: Int) {
+    val cur = tabs.active() ?: return
+    val list = buildItems(cur.incognito).flatMap { it.second }
+    val idx = list.indexOfFirst { it.id == cur.id }
+    val next = list.getOrNull(idx + dir)
+    if (idx < 0 || next == null) {
+        softBuzz(30)
+        AppToast.show(this, if (dir > 0) "Vpravo už žádná karta není" else "Vlevo už žádná karta není", false, AppToast.Kind.INFO)
+        return
+    }
+    switchTo(next)
+    if (AppSettings.animationsOn.get()) {
+        // nova karta prijede ze strany, kam se tahlo
+        webContainer.translationX = dir * dp(70).toFloat()
+        webContainer.alpha = 0.4f
+        webContainer.animate().translationX(0f).alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    }
+}
+
+@SuppressLint("ClickableViewAccessibility")
+internal fun MainActivity.setupFieldSwipe() {
+    etSearchMain.setOnTouchListener { v, ev -> handleFieldSwipe(v, ev) }
 }

@@ -444,6 +444,7 @@ internal fun MainActivity.updateTopClear() {
 @SuppressLint("ClickableViewAccessibility")   // tap na ikony v poli, klik na pole zustava
 internal fun MainActivity.setupTopClear() {
     etTopUrl.setOnTouchListener { v, ev ->
+        if (handleFieldSwipe(v, ev)) return@setOnTouchListener true   // tah doleva / doprava = jina karta
         // ikona kopirovani (zacatek pole): zkopiruje adresu z pole
         if (ev.actionMasked == MotionEvent.ACTION_UP && etTopUrl.compoundDrawablesRelative[0] != null) {
             val cw = etTopUrl.compoundDrawablesRelative[0].bounds.width() + dp(14)

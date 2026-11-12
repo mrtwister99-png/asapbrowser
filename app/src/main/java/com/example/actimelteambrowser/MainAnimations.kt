@@ -571,12 +571,16 @@ internal fun MainActivity.setupNavArrows() {
         btn.setOnClickListener {
             if (busy) return@setOnClickListener
             val can = if (forward) webView.canGoForward() else webView.canGoBack()
-            if (!can) { AppToast.show(this, if (forward) "Není kam jít vpřed" else "Není kam jít zpět"); return@setOnClickListener }
             fun go() { if (forward) webView.goForward() else webView.goBack() }
             val w = fill.width; val h = fill.height
-            if (!AppSettings.animationsOn.get() || w <= 0 || h <= 0) { go(); return@setOnClickListener }
+            if (!can) {
+                // neni kam jit: cervena vypln + lehke zabrneni + hlaska
+                softBuzz(30)
+                AppToast.show(this, "Není kam jít", false, AppToast.Kind.ERROR)
+            }
+            if (!AppSettings.animationsOn.get() || w <= 0 || h <= 0) { if (can) go(); return@setOnClickListener }
             busy = true
-            fill.imageTintList = ColorStateList.valueOf(accentState.value)
+            fill.imageTintList = ColorStateList.valueOf(if (can) accentState.value else 0xFFE53935.toInt())
             fill.visibility = View.VISIBLE
             // vyplneni zprava doleva (u vpred je obrazek zrcadleny, takze jde smerem k hrotu)
             val a = ValueAnimator.ofInt(w, 0)
@@ -587,11 +591,12 @@ internal fun MainActivity.setupNavArrows() {
                 override fun onAnimationEnd(animation: Animator) {
                     fill.clipBounds = null
                     fill.postDelayed({
-                        go()
+                        if (can) go()
                         fill.animate().alpha(0f).setDuration(200).withEndAction {
                             fill.visibility = View.INVISIBLE
                             fill.alpha = 1f
                             busy = false
+                            updateNavArrows()
                         }.start()
                     }, 120)
                 }
@@ -601,4 +606,13 @@ internal fun MainActivity.setupNavArrows() {
     }
     wire(R.id.btnNavBack, R.id.ivNavBackFill, false)
     wire(R.id.btnNavForward, R.id.ivNavForwardFill, true)
+    updateNavArrows()
+}
+
+// Sipka, kterou nejde pouzit (neni kam jit), je svetle seda
+internal fun MainActivity.updateNavArrows() {
+    if (!isWebViewReady()) return
+    val gray = ColorStateList.valueOf(0xFFC4C4C4.toInt())
+    findViewById<ImageView>(R.id.ivNavBack)?.imageTintList = if (webView.canGoBack()) null else gray
+    findViewById<ImageView>(R.id.ivNavForward)?.imageTintList = if (webView.canGoForward()) null else gray
 }
