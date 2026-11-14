@@ -18,3 +18,11 @@ rust-engine/target/
 .idea/
 *.jks
 *.keystore
+
+# Supabase CLI docasne soubory (odkaz na projekt) a Node balicky
+supabase/.temp/
+node_modules/
+package.json
+package-lock.json
+pnpm-lock.yaml
+build/

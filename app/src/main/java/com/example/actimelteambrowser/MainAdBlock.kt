@@ -180,8 +180,13 @@ private const val STRICT_CSS = "ins.adsbygoogle,[id^='ad-'],[id^='ad_'],[id^='ad
 // "sub.priklad.cz" -> "priklad.cz" (stejny web = stejna posledni dve casti domeny)
 private fun baseDomain(h: String): String {
     val p = h.lowercase().removePrefix("www.").split('.')
-    return if (p.size <= 2) p.joinToString(".") else p.takeLast(2).joinToString(".")
+    if (p.size <= 2) return p.joinToString(".")
+    // co.uk, com.au, ac.jp ... = koncovka ma dve casti, web je az treti od konce (jinak by bbc.co.uk bylo "co.uk")
+    val n = if (p.size >= 3 && p.last().length == 2 && p[p.size - 2] in SECOND_LEVEL) 3 else 2
+    return p.takeLast(n).joinToString(".")
 }
+
+private val SECOND_LEVEL = setOf("co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "go", "gob", "mil", "nic")
 
 // Bezi na pozadi vlakne (shouldInterceptRequest)
 internal fun MainActivity.strictBlock(request: WebResourceRequest, tab: BrowserTab): Boolean {

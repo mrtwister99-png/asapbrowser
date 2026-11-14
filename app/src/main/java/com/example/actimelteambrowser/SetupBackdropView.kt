@@ -23,6 +23,7 @@ import kotlin.math.sin
  * Pozadi nastavovacich rezimu (uvodni nastaveni, nastaveni tlacitek, nastaveni gest): prechod cerna -> tmave seda
  * a konvoj tri UFO - vpredu dve zelena, kousek za nimi cervene. Konvoj leti na nahodne misto (rovne nebo klikate,
  * 3-15 s, nejdal tesne pred okraj obrazovky), zastavi, 15 s stoji a pak leti znovu. Vsechny rozmery jsou v dp.
+ * Vypnute animace (Nastaveni -> Animace): tri UFO stoji kazde na jinem nahodnem miste a nic se neprekresluje.
  */
 class SetupBackdropView(context: Context) : View(context) {
 
@@ -35,6 +36,8 @@ class SetupBackdropView(context: Context) : View(context) {
     private val edge = 36f                           // konvoj doleti nejdal tesne pred okraj
     private val backs = floatArrayOf(0f, 26f, 68f)   // odstup za vedouci lodi: zelena, zelena, cervena
     private val waitSec = 15f
+    private val still = !com.example.actimelteambrowser.core.settings.AppSettings.animationsOn.get()
+    private val stillPos = Array(3) { FloatArray(2) }  // mista stojicich UFO (jen pri vypnutych animacich)
 
     private val green = Look("#00E676".toColorInt(), "#5CFFAB".toColorInt(), "#2E9E57".toColorInt(), Color.argb(46, 0, 230, 118))
     private val red = Look("#FF3B30".toColorInt(), "#FF8A80".toColorInt(), "#7A0000".toColorInt(), Color.argb(46, 255, 59, 48))
@@ -74,6 +77,7 @@ class SetupBackdropView(context: Context) : View(context) {
         h = newH / density
         if (w <= 0f || h <= 0f) return
         bgPaint.shader = LinearGradient(0f, 0f, 0f, newH.toFloat(), Color.BLACK, "#2B2B2B".toColorInt(), Shader.TileMode.CLAMP)
+        if (still) { placeStill(); return }
         if (trail.isEmpty()) {
             lx = w * 0.5f
             ly = h * 0.4f
@@ -95,7 +99,19 @@ class SetupBackdropView(context: Context) : View(context) {
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
-        if (visibility == VISIBLE) { lastNs = System.nanoTime(); invalidate() }
+        if (visibility == VISIBLE && !still) { lastNs = System.nanoTime(); invalidate() }
+    }
+
+    // Tri nahodna mista od sebe dost daleko (aby se UFO neprekryvala)
+    private fun placeStill() {
+        val minDist = min(w, h) * 0.25f
+        for (i in stillPos.indices) {
+            for (tries in 0 until 30) {
+                stillPos[i][0] = rand(edge, max(edge + 1f, w - edge))
+                stillPos[i][1] = rand(edge, max(edge + 1f, h - edge))
+                if ((0 until i).all { j -> hypot(stillPos[i][0] - stillPos[j][0], stillPos[i][1] - stillPos[j][1]) >= minDist }) break
+            }
+        }
     }
 
     // Novy let: nahodny cil (dost daleko), nahodna doba 3-15 s, nahodne rovne nebo klikate
@@ -165,6 +181,12 @@ class SetupBackdropView(context: Context) : View(context) {
         lastNs = now
         val t = (now - startNs) / 1e9f
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        if (still) {
+            if (w > 0f && h > 0f) canvas.withScale(density, density) {
+                for (i in stillPos.indices.reversed()) drawUfo(canvas, stillPos[i][0], stillPos[i][1], if (i == 2) red else green, 0f, i)
+            }
+            return   // stoji = zadne dalsi prekreslovani
+        }
         if (w > 0f && h > 0f) {
             step(dt)
             canvas.withScale(density, density) {

@@ -994,7 +994,7 @@ class MainActivity : AppCompatActivity() {
 
     // Text v poli s adresou nahore (puvodni chovani)
     internal fun topUrlText(url: String?): String =
-        url?.replace("https://", "")?.replace("/", "") ?: ""
+        url?.removePrefix("https://")?.removeSuffix("/") ?: ""   // cesta (/a/b) zustava, http:// zustava videt
 
     // ---------------- SLOZKY A PORADI KARET V PREHLEDU ----------------
 
