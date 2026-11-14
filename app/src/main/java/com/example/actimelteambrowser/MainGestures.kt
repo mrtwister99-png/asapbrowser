@@ -257,6 +257,7 @@ internal fun MainActivity.showGestures(test: Boolean = false, demoBounds: ((Floa
             onSurfaceBounds = demoBounds,
             showHints = demoBounds == null,
             theme = theme,
+            hintColor = if (tabs.active()?.incognito == true) androidx.compose.ui.graphics.Color(0xFF006AFF) else com.example.actimelteambrowser.ui.GESTURE_GREEN,
             topInsetDp = topDp,
             onMatchAt = { x, y -> if (demoBounds == null) showFirework(x, y) }
         )

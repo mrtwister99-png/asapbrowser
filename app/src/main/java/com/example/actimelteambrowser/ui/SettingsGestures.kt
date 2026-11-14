@@ -540,7 +540,8 @@ fun GestureOverlay(
     showHints: Boolean = true,                      // napoveda gest, ktera jdou dokreslit (v ukazce vypnuto)
     theme: GestureTheme = GestureTheme(),
     topInsetDp: Int = 8,                             // kde konci horni pole (napoveda zacina pod nim)
-    onMatchAt: ((Float, Float) -> Unit)? = null      // stred posledni klavesy rozpoznaneho gesta (v okne, px) - ohnostroj
+    onMatchAt: ((Float, Float) -> Unit)? = null,     // stred posledni klavesy rozpoznaneho gesta (v okne, px) - ohnostroj
+    hintColor: Color = GESTURE_GREEN                 // barva nahledu gest v napovede (anonymni karta = modra)
 ) {
     var progress by remember { mutableStateOf("") }
     val matched = gestures.firstOrNull { it.code == progress }
@@ -660,7 +661,7 @@ fun GestureOverlay(
             ) {
                 for (g in possible) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        GesturePathPreview(g.code, Modifier.size(40.dp))
+                        GesturePathPreview(g.code, Modifier.size(40.dp), hintColor)
                         Spacer(Modifier.width(12.dp))
                         Text(
                             androidx.compose.ui.text.buildAnnotatedString {
@@ -684,7 +685,7 @@ private fun codeText(code: String): String = code.toCharArray().joinToString("-"
 
 /** Maly nahled drahy gesta na mrizce 3x3: velka zelena tecka = start, bila = konec, cara = prejezd mezi klavesami. */
 @Composable
-internal fun GesturePathPreview(code: String, modifier: Modifier = Modifier) {
+internal fun GesturePathPreview(code: String, modifier: Modifier = Modifier, color: Color = GESTURE_GREEN) {
     Canvas(modifier) {
         val cell = size.width / 3f
         fun pt(k: Char): Offset {
@@ -694,10 +695,10 @@ internal fun GesturePathPreview(code: String, modifier: Modifier = Modifier) {
         for (i in 0..8) drawCircle(Color.White.copy(alpha = 0.3f), radius = 1.5.dp.toPx(), center = pt('1' + i))
         val pts = code.filter { it in '1'..'9' }.map { pt(it) }
         for (i in 1 until pts.size) {
-            drawLine(GESTURE_GREEN, pts[i - 1], pts[i], strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+            drawLine(color, pts[i - 1], pts[i], strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
         }
         if (pts.isNotEmpty()) {
-            drawCircle(GESTURE_GREEN, radius = 4.dp.toPx(), center = pts.first())
+            drawCircle(color, radius = 4.dp.toPx(), center = pts.first())
             drawCircle(Color.White, radius = 2.5.dp.toPx(), center = pts.last())
         }
     }
