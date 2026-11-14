@@ -150,9 +150,9 @@ class MainActivity : AppCompatActivity() {
             // po navratu na hlavni plochu se znovu prehraje animace kolecko -> logo (spusti ji onResume)
             introOnResume = true
             // Nastaveni -> Tlacitka: hlavni plocha prejde do konfiguracniho modu
-            if (r.data?.getBooleanExtra(SettingsActivity.EXTRA_CONFIG_BUTTONS, false) == true) enterConfigMode()
+            if (r.data?.getBooleanExtra(SettingsActivity.EXTRA_CONFIG_BUTTONS, false) == true) { enterConfigMode(); configFromSettings = true }
             // Nastaveni -> Gesta: plocha gest + panel shora
-            if (r.data?.getBooleanExtra(SettingsActivity.EXTRA_CONFIG_GESTURES, false) == true) enterGestureConfig()
+            if (r.data?.getBooleanExtra(SettingsActivity.EXTRA_CONFIG_GESTURES, false) == true) { enterGestureConfig(); configFromSettings = true }
             // Tutorialy -> Demo videa: ukazka se prehraje na hlavni plose
             r.data?.getIntExtra(SettingsActivity.EXTRA_RUN_DEMO, 0)?.takeIf { it != 0 }?.let { runDemoFromSettings(it) }
             val url = r.data?.getStringExtra(SettingsActivity.EXTRA_URL)
@@ -591,6 +591,7 @@ class MainActivity : AppCompatActivity() {
     // Zamek proti dvojitemu otevreni: po otevreni okna/prehledu/dialogu se dalsi "otevirani" hned za sebou ignoruje
     internal var openLockUntil = 0L
     internal var settingsOpen = false
+    internal var configFromSettings = false   // rezim tlacitek / gest otevreny z Nastaveni: po ulozeni zpet do Nastaveni
     private var introOnResume = false
 
     internal fun isOpeningFunction(fn: ButtonFunction): Boolean = when (fn) {
@@ -1060,9 +1061,9 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 when {
                     gestureTestMode -> setGestureTest(false)   // z TESTu zpet do nastaveni gest
-                    gestureConfigMode -> exitGestureConfig()
+                    gestureConfigMode -> { exitGestureConfig(); backToSettingsAfterConfig() }
                     regionView != null -> removeRegionOverlay()
-                    configMode -> exitConfigMode()
+                    configMode -> { exitConfigMode(); backToSettingsAfterConfig() }
                     isFindBarOpen() -> hideFindBar()   // zavrit hledani na strance
                     etSearchMain.hasFocus() || etTopUrl.hasFocus() -> dismissInput()   // 1. zavrit psani/naseptavac
                     customView != null -> exitFullscreenVideo()

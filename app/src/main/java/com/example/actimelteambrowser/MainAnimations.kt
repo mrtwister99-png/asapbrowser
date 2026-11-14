@@ -565,6 +565,7 @@ internal fun MainActivity.setupNavArrows() {
         var busy = false
         btn.setOnClickListener {
             if (busy) return@setOnClickListener
+            if (liveTutorialDone(if (forward) 106 else 105)) return@setOnClickListener   // prvni klepnuti = ukazka sipek
             val can = if (forward) webView.canGoForward() else webView.canGoBack()
             fun go() { if (forward) webView.goForward() else webView.goBack() }
             val w = fill.width; val h = fill.height

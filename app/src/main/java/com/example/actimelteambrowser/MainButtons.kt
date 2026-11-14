@@ -153,7 +153,7 @@ internal fun MainActivity.enterConfigMode() {
     sbg.setStroke(dp(2), saveOrange)   // plny obrys
     save.background = sbg
     save.elevation = dp(9).toFloat()
-    save.setOnClickListener { exitConfigMode() }
+    save.setOnClickListener { exitConfigMode(); backToSettingsAfterConfig() }
     val vlp = ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     vlp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
     vlp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
@@ -186,6 +186,13 @@ internal fun MainActivity.enterConfigMode() {
     configHost = host
 
     refreshConfigUi()
+}
+
+/** Po ULOZIT v rezimu tlacitek / gest: kdyz se do nej prislo z Nastaveni, Nastaveni se zase otevre. */
+internal fun MainActivity.backToSettingsAfterConfig() {
+    if (!configFromSettings) return
+    configFromSettings = false
+    window.decorView.postDelayed({ openSettingsAt(null) }, 250)
 }
 
 internal fun MainActivity.exitConfigMode() {
@@ -718,11 +725,13 @@ internal fun MainActivity.applyLiveTutorial() {
             in 1..12 -> buttonView(n)
             101 -> findViewById(R.id.urlContainer)
             102 -> etSearchMain
+            105 -> findViewById(R.id.btnNavBack)
+            106 -> findViewById(R.id.btnNavForward)
             in 201..204 -> (sideBarLeft as? ViewGroup)?.getChildAt(n - 201)
             else -> null
         }
         val v: View = found ?: continue
-        val radius = when (n) { in 1..4 -> dp(18); in 5..12 -> dp(16); 101 -> dp(18); 102 -> dp(22); else -> dp(18) }
+        val radius = when (n) { in 1..4 -> dp(18); in 5..12 -> dp(16); 101 -> dp(18); 102 -> dp(22); 105, 106 -> dp(12); else -> dp(18) }
         val d = GradientDrawable()
         d.setColor(Color.TRANSPARENT)
         if (n in 9..12) d.setStroke(dp(2), yellow, dp(8).toFloat(), dp(5).toFloat()) else d.setStroke(dp(2), yellow)
@@ -868,7 +877,7 @@ internal fun MainActivity.showTutorialPlusDialog() {
 
 // Zacatek zive tutorialu (po "Okay" v uvodni zprave): tlacitka, pole, Sdilet a tlacitka v liste dostanou obrys
 internal fun MainActivity.startLiveTutorial() {
-    AppSettings.liveTutorial.set(((1..12) + listOf(101, 102, 103, 104, 201, 202, 203) + (if (AppSettings.vaultDemoSeen.get()) emptyList() else listOf(204))).joinToString(","))
+    AppSettings.liveTutorial.set(((1..12) + listOf(101, 102, 103, 104, 105, 106, 201, 202, 203) + (if (AppSettings.vaultDemoSeen.get()) emptyList() else listOf(204))).joinToString(","))
     applyLiveTutorial()
 }
 
@@ -877,8 +886,10 @@ internal fun MainActivity.startLiveTutorial() {
 internal fun MainActivity.liveTutorialDone(n: Int): Boolean {
     val left = liveIds()
     if (n !in left) return false
-    AppSettings.liveTutorial.set(left.filter { it != n }.joinToString(","))
-    liveOutlines.remove(n)?.let { (v, d) -> v.overlay.remove(d) }
+    // sipky zpet (105) a vpred (106) maji spolecnou ukazku: klepnuti na kteroukoli zhasne obe
+    val gone = if (n == 105 || n == 106) setOf(105, 106) else setOf(n)
+    AppSettings.liveTutorial.set(left.filter { it !in gone }.joinToString(","))
+    for (g in gone) liveOutlines.remove(g)?.let { (v, d) -> v.overlay.remove(d) }
     if (n == 103 || n == 104) {
         liveIcons.remove(findViewById(if (n == 103) R.id.ivUrlShare else R.id.ivUrlLock))
         paintTutorialIcon(n, false)
@@ -888,6 +899,7 @@ internal fun MainActivity.liveTutorialDone(n: Int): Boolean {
     val gestBtn = n in 1..12 && n != 7 && n != 8 && buttonFunction(n, false) == ButtonFunction.GESTURES
     // tlacitka 1-4: ukazka jen pri vychozich funkcich (klepnuti i drzeni), jinak by ukazovala neco jineho nez tlacitko dela
     val basic = n in 1..4 && !gestBtn && buttonFunction(n, false) == ButtonDefaults.tap(n) && buttonFunction(n, true) == ButtonDefaults.long(n)
+    if (n == 105 || n == 106) return startFirstDemo(105)
     return (n == 7 || n == 8 || n == 103 || n == 104 || n in 201..203 || gestBtn || basic) && startFirstDemo(n)
 }
 

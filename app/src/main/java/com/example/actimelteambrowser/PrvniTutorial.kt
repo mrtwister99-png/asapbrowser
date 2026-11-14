@@ -133,6 +133,16 @@ private fun MainActivity.raiseLayer() {
 /** Bezi ukazka (skutecna tlacitka se behem ni neprepinaji). */
 internal fun isDemoRunning(): Boolean = demoRunning
 
+// nova karta z ukazky zmizi a vrati se puvodni karta
+private fun MainActivity.closeDemoTab() {
+    if (demoNewTabId < 0) return
+    val prev = tabs.list.firstOrNull { it.id == demoPrevTabId }
+    if (tabs.list.size > 1) closeTabNow(demoNewTabId)
+    prev?.let { switchTo(it) }
+    updateTabStrips()
+    demoNewTabId = -1L; demoPrevTabId = -1L
+}
+
 private fun MainActivity.endDemo() {
     demoHandler.removeCallbacksAndMessages(null)
     demoAdOrig?.let { isAdBlockOn = it; applyAdBlockUi() }   // vrati puvodni vzhled AdBlocku
@@ -141,14 +151,7 @@ private fun MainActivity.endDemo() {
     if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }             // zavre prehled karet otevreny ukazkou
     if (demoFindOpen) { hideFindBar(); demoFindOpen = false }          // zavre ukazkovy panel hledani
     tabsView.scaleX = 1f; tabsView.scaleY = 1f; tabsView.alpha = 1f
-    if (demoNewTabId >= 0) {
-        // nova karta z ukazky zmizi a vrati se puvodni karta
-        val prev = tabs.list.firstOrNull { it.id == demoPrevTabId }
-        if (tabs.list.size > 1) closeTabNow(demoNewTabId)
-        prev?.let { switchTo(it) }
-        updateTabStrips()
-        demoNewTabId = -1L; demoPrevTabId = -1L
-    }
+    closeDemoTab()
     demoResume = null
     topDemoRestore?.let { topDemoRestore = null; it() }   // ukazka horni listy: vrati listy, tlacitka a pole
     updateDeskBtn()   // tlacitko Verze pro pocitac zpet podle skutecneho stavu
@@ -177,10 +180,16 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     // 11-14 = ukazka tlacitek 1-4 (klepnuti + drzeni), 300 = tlacitko s funkci Gesta
     val id = if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) 10 + n else if (n in 1..12 && n != 7 && n != 8) 300 else n
     if ((n == 7 || n == 8) && buttonFunction(n, false) != ButtonDefaults.tap(n)) return false   // tlacitko ma jinou funkci
-    if (n == 7 || n == 8 || n == 103 || n == 104) return startTopDemo(n)   // horni lista: vlastni prubeh (nadpis, tip, OK, animace)
+    // horni a spodni lista: vlastni prubeh (nadpis v poli, tip, OK, animace, kolecka, Preskocit)
+    if (n == 7 || n == 8 || n == 103 || n == 104 || n == 105) return startBarDemo(n)
+    if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) return startBarDemo(10 + n)
 
     demoRunning = true
-    if (id == 300 && quickSetupStage == 2) { quickSetupStage = 21; quickSpotOff?.invoke() }   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
+    if (id == 300 && quickSetupStage == 2) { quickSetupStage = 21; quickSpotOff?.invoke() }
+    // bocni dema (lista, gesta): videt je horni i spodni lista, nadpis nahore i dole (v prvotnim nastaveni zustava jeho nadpis)
+    val sideDemo = id in 201..203 || id == 300
+    val sideTitle = when (id) { 201 -> "SCREENSHOT"; 202 -> "VERZE PRO POČÍTAČ"; 203 -> "NAJÍT NA STRÁNCE"; else -> "GESTA" }
+    if (sideDemo && fieldTitleTop == null) { showFieldTitles(sideTitle, "DEMO VIDEO"); topDemoRestore = { clearFieldTitles() } }   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
     val parent = root as ConstraintLayout
     val urlBox = findViewById<View>(R.id.urlContainer)
     val adBtn = findViewById<View>(R.id.btnAdBlock)
@@ -206,6 +215,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             105 -> for (bid in listOf(R.id.btnNavBack, R.id.btnNavForward)) dim.holes.add(rectOf(findViewById(bid)).apply { inset(pad, pad) })
             else -> dim.holes.add(rectOf(adBtn).apply { inset(pad, pad) })
         }
+        if (sideDemo) { dim.holes.add(rectOf(topBar)); dim.holes.add(rectOf(bottomBar)) }
         dim.invalidate()
     }
 
@@ -226,7 +236,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     clp.marginStart = dp(28); clp.marginEnd = dp(28)
     // Preskocit je u vsech ukazek na stejnem miste: dole, tesne nad spodni listou (neprekryva tlacitka)
     val skipBottom = (if (bottomBar.height > 0) bottomBar.height else lastSystemBottom + dp(80)) + dp(12)
-    if (id == 300 || id == 203 || id in 11..14) clp.topMargin = dp(60) else clp.bottomMargin = skipBottom + dp(72)
+    if (id == 300 || id == 203 || id in 11..14) clp.topMargin = topBar.bottom + dp(12) else clp.bottomMargin = skipBottom + dp(72)
     ov.addView(caption, clp)
     fun say(t: String) { caption.text = t; caption.visibility = View.VISIBLE }
 
@@ -286,6 +296,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
         dim.circle = false
         dim.holes.clear()
         for (v in vs) if (v != null && v.isAttachedToWindow) dim.holes.add(rectOf(v).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) })
+        if (sideDemo) { dim.holes.add(rectOf(topBar)); dim.holes.add(rectOf(bottomBar)) }
         dim.visibility = View.VISIBLE
         dim.invalidate()
     }
@@ -308,17 +319,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     fun at(delay: Long, block: () -> Unit) { t += delay; demoHandler.postDelayed({ if (demoRunning) block() }, t) }
 
     when (id) {
-        105 -> {
-            // sipky ve spodnim poli: zpet a vpred mezi strankami; seda = neni kam jit
-            val back = findViewById<View>(R.id.btnNavBack)
-            val fwd = findViewById<View>(R.id.btnNavForward)
-            at(0) { say("Šipka vlevo: o stránku zpět"); moveTo(back, 600) }
-            at(800) { tap(); blinkView(back) }
-            at(1600) { say("Šipka vpravo: o stránku vpřed"); moveTo(fwd, 700) }
-            at(900) { tap(); blinkView(fwd) }
-            at(1700) { say("Když není kam jít, šipka je šedá – po klepnutí zčervená a napíše „Není kam jít“") }
-            at(3200) { endDemo() }
-        }
         201 -> {
             // Screenshot: nabidka -> Cela obrazovka (probliknuti) -> nabidka -> Vyber casti (ramecek). Nic se neuklada.
             val cam = (sideBarLeft as? ViewGroup)?.getChildAt(0)
@@ -400,141 +400,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             for (w in listOf("r", "re", "rec", "rece", "recept")) at(260) { setFindDemo(w, "") }
             at(500) { setFindDemo("recept", "1 / 4"); say("Šipkami ▲ ▼ přeskakuješ mezi nalezenými místy") }
             at(2600) { endDemo() }
-        }
-        11, 12, 13, 14 -> {
-            // Tlacitka 1-4: klepnuti + drzeni. Otevira se SKUTECNE UI (prehled karet, Oblibene, Nastaveni, okna), nic se neulozi.
-            val btn = buttonView(n)
-            if (btn == null) { endDemo(); return true }
-            val tapText = mapOf(1 to "Klepnutí: Domů – stránka se obnoví a přejde na domovskou", 2 to "Klepnutí: přehled všech karet", 3 to "Klepnutí: otevře Oblíbené (záložky)", 4 to "Klepnutí: otevře Nastavení")
-            val holdText = mapOf(1 to "Podržení: nastavení domovské stránky", 2 to "Podržení: nová karta", 3 to "Podržení: přidá stránku do složky Oblíbených", 4 to "Podržení: hodnocení a hlášení chyb")
-            // okno Nastaveni v rezimu ukazky; po navratu (done) ukazka pokracuje [resume]
-            fun openSettingsDemo(demo: String, resume: () -> Unit) {
-                if (settingsOpen) { endDemo(); return }
-                demoResume = { t = 0L; resume() }
-                settingsOpen = true
-                val i = settingsIntent().putExtra(SettingsActivity.EXTRA_DEMO, demo)
-                when (demo) {
-                    SettingsActivity.DEMO_BOOKMARKS -> i.putExtra(SettingsActivity.EXTRA_START, SettingsActivity.START_BOOKMARKS)
-                    SettingsActivity.DEMO_FEEDBACK -> i.putExtra(SettingsActivity.EXTRA_START, SettingsActivity.START_FEEDBACK)
-                }
-                settingsLauncher.launch(i)
-            }
-            at(0) { focusViews(btn); say(tapText[n] ?: ""); moveTo(btn, 600) }
-            at(800) { tap() }
-            when (n) {
-                1 -> {
-                    // ukazka = otacejici se ikona obnoveni, pak ikona domu (skutecna stranka se nenacita)
-                    val rm = ImageView(this)
-                    rm.setImageResource(R.drawable.ic_refresh)
-                    rm.setColorFilter(Color.WHITE)
-                    rm.background = card()
-                    rm.setPadding(dp(18), dp(18), dp(18), dp(18))
-                    rm.visibility = View.INVISIBLE
-                    ov.addView(rm, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.CENTER))
-                    at(150) {
-                        dim.visibility = View.GONE   // po klepnuti zadne ztmaveni
-                        blinkHome()
-                        rm.alpha = 1f; rm.rotation = 0f; rm.visibility = View.VISIBLE
-                        rm.animate().rotation(360f).setDuration(900).withEndAction {
-                            rm.setImageResource(R.drawable.ic_home)   // po obnoveni skoci na domovskou
-                            rm.animate().alpha(0f).setStartDelay(500).setDuration(300).start()
-                        }.start()
-                    }
-                    at(2300) { focusViews(btn); say(holdText[1] ?: ""); moveTo(btn, 400) }   // zase ztmaveni, prst na domecku
-                    at(600) { holdFinger() }
-                    // ikona se zespoda vyplni, zvetsi se a az potom se otevre skutecne okno nastaveni domovske stranky (bez ztmaveni, zluty obrys)
-                    at(650) {
-                        animateHome {
-                            if (demoRunning) {
-                                releaseFinger()
-                                dim.visibility = View.GONE
-                                openModal { showHomeDialog() }
-                                (lastDialogCard?.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).setStroke(dp(3), DEMO_YELLOW.toColorInt()) }
-                            }
-                        }
-                    }
-                    at(3600) { endDemo() }
-                }
-                2 -> {
-                    at(150) {
-                        spinTabs {
-                            if (demoRunning) {
-                                dim.visibility = View.GONE   // nejdriv je videt cely prehled karet
-                                openTabsOverview(); demoTabsOpen = true
-                            }
-                        }
-                    }
-                    // bez ztmaveni problikne Bezne -> Skupiny -> Anonymni
-                    at(1500) {
-                        say("Běžné karty…")
-                        DemoMarks.rects["tabs_normal"]?.let { moveToRect(it, 500); blinkScreen(it) }
-                    }
-                    at(1400) {
-                        say("…skupiny karet…")
-                        DemoMarks.rects["tabs_groups"]?.let { moveToRect(it, 500); blinkScreen(it) }
-                    }
-                    at(1400) {
-                        say("…a anonymní karty")
-                        DemoMarks.rects["tabs_incog"]?.let { moveToRect(it, 500); blinkScreen(it) }
-                    }
-                    // prehled se stahne dolu do stredu obrazovky a zavre se
-                    at(1600) {
-                        tabsView.pivotX = tabsView.width / 2f
-                        tabsView.pivotY = tabsView.height * 0.75f
-                        tabsView.animate().scaleX(0.05f).scaleY(0.05f).alpha(0f).setDuration(420).withEndAction {
-                            if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }
-                            tabsView.scaleX = 1f; tabsView.scaleY = 1f; tabsView.alpha = 1f
-                        }.start()
-                    }
-                    at(800) { focusViews(btn); say(holdText[2] ?: ""); moveTo(btn, 600) }   // ztmaveni, prst na tlacitko karet
-                    at(800) { holdFinger() }
-                    at(650) {
-                        // drzeni = okno nove karty (skutecna nova karta, po ukazce se zavre)
-                        animateTabsButton { }
-                        flyBurst("+", "#00B055")
-                        dim.visibility = View.GONE
-                        demoPrevTabId = tabs.activeId
-                        openStartTab()
-                        demoNewTabId = tabs.activeId
-                    }
-                    at(700) { releaseFinger(); say("Nová karta je otevřená") }
-                    at(2200) { endDemo() }
-                }
-                3 -> {
-                    at(150) {
-                        spinFavorites {
-                            if (demoRunning) openSettingsDemo(SettingsActivity.DEMO_BOOKMARKS) {
-                                // po navratu z Oblibenych: drzeni = skutecne okno "Pridat do slozky" (nic se neulozi)
-                                at(500) { focusViews(btn); say(holdText[3] ?: ""); moveTo(btn, 600) }
-                                at(800) { holdFinger() }
-                                at(650) { holdIconFlip(3); animateStar { } }
-                                at(700) { releaseFinger(); openModal { chooseFolderAndSave(webView.url?.takeIf { isWebUrl(it) } ?: "https://example.com", "Ukázka", demo = true) } }
-                                at(500) { if (demoRunning) raiseLayer() }   // okno nacita slozky na pozadi
-                                at(600) { demoTargets["folder0"]?.let { say("Vybereš složku – třeba Oblíbené…"); moveTo(it, 500); blinkView(it) } }
-                                at(1500) { demoTargets["folder1"]?.let { say("…nebo další složku"); moveTo(it, 500); blinkView(it) } }
-                                at(1700) { endDemo() }
-                            }
-                        }
-                    }
-                }
-                else -> {
-                    at(150) {
-                        playSettingsOutro {
-                            if (demoRunning) openSettingsDemo(SettingsActivity.DEMO_SETTINGS) {
-                                // po navratu z Nastaveni: drzeni = Hodnoceni a hlaseni chyb
-                                at(600) { focusViews(btn); say(holdText[4] ?: ""); moveTo(btn, 600) }
-                                at(800) { holdFinger() }
-                                at(650) {
-                                    holdIconFlip(4)
-                                    spinSettingsLogo {
-                                        if (demoRunning) { releaseFinger(); openSettingsDemo(SettingsActivity.DEMO_FEEDBACK) { at(200) { endDemo() } } }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
         300 -> {
             // Gesta: kulicka -> otevre se plocha -> prst nakresli 9-8-5-2 (nova karta); na konci se plocha zavre a nic se neprovede
@@ -673,8 +538,11 @@ internal fun MainActivity.runDemoFromSettings(n: Int) {
 
 private var topDemoRestore: (() -> Unit)? = null
 
-/** Cast ukazky: uvodni tip, zaverecny tip, delka animace a animace (at = krok v ms od zacatku animace). */
-private class TopPart(val intro: String, val outro: String, val ms: Long, val run: ((Long, () -> Unit) -> Unit) -> Unit)
+/** Rizeni animace casti: at = krok v ms od zacatku animace, finish = cast skoncila (u casti s ms = 0). */
+private class DemoCtl(val at: (Long, () -> Unit) -> Unit, val finish: () -> Unit)
+
+/** Cast ukazky: uvodni tip, zaverecny tip, delka animace (0 = skonci sama pres finish) a animace. */
+private class TopPart(val intro: String, val outro: String, val ms: Long, val run: (DemoCtl) -> Unit)
 
 /** Preskocit vsechny tutorialy: nic uz nesviti ani neblika zlute. */
 internal fun MainActivity.skipAllTutorials() {
@@ -699,30 +567,39 @@ internal fun MainActivity.demoButton(text: String, primary: Boolean): TextView {
     return b
 }
 
-private fun MainActivity.startTopDemo(id: Int): Boolean {
+private fun MainActivity.startBarDemo(id: Int): Boolean {
     demoRunning = true
+    val bottom = id in 11..14 || id == 105   // spodni lista (Domu, sipky, karty, Oblibene, Nastaveni)
     val parent = root as ConstraintLayout
     val adBtn = findViewById<View>(R.id.btnAdBlock)
     val shareBtn = findViewById<View>(R.id.ivUrlShare)
     val lockBtn = findViewById<View>(R.id.ivUrlLock)
     val vpnBtn = findViewById<View>(R.id.btnVpn)
+    val backBtn = findViewById<View>(R.id.btnNavBack)
+    val fwdBtn = findViewById<View>(R.id.btnNavForward)
     setChromeHidden(false)
     if (leftBarOpen) closeLeftBarAndHide()
 
-    // vse krome horni listy zmizi (vrati se v endDemo)
+    // videt je jen ukazovana lista; ostatni zmizi (vrati se v endDemo)
     val hidden = ArrayList<Pair<View, Int>>()
     fun hide(v: View?) { if (v != null && v.visibility == View.VISIBLE) { hidden.add(v to v.visibility); v.visibility = View.INVISIBLE } }
-    hide(bottomBar)
+    hide(if (bottom) topBar else bottomBar)
     for (k in listOf(5, 6) + extraViews.keys) hide(buttonView(k))
     hide(orbView)
     stripViews().forEach { hide(it.first) }
     tutorialPlus.forEach { hide(it) }
-    val title = when (id) { 7 -> "TLAČÍTKO ADBLOCK"; 8 -> "TLAČÍTKO VPN"; 103 -> "TLAČÍTKO SDÍLET"; else -> "ZÁMEK" }
-    showFieldTitles(title, null)
+    val title = when (id) {
+        7 -> "TLAČÍTKO ADBLOCK"; 8 -> "TLAČÍTKO VPN"; 103 -> "TLAČÍTKO SDÍLET"; 104 -> "ZÁMEK"
+        11 -> "DOMOVSKÁ STRÁNKA"; 12 -> "NOVÉ OKNO A ZÁLOŽKY"; 13 -> "OBLÍBENÉ ZÁLOŽKY"; 14 -> "NASTAVENÍ + RECENZE"
+        else -> "KROK VPŘED + VZAD"
+    }
+    // nadpis do pole ukazovane listy; pole jsou cista (ikony zustanou jen u ukazovaneho tlacitka)
+    val keep = when (id) { 103 -> setOf(R.id.ivUrlShare); 104 -> setOf(R.id.ivUrlLock); 105 -> setOf(R.id.btnNavBack, R.id.btnNavForward); else -> emptySet() }
+    if (bottom) showFieldTitles(null, title, keep) else showFieldTitles(title, null, keep)
     var resetHook: (() -> Unit)? = null
     topDemoRestore = { hidden.forEach { (v, vis) -> v.visibility = vis }; clearFieldTitles() }
 
-    // ztmaveni: jasna je cela horni lista
+    // ztmaveni: jasna je cela ukazovana lista
     val dim = DemoDim(this)
     val dlp = ConstraintLayout.LayoutParams(0, 0)
     dlp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
@@ -732,13 +609,15 @@ private fun MainActivity.startTopDemo(id: Int): Boolean {
     dim.elevation = dp(100).toFloat()
     parent.addView(dim, dlp)
     demoOverlay = dim
-    dim.post { dim.holes.clear(); dim.holes.add(rectOf(topBar)); dim.invalidate() }
+    dim.post { dim.holes.clear(); dim.holes.add(rectOf(if (bottom) bottomBar else topBar)); dim.invalidate() }
+    fun dimOff() { dim.visibility = View.GONE }
+    fun dimOn() { dim.visibility = View.VISIBLE }
 
-    // nejvyssi vrstva: tecka, tip + OK, kolecka, Preskocit
+    // nejvyssi vrstva: tecka, tip + OK, kolecka, Preskocit (u spodni listy nad listou)
     val ov = FrameLayout(this)
     ov.isClickable = true
     layerContent = ov
-    val skipBottom = lastSystemBottom + dp(20)
+    val skipBottom = if (bottom) (if (bottomBar.height > 0) bottomBar.height else lastSystemBottom + dp(80)) + dp(12) else lastSystemBottom + dp(20)
 
     val skip = demoButton(getString(R.string.tutorial_skip), false)
     skip.setPadding(dp(28), dp(12), dp(28), dp(12))
@@ -772,41 +651,65 @@ private fun MainActivity.startTopDemo(id: Int): Boolean {
     blp.bottomMargin = skipBottom + dp(104)
     ov.addView(box, blp)
 
-    // Preskocit: jen tento tutorial, nebo vsechny
+    // Preskocit: jen tento tutorial, nebo vsechny (to se jeste potvrzuje)
     val choice = LinearLayout(this)
     choice.orientation = LinearLayout.VERTICAL
     choice.background = demoCaptionBg(this)
     choice.setPadding(dp(16), dp(14), dp(16), dp(14))
     val chText = TextView(this)
-    chText.text = "Co chceš přeskočit?"
     chText.setTextColor(Color.WHITE)
     chText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
     chText.gravity = Gravity.CENTER
     choice.addView(chText)
-    val chOne = demoButton("Pouze tento tutoriál", true)
-    val chAll = demoButton("Přeskočit všechny tutoriály", false)
+    val chNote = TextView(this)
+    chNote.text = "(všechny tutoriály jsou k přehrání v Nastavení → Tutoriály)"
+    chNote.setTextColor("#AAAAAA".toColorInt())
+    chNote.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+    chNote.gravity = Gravity.CENTER
+    val nlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    nlp.topMargin = dp(6)
+    choice.addView(chNote, nlp)
+    val chA = demoButton("", true)
+    val chB = demoButton("", false)
     val chBack = demoButton("Zpět", false)
-    for (b in listOf(chOne, chAll, chBack)) {
+    chBack.background = GradientDrawable().apply { setColor("#333333".toColorInt()); cornerRadius = dp(22).toFloat() }
+    for (b in listOf(chA, chB, chBack)) {
         val l = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         l.topMargin = dp(10)
         choice.addView(b, l)
     }
-    chBack.background = GradientDrawable().apply { setColor("#333333".toColorInt()); cornerRadius = dp(22).toFloat() }
     choice.visibility = View.GONE
     val chlp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
     chlp.marginStart = dp(24); chlp.marginEnd = dp(24)
     chlp.bottomMargin = skipBottom + dp(60)
     ov.addView(choice, chlp)
     var boxWasVisible = true
+    fun closeChoice() { choice.visibility = View.GONE; if (boxWasVisible) box.visibility = View.VISIBLE }
+    // 1. krok: co preskocit
+    fun askWhat() {
+        chText.text = "Co chceš přeskočit?"
+        chNote.visibility = View.GONE
+        chA.text = "Pouze tento tutoriál"; chB.text = "Přeskočit všechny tutoriály"
+        chBack.visibility = View.VISIBLE
+        chA.setOnClickListener { endDemo() }
+        chB.setOnClickListener {
+            // 2. krok: potvrzeni
+            chText.text = "Opravdu chceš přeskočit všechny tutoriály?"
+            chNote.visibility = View.VISIBLE
+            chA.text = "ANO"; chB.text = "NE"
+            chBack.visibility = View.GONE
+            chA.setOnClickListener { skipAllTutorials(); endDemo(); AppToast.show(this, "Tutoriály přeskočeny") }
+            chB.setOnClickListener { closeChoice() }
+        }
+    }
     skip.setOnClickListener {
         if (choice.visibility == View.VISIBLE) return@setOnClickListener
         boxWasVisible = box.visibility == View.VISIBLE
         box.visibility = View.INVISIBLE
+        askWhat()
         choice.visibility = View.VISIBLE
     }
-    chBack.setOnClickListener { choice.visibility = View.GONE; if (boxWasVisible) box.visibility = View.VISIBLE }
-    chOne.setOnClickListener { endDemo() }
-    chAll.setOnClickListener { skipAllTutorials(); endDemo(); AppToast.show(this, "Tutoriály přeskočeny") }
+    chBack.setOnClickListener { closeChoice() }
 
     // tecka
     val fs = dp(20)
@@ -821,11 +724,11 @@ private fun MainActivity.startTopDemo(id: Int): Boolean {
         return RectF(a[0].toFloat(), a[1].toFloat(), (a[0] + v.width).toFloat(), (a[1] + v.height).toFloat())
     }
     fun local(r: RectF): RectF { val b = IntArray(2); ov.getLocationOnScreen(b); return RectF(r.left - b[0], r.top - b[1], r.right - b[0], r.bottom - b[1]) }
-    fun moveTo(v: View, ms: Long) {
-        if (!v.isAttachedToWindow) return
-        val r = local(screenRect(v))
+    fun moveToRect(sr: RectF, ms: Long) {
+        val r = local(sr)
         finger.animate().alpha(1f).translationX(r.centerX() - fs / 2f).translationY(r.centerY() - fs / 2f).setDuration(ms).start()
     }
+    fun moveTo(v: View, ms: Long) { if (v.isAttachedToWindow) moveToRect(screenRect(v), ms) }
     fun fingerFromCenter() {
         finger.animate().cancel()
         finger.scaleX = 1f; finger.scaleY = 1f
@@ -840,16 +743,32 @@ private fun MainActivity.startTopDemo(id: Int): Boolean {
     fun releaseFinger() { finger.animate().scaleX(1f).scaleY(1f).setDuration(200).start() }
     fun blinkFast(v: View?) { if (v != null && v.isAttachedToWindow) blinkOutline(ov, local(screenRect(v)), times = 3, stepMs = 120) }
     fun blink(v: View?) { if (v != null && v.isAttachedToWindow) blinkOutline(ov, local(screenRect(v))) }
+    fun blinkRect(sr: RectF) = blinkOutline(ov, local(sr))
     fun press(key: String) { demoTargets[key]?.let { tap(); it.performClick() } }
     fun openModal(open: () -> Unit) {
         open(); demoDialogOpen = true
         demoHandler.postDelayed({ if (demoRunning) raiseLayer() }, 120)
     }
     fun closeModal() { if (demoDialogOpen) { runCatching { lastDialogDismiss?.invoke() }; demoDialogOpen = false } }
+    // okno Nastaveni v rezimu ukazky; po navratu (hotovo) ukazka pokracuje [resume], Preskocit v nem ukazku ukonci
+    fun openSettingsDemo(demo: String, resume: () -> Unit) {
+        if (settingsOpen) { endDemo(); return }
+        demoResume = resume
+        settingsOpen = true
+        val i = settingsIntent().putExtra(SettingsActivity.EXTRA_DEMO, demo)
+        when (demo) {
+            SettingsActivity.DEMO_BOOKMARKS -> i.putExtra(SettingsActivity.EXTRA_START, SettingsActivity.START_BOOKMARKS)
+            SettingsActivity.DEMO_FEEDBACK -> i.putExtra(SettingsActivity.EXTRA_START, SettingsActivity.START_FEEDBACK)
+        }
+        settingsLauncher.launch(i)
+    }
 
     // ---------------- casti ukazky ----------------
     val parts = ArrayList<TopPart>()
-    val target: View = when (id) { 7 -> adBtn; 8 -> vpnBtn; 103 -> shareBtn; else -> lockBtn }
+    val target: View? = when (id) {
+        7 -> adBtn; 8 -> vpnBtn; 103 -> shareBtn; 104 -> lockBtn; 105 -> backBtn
+        else -> buttonView(id - 10)
+    }
     when (id) {
         7 -> {
             demoAdOrig = isAdBlockOn
@@ -858,98 +777,264 @@ private fun MainActivity.startTopDemo(id: Int): Boolean {
             parts += TopPart(
                 "Klepnutím na AdBlock zapneš nebo vypneš blokování reklam.",
                 "Číslo na tlačítku ukazuje, kolik reklam se na stránce zablokovalo.", 5200
-            ) { at ->
-                at(0) { fingerFromCenter() }
-                at(250) { moveTo(adBtn, 650) }
-                at(1050) { tap() }
-                at(1200) { flip() }
-                at(1500) { fingerHide() }
-                at(3000) { fingerFromCenter() }
-                at(3250) { moveTo(adBtn, 650) }
-                at(4050) { tap() }
-                at(4200) { flip() }
-                at(4500) { fingerHide() }
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(adBtn, 650) }
+                c.at(1050) { tap() }
+                c.at(1200) { flip() }
+                c.at(1500) { fingerHide() }
+                c.at(3000) { fingerFromCenter() }
+                c.at(3250) { moveTo(adBtn, 650) }
+                c.at(4050) { tap() }
+                c.at(4200) { flip() }
+                c.at(4500) { fingerHide() }
             }
             parts += TopPart(
                 "Podržením AdBlocku přidáš web, na kterém reklamy pořád prolézají – bude se na něm blokovat přísněji.",
                 "Hotovo – web se přidá k přísnějšímu blokování (v ukázce se nic neuloží).", 7600
-            ) { at ->
-                at(0) { fingerFromCenter() }
-                at(250) { moveTo(adBtn, 650) }
-                at(1000) { holdFinger() }
-                at(1900) { releaseFinger(); fingerHide() }
-                at(2200) { openModal { showAdBlockSitesDialog(demo = true) } }
-                at(3100) { fingerFromCenter() }
-                at(3350) { demoTargets["site_current"]?.let { moveTo(it, 600) } }
-                at(4150) { press("site_current") }
-                at(5000) { demoTargets["site_ok"]?.let { moveTo(it, 550) } }
-                at(5800) { press("site_ok") }
-                at(6000) { raiseLayer() }
-                at(6300) { fingerHide() }
-                at(7400) { closeModal() }
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(adBtn, 650) }
+                c.at(1000) { holdFinger() }
+                c.at(1900) { releaseFinger(); fingerHide() }
+                c.at(2200) { openModal { showAdBlockSitesDialog(demo = true) } }
+                c.at(3100) { fingerFromCenter() }
+                c.at(3350) { demoTargets["site_current"]?.let { moveTo(it, 600) } }
+                c.at(4150) { press("site_current") }
+                c.at(5000) { demoTargets["site_ok"]?.let { moveTo(it, 550) } }
+                c.at(5800) { press("site_ok") }
+                c.at(6000) { raiseLayer() }
+                c.at(6300) { fingerHide() }
+                c.at(7400) { closeModal() }
             }
         }
         103 -> {
             parts += TopPart(
                 "Klepnutím na Sdílet otevřeš okno, kde adresu stránky zkopíruješ nebo pošleš.",
                 "Kopírovat = adresa do schránky. Sdílet = pošleš ji třeba do zprávy. Přepínačem QR kód sdílíš místo adresy QR kód.", 5000
-            ) { at ->
-                at(0) { fingerFromCenter() }
-                at(250) { moveTo(shareBtn, 650) }
-                at(1000) { tap() }
-                at(1200) { openModal { showShareDialog(demo = true) } }
-                at(1700) { fingerHide() }
-                at(2000) { blinkFast(demoTargets["copy"]) }        // Kopirovat 3x rychle
-                at(2900) { blinkFast(lastDialogPositive) }         // pak Sdilet 3x rychle
-                at(4700) { closeModal() }
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(shareBtn, 650) }
+                c.at(1000) { tap() }
+                c.at(1200) { openModal { showShareDialog(demo = true) } }
+                c.at(1700) { fingerHide() }
+                c.at(2000) { blinkFast(demoTargets["copy"]) }        // Kopirovat 3x rychle
+                c.at(2900) { blinkFast(lastDialogPositive) }         // pak Sdilet 3x rychle
+                c.at(4700) { closeModal() }
             }
             parts += TopPart(
                 "Podržením Sdílet rovnou otevřeš sdílení telefonu – bez okna.",
                 "Tak adresu pošleš nejrychleji.", 3000
-            ) { at ->
-                at(0) { fingerFromCenter() }
-                at(250) { moveTo(shareBtn, 650) }
-                at(1000) { holdFinger() }
-                at(1900) { releaseFinger(); blinkFast(shareBtn); AppToast.show(this, "Otevře se sdílení telefonu (v ukázce ne)") }
-                at(2400) { fingerHide() }
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(shareBtn, 650) }
+                c.at(1000) { holdFinger() }
+                c.at(1900) { releaseFinger(); blinkFast(shareBtn); AppToast.show(this, "Otevře se sdílení telefonu (v ukázce ne)") }
+                c.at(2400) { fingerHide() }
             }
         }
         104 -> {
             parts += TopPart(
                 "Zámek ukazuje, jestli je spojení se stránkou šifrované. Klepnutím otevřeš informace o stránce a nastavení jen pro tento web.",
                 "Zelený zámek = šifrované spojení (https), červený = nešifrované (http). Tady si taky vypneš AdBlock jen pro tento web nebo smažeš jeho cookies.", 7800
-            ) { at ->
-                at(0) { fingerFromCenter() }
-                at(250) { moveTo(lockBtn, 650) }
-                at(1000) { tap() }
-                at(1200) { openModal { showPageInfo(demo = true) } }
-                at(2000) { demoTargets["adblock"]?.let { moveTo(it, 550) } }
-                at(2700) { press("adblock") }   // vypne + cervena tecka u zamku + toast
-                at(4000) { press("adblock") }   // zapne + toast
-                at(4800) {
-                    demoTargets["cookies"]?.let { c ->
-                        c.requestRectangleOnScreen(android.graphics.Rect(0, 0, c.width, c.height))
-                        demoHandler.postDelayed({ if (demoRunning) moveTo(c, 550) }, 350)
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(lockBtn, 650) }
+                c.at(1000) { tap() }
+                c.at(1200) { openModal { showPageInfo(demo = true) } }
+                c.at(2000) { demoTargets["adblock"]?.let { moveTo(it, 550) } }
+                c.at(2700) { press("adblock") }   // vypne + cervena tecka u zamku + toast
+                c.at(4000) { press("adblock") }   // zapne + toast
+                c.at(4800) {
+                    demoTargets["cookies"]?.let { v ->
+                        v.requestRectangleOnScreen(android.graphics.Rect(0, 0, v.width, v.height))
+                        demoHandler.postDelayed({ if (demoRunning) moveTo(v, 550) }, 350)
                     }
                 }
-                at(6000) { press("cookies") }
-                at(6600) { fingerHide() }
-                at(7500) { closeModal() }
+                c.at(6000) { press("cookies") }
+                c.at(6600) { fingerHide() }
+                c.at(7500) { closeModal() }
             }
         }
-        else -> {
+        8 -> {
             parts += TopPart(
                 "VPN skryje, odkud se připojuješ – provoz půjde šifrovaně přes jiný server.",
                 "VPN se ještě připravuje. Až bude hotová, zapneš ji tady jedním klepnutím.", 2600
-            ) { at ->
-                at(0) { fingerFromCenter() }
-                at(250) { moveTo(vpnBtn, 650) }
-                at(1000) { tap(); blinkFast(vpnBtn) }
-                at(1200) { AppToast.show(this, "VPN se připravuje") }
-                at(1800) { fingerHide() }
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(vpnBtn, 650) }
+                c.at(1000) { tap(); blinkFast(vpnBtn) }
+                c.at(1200) { AppToast.show(this, "VPN se připravuje") }
+                c.at(1800) { fingerHide() }
+            }
+        }
+        105 -> {
+            parts += TopPart(
+                "Šipkami ve spodním poli přejdeš o stránku zpět nebo vpřed.",
+                "Když není kam jít, šipka po klepnutí zčervená a napíše „Není kam jít“.", 4200
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(backBtn, 650) }
+                c.at(1000) { tap(); blinkFast(backBtn); AppToast.show(this, "O stránku zpět") }
+                c.at(1900) { moveTo(fwdBtn, 800) }
+                c.at(2800) { tap(); blinkFast(fwdBtn); AppToast.show(this, "O stránku vpřed") }
+                c.at(3600) { fingerHide() }
+            }
+        }
+        11 -> {
+            val btn = buttonView(1) ?: run { endDemo(); return true }
+            // obnoveni: otacejici se ikona, pak domecek (skutecna stranka se nenacita)
+            val rm = ImageView(this)
+            rm.setColorFilter(Color.WHITE)
+            rm.background = card()
+            rm.setPadding(dp(18), dp(18), dp(18), dp(18))
+            rm.visibility = View.INVISIBLE
+            ov.addView(rm, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.CENTER))
+            resetHook = { rm.animate().cancel(); rm.visibility = View.INVISIBLE }
+            parts += TopPart(
+                "Klepnutím na Domů se stránka obnoví a přejdeš na domovskou stránku.",
+                "Domovskou stránku si nastavíš podržením tlačítka.", 3000
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { tap(); blinkHome() }
+                c.at(1150) {
+                    rm.setImageResource(R.drawable.ic_refresh)
+                    rm.alpha = 1f; rm.rotation = 0f; rm.visibility = View.VISIBLE
+                    rm.animate().rotation(360f).setDuration(900).withEndAction {
+                        rm.setImageResource(R.drawable.ic_home)
+                        rm.animate().alpha(0f).setStartDelay(500).setDuration(300).start()
+                    }.start()
+                }
+                c.at(1400) { fingerHide() }
+            }
+            parts += TopPart(
+                "Podržením Domů nastavíš domovskou stránku.",
+                "Sem napíšeš adresu, kam se má Domů vracet.", 0
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { holdFinger() }
+                c.at(1500) {
+                    animateHome {
+                        if (!demoRunning) return@animateHome
+                        releaseFinger(); fingerHide()
+                        openModal { showHomeDialog() }
+                        (lastDialogCard?.background as? GradientDrawable)?.mutate()?.let { (it as GradientDrawable).setStroke(dp(3), DEMO_YELLOW.toColorInt()) }
+                        demoHandler.postDelayed({ c.finish() }, 2600)
+                    }
+                }
+            }
+        }
+        12 -> {
+            val btn = buttonView(2) ?: run { endDemo(); return true }
+            resetHook = {
+                dimOn()
+                if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }
+                tabsView.animate().cancel(); tabsView.scaleX = 1f; tabsView.scaleY = 1f; tabsView.alpha = 1f
+                closeDemoTab()
+            }
+            parts += TopPart(
+                "Klepnutím na tlačítko karet otevřeš přehled všech karet (záložek).",
+                "Karty máš běžné, ve skupinách a anonymní.", 0
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { tap() }
+                c.at(1150) {
+                    spinTabs {
+                        if (!demoRunning) return@spinTabs
+                        fingerHide(); dimOff()
+                        openTabsOverview(); demoTabsOpen = true
+                        val steps = listOf("tabs_normal", "tabs_groups", "tabs_incog")
+                        for ((i, key) in steps.withIndex()) demoHandler.postDelayed({
+                            if (demoRunning) DemoMarks.rects[key]?.let { moveToRect(it, 450); blinkRect(it) }
+                        }, 700L + i * 1300L)
+                        demoHandler.postDelayed({
+                            if (!demoRunning) return@postDelayed
+                            fingerHide()
+                            tabsView.pivotX = tabsView.width / 2f
+                            tabsView.pivotY = tabsView.height * 0.75f
+                            tabsView.animate().scaleX(0.05f).scaleY(0.05f).alpha(0f).setDuration(420).withEndAction {
+                                if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }
+                                tabsView.scaleX = 1f; tabsView.scaleY = 1f; tabsView.alpha = 1f
+                                dimOn()
+                                c.finish()
+                            }.start()
+                        }, 700L + 3 * 1300L + 400L)
+                    }
+                }
+            }
+            parts += TopPart(
+                "Podržením tlačítka karet otevřeš nové okno (novou kartu).",
+                "Nová karta je otevřená (po ukázce se zase zavře).", 3400
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { holdFinger() }
+                c.at(1700) {
+                    animateTabsButton { }
+                    flyBurst("+", "#00B055")
+                    dimOff()
+                    demoPrevTabId = tabs.activeId
+                    openStartTab()
+                    demoNewTabId = tabs.activeId
+                }
+                c.at(2300) { releaseFinger(); fingerHide() }
+            }
+        }
+        13 -> {
+            val btn = buttonView(3) ?: run { endDemo(); return true }
+            parts += TopPart(
+                "Klepnutím na hvězdu otevřeš Oblíbené – uložené stránky ve složkách.",
+                "Stránky si třídíš do složek, jak se ti to hodí.", 0
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { tap() }
+                c.at(1150) { spinFavorites { if (demoRunning) { fingerHide(); openSettingsDemo(SettingsActivity.DEMO_BOOKMARKS) { c.finish() } } } }
+            }
+            parts += TopPart(
+                "Podržením hvězdy přidáš aktuální stránku do složky Oblíbených.",
+                "Vybereš složku a stránka se do ní uloží (v ukázce se nic neuloží).", 5600
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { holdFinger() }
+                c.at(1500) { holdIconFlip(3); animateStar { } }
+                c.at(2200) { releaseFinger(); fingerHide(); openModal { chooseFolderAndSave(webView.url?.takeIf { isWebUrl(it) } ?: "https://example.com", "Ukázka", demo = true) } }
+                c.at(2700) { raiseLayer() }   // okno nacita slozky na pozadi
+                c.at(3200) { demoTargets["folder0"]?.let { moveTo(it, 500); blink(it) } }
+                c.at(4300) { demoTargets["folder1"]?.let { moveTo(it, 500); blink(it) } }
+                c.at(5300) { fingerHide(); closeModal() }
+            }
+        }
+        14 -> {
+            val btn = buttonView(4) ?: run { endDemo(); return true }
+            parts += TopPart(
+                "Klepnutím na logo otevřeš Nastavení.",
+                "V Nastavení si upravíš tlačítka, gesta, vzhled a všechno ostatní.", 0
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { tap() }
+                c.at(1150) { playSettingsOutro { if (demoRunning) { fingerHide(); openSettingsDemo(SettingsActivity.DEMO_SETTINGS) { c.finish() } } } }
+            }
+            parts += TopPart(
+                "Podržením loga otevřeš Hodnocení a hlášení chyb.",
+                "Napiš recenzi nebo nahlas chybu – moc to pomůže.", 0
+            ) { c ->
+                c.at(0) { fingerFromCenter() }
+                c.at(250) { moveTo(btn, 650) }
+                c.at(1000) { holdFinger() }
+                c.at(1500) {
+                    holdIconFlip(4)
+                    spinSettingsLogo { if (demoRunning) { releaseFinger(); fingerHide(); openSettingsDemo(SettingsActivity.DEMO_FEEDBACK) { c.finish() } } }
+                }
             }
         }
     }
+    if (parts.isEmpty()) { endDemo(); return true }
 
     // ---------------- prubeh ----------------
     var gen = 0
@@ -973,25 +1058,32 @@ private fun MainActivity.startTopDemo(id: Int): Boolean {
         paintDots(k)
         box.visibility = View.INVISIBLE   // behem animace tip nezakryva okna
         val part = parts[k]
-        dots.getOrNull(k)?.let { d ->
-            val a = ValueAnimator.ofFloat(0f, 1f)
-            a.duration = part.ms
-            a.addUpdateListener { an -> if (g == gen) { d.p = an.animatedValue as Float; d.invalidate() } }
+        val dot = dots.getOrNull(k)
+        if (dot != null) {
+            val a = ValueAnimator.ofFloat(0f, if (part.ms > 0) 1f else 0.6f)
+            a.duration = if (part.ms > 0) part.ms else 1500
+            a.addUpdateListener { an -> if (g == gen) { dot.p = an.animatedValue as Float; dot.invalidate() } }
             a.start()
         }
-        part.run { ms, block -> after(ms, g, block) }
-        after(part.ms + 250, g) {
-            done.add(k)
-            val next = k + 1
-            if (next < parts.size) {
-                caption.text = part.outro + "\n\n" + parts[next].intro
-                setOk("OK, pokračuj") { runAnim(next) }
-                blink(target)
-            } else {
-                caption.text = part.outro
-                setOk("Hotovo") { endDemo() }
+        var finished = false
+        val finish = {
+            if (!finished && demoRunning && g == gen) {
+                finished = true
+                dot?.let { it.p = 1f; it.invalidate() }
+                done.add(k)
+                val next = k + 1
+                if (next < parts.size) {
+                    caption.text = part.outro + "\n\n" + parts[next].intro
+                    setOk("OK, pokračuj") { runAnim(next) }
+                    blink(target)
+                } else {
+                    caption.text = part.outro
+                    setOk("Hotovo") { endDemo() }
+                }
             }
         }
+        part.run(DemoCtl({ ms, block -> after(ms, g, block) }, finish))
+        if (part.ms > 0) after(part.ms + 250, g) { finish() }
     }
     fun showIntro(k: Int) {
         ++gen

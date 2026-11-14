@@ -62,7 +62,7 @@ internal fun MainActivity.enterGestureConfig() {
                 AppSettings.gestureSize.reset()
                 gestResetKey.intValue += 1
             },
-            onClose = { exitGestureConfig() },
+            onClose = { exitGestureConfig(); backToSettingsAfterConfig() },
             onPreviewStyle = { gestPreviewStyle.value = it; orbView?.styleOverride = it; orbView?.invalidate() },
             onAlignArea = { alignGestureAreaToOrb() },
             testMode = gestTestState.value,
