@@ -133,17 +133,8 @@ internal fun MainActivity.enterConfigMode() {
     etTopUrl.isEnabled = false
     val parent = root as ViewGroup
 
-    // pruhledna vrstva; pohlti klepnuti do webu (tlacitka maji vyssi elevation)
-    val scrim = View(this)
-    scrim.setBackgroundColor("#80000000".toColorInt())   // zbytek plochy ztmaveny na 50 %, tlacitka jsou nad tim
-    scrim.isClickable = true
-    scrim.elevation = dp(7).toFloat()
-    val slp = ConstraintLayout.LayoutParams(0, 0)
-    slp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-    slp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-    slp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-    slp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-    parent.addView(scrim, slp)
+    // pozadi: prechod cerna -> tmave seda se tremi UFO; pohlti klepnuti do webu (tlacitka maji vyssi elevation)
+    val scrim = addSetupBackdrop(7, true)
     configScrim = scrim
 
     // uprostred: zluty text s plnym zlutooranzovym obrysem
@@ -380,7 +371,7 @@ internal fun MainActivity.confirmSideButton(n: Int, v: View, onDone: () -> Unit)
     greenBg.setStroke(dp(1), Color.WHITE)
     fun retract() {
         // jako applySideMode: schovat za okraj, krome otevrene listy tohoto tlacitka a konfiguracnich modu
-        val target = if (!configMode && !gestureConfigMode && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
+        val target = if (!sideButtonsOut && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
         v.animate().translationX(target).setDuration(250).withEndAction { sideConfirming.remove(n) }.start()
     }
     v.animate().translationX(0f).setDuration(220).withEndAction {
@@ -404,7 +395,7 @@ internal fun MainActivity.confirmSideButton(n: Int, v: View, onDone: () -> Unit)
 
 // Boční tlačítka: trvale zasunutá (50 / 70 %); celá jsou vidět jen v konfiguračních módech a u otevřené lišty
 internal fun MainActivity.applySideMode(n: Int, v: View) {
-    v.translationX = if (!configMode && !gestureConfigMode && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
+    v.translationX = if (!sideButtonsOut && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
     if (n == barOrigin) setLeftBar(leftBarOpen, false)
 }
 
@@ -419,10 +410,7 @@ internal fun MainActivity.setupSideBar() {
     bar.setPadding(0, dp(12), 0, 0)
     bar.elevation = dp(6).toFloat()   // nad webem, pod tlacitky (8)
     // lista vyrusta z (zeleneho) tlacitka: prechod zespoda zelena -> nahore cerna
-    val bg = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf("#00B055".toColorInt(), "#0F3D2A".toColorInt(), "#0A0A0A".toColorInt()))
-    bg.cornerRadius = 24f * d
-    bg.setStroke((1f * d).toInt().coerceAtLeast(1), Color.WHITE)
-    bar.background = bg
+    bar.background = sideBarBg()
 
     // jedno kulate tlacitko v liste s pevnou akci (klepnuti)
     fun barButton(content: View, action: () -> Unit): FrameLayout {
@@ -486,12 +474,34 @@ internal fun MainActivity.setupSideBar() {
     bar.visibility = View.INVISIBLE
 }
 
-// Zelene pozadi tlacitka, kdyz ma aktivni karta zapnutou verzi pro pocitac
+// Pozadi listy: prechod zespoda hlavni barva (zelena, v anonymnim rezimu modra) -> nahore cerna
+internal fun MainActivity.sideBarBg(): GradientDrawable {
+    val d = resources.displayMetrics.density
+    val blue = accentState.value != 0xFF00B055.toInt()
+    val bg = GradientDrawable(
+        GradientDrawable.Orientation.BOTTOM_TOP,
+        intArrayOf(accentState.value, (if (blue) "#0F2A4D" else "#0F3D2A").toColorInt(), "#0A0A0A".toColorInt())
+    )
+    bg.cornerRadius = 24f * d
+    bg.setStroke((1f * d).toInt().coerceAtLeast(1), Color.WHITE)
+    return bg
+}
+
+// Anonymni rezim: tlacitko listy, lista a znak na kulicce gest jsou modre (jinak zelene)
+internal fun MainActivity.applySideAccent() {
+    orbView?.accent = accentState.value
+    sideBarLeft?.background = sideBarBg()
+    if (gestureButtonN() != 6) findViewById<View>(R.id.btnSideRightMain).setBackgroundResource(sideButtonBgRes(6))
+    findViewById<View>(R.id.btnSideLeftMain).setBackgroundResource(sideButtonBgRes(5))
+    updateDeskBtn()
+}
+
+// Barevne pozadi tlacitka, kdyz ma aktivni karta zapnutou verzi pro pocitac
 internal fun MainActivity.updateDeskBtn() {
     val b = leftDeskBtn ?: return
     if (tabs.active()?.desktop == true) {
         val g = GradientDrawable()
-        g.setColor("#00B055".toColorInt())
+        g.setColor(accentState.value)
         g.cornerRadius = dp(18).toFloat()
         g.setStroke(dp(1), Color.WHITE)
         b.background = g
@@ -563,10 +573,11 @@ internal fun MainActivity.applyBarBtnIcon(open: Boolean) {
     }
 }
 
-// Pozadi bocniho tlacitka 5 / 6: s funkci Bocni lista (klepnuti nebo drzeni) je zelene
+// Pozadi bocniho tlacitka 5 / 6: s funkci Bocni lista (klepnuti nebo drzeni) je zelene, v anonymnim rezimu modre
 internal fun MainActivity.sideButtonBgRes(n: Int): Int =
-    if (buttonFunction(n, false) == ButtonFunction.LEFT_BAR || buttonFunction(n, true) == ButtonFunction.LEFT_BAR) R.drawable.side_button_bar_bg
-    else R.drawable.side_button_bg
+    if (buttonFunction(n, false) == ButtonFunction.LEFT_BAR || buttonFunction(n, true) == ButtonFunction.LEFT_BAR) {
+        if (accentState.value != 0xFF00B055.toInt()) R.drawable.side_button_bar_bg_blue else R.drawable.side_button_bar_bg
+    } else R.drawable.side_button_bg
 
 // Lista zajede dolu do tlacitka a pak se tlacitko zasune do vychozi polohy (podle nastaveni vysouvani)
 internal fun MainActivity.closeLeftBarAndHide() {
@@ -593,7 +604,7 @@ internal fun MainActivity.hideExtrasForBar(open: Boolean) {
             }.start()
         } else {
             v.visibility = View.VISIBLE
-            val back = if (configMode || gestureConfigMode) 0f else hiddenX(n)
+            val back = if (sideButtonsOut) 0f else hiddenX(n)
             v.animate().translationX(back).setDuration(300).start()
         }
     }

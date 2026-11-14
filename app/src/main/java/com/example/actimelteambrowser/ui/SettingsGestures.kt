@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -1022,7 +1023,11 @@ private fun PagedPalette(selected: Int, onPick: (Int) -> Unit) {
  * Tajny kod: vypnout zabrneni i zvuk a smazat vychozi gesto Zpet = odemkne Ctverecky, Hvezdicky i Barvy (Zpet se hned vrati).
  */
 @Composable
-fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}, onAlignArea: () -> Unit = {}) {
+fun GesturePanel(
+    onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}, onAlignArea: () -> Unit = {},
+    testMode: Boolean = false,           // TEST: panel je schovany, na miste tlacitek je jen zelene OK
+    onTest: (Boolean) -> Unit = {}
+) {
     val ctx = LocalContext.current
     var style by remember { mutableStateOf(AppSettings.gestureStyle.get()) }
     var squareOwned by remember { mutableStateOf(AppSettings.squareStyleOwned.get()) }
@@ -1046,6 +1051,7 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
     var pendingFn by remember { mutableStateOf<ButtonFunction?>(null) }
     var recordFor by remember { mutableStateOf<Int?>(null) }   // index prenahravaneho gesta, -1 = nove
     var open by remember { mutableStateOf(-1) }   // otevrena sekce: 0 vzhled, 1 odezva, 2 gesta, -1 zadna
+    var topButtonsW by remember { mutableStateOf(0) }   // sirka ULOZIT + TEST (px): stejne siroke je OK v testu
 
     fun persist() = Gestures.save(gestures.toList())
     fun ownedStyle(st: Int) = when (st) { 2 -> squareOwned; 3 -> starOwned; else -> true }
@@ -1088,7 +1094,22 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val maxPanel = maxHeight * 0.62f
-            Column(
+            // TEST: z panelu zbyde jen zelene OK na miste tlacitek ULOZIT + TEST (stejne siroke jako obe dohromady)
+            if (testMode) Row(
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 40.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .then(if (topButtonsW > 0) Modifier.width(with(LocalDensity.current) { topButtonsW.toDp() }) else Modifier)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(ACCENT)
+                        .clickable { onTest(false) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("OK", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+            } else Column(
                 Modifier
                     .fillMaxWidth()
                     .animateContentSize()
@@ -1102,16 +1123,28 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Gesta", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xE61E1E1E))
-                            .drawBehind {
-                                drawRoundRect(color = Color(0xFFFFA000), cornerRadius = CornerRadius(14.dp.toPx()), style = Stroke(width = 2.dp.toPx()))
-                            }
-                            .clickable(onClick = onClose)
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) { Text("Uložit a zavřít nastavení", color = Color(0xFFFFD600), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    Row(
+                        Modifier.onSizeChanged { topButtonsW = it.width },
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xE61E1E1E))
+                                .drawBehind {
+                                    drawRoundRect(color = Color(0xFFFFA000), cornerRadius = CornerRadius(14.dp.toPx()), style = Stroke(width = 2.dp.toPx()))
+                                }
+                                .clickable(onClick = onClose)
+                                .padding(horizontal = 18.dp, vertical = 10.dp)
+                        ) { Text("ULOŽIT", color = Color(0xFFFFD600), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF006AFF))   // modra appky (anonymni rezim)
+                                .clickable { onTest(true) }
+                                .padding(horizontal = 18.dp, vertical = 10.dp)
+                        ) { Text("TEST", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    }
                 }
                 // lista se tremi sipkami: otevrena muze byt vzdy jen jedna sekce
                 Row(

@@ -396,7 +396,8 @@ internal fun MainActivity.finishPullLoading() {
     v.postDelayed({ endPull(true) }, wait)
 }
 
-// Hlavni barva plochy: zelena, v anonymnim rezimu modra #006AFF (lupa, obrys pole, naseptavac, AdBlock, animace)
+// Hlavni barva plochy: zelena, v anonymnim rezimu modra #006AFF (lupa, obrys pole, naseptavac, AdBlock, animace,
+// tlacitko listy, lista a znak na kulicce gest)
 internal fun MainActivity.applyAccent(incognito: Boolean) {
     val c = if (incognito) 0xFF006AFF.toInt() else 0xFF00B055.toInt()
     if (accentState.value == c) return
@@ -405,6 +406,7 @@ internal fun MainActivity.applyAccent(incognito: Boolean) {
     d?.setTint(c)
     etSearchMain.setCompoundDrawablesRelativeWithIntrinsicBounds(d, null, null, null)
     applyAdBlockUi()
+    applySideAccent()
 }
 
 

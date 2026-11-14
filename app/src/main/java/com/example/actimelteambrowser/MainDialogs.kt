@@ -47,11 +47,13 @@ internal fun MainActivity.showStyledDialog(
     dimAmount: Float = 0.6f,
     strokeColor: Int? = null,
     topView: ((dismiss: () -> Unit) -> View)? = null,
+    onCancel: (() -> Unit)? = null,   // okno zavrene tlacitkem Zpet / klepnutim mimo (ne tlacitkem v okne)
     bodyBuilder: (dismiss: () -> Unit) -> View
 ) {
     val dialog = Dialog(this)
     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
     val dismiss = { dialog.dismiss() }
+    if (onCancel != null) dialog.setOnCancelListener { onCancel() }
 
     val card = LinearLayout(this)
     lastDialogCard = card
@@ -131,12 +133,13 @@ internal fun MainActivity.showWelcomeOnce() {
     if (AppSettings.welcomeShown.get()) return
     AppSettings.welcomeShown.set(true)
     window.decorView.post {
+        showFirstBackdrop()   // pozadi s UFO po celou dobu uvodniho nastaveni
         val pages = listOf(
             "Zdar, jsem rád, že ses dostal k téhle aplikaci! 😃\n\nAť máš představu, o co jde: tohle je jednoduchý, rychlý a CELOUŽIVATELSKY nastavitelný webový prohlížeč, který byl primárně dělaný pro YouTube bez reklam.",
             "Ve finále se z toho všeho stal propracovaný všestranný pomocník, který je buď super jednoduchý, nebo pro opravdu náročné uživatele.\n\nDoporučil bych věnovat prvních pár chvilek jednoduchému nastavení – čím víc si to nakonfiguruješ podle sebe, tím to budeš mít rychlejší."
         )
         var page = 0
-        showStyledDialog(title = "Úvod", positiveText = null, negativeText = null) { dismiss ->
+        showStyledDialog(title = "Úvod", positiveText = null, negativeText = null, dimAmount = 0.45f, onCancel = { hideFirstBackdrop() }) { dismiss ->
             val box = LinearLayout(this)
             box.orientation = LinearLayout.VERTICAL
 

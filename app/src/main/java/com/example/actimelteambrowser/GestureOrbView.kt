@@ -24,6 +24,10 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
     /** Vzhled, ktery se prave zkousi v nastaveni gest (zamceny vzor); null = ulozeny vzhled. */
     var styleOverride: Int? = null
 
+    /** Barva znaku: zelena, v anonymnim rezimu modra. */
+    var accent: Int = "#00B055".toColorInt()
+        set(v) { if (field != v) { field = v; dot.color = v; invalidate() } }
+
     private val d = resources.displayMetrics.density
     private val orbR = 28f * d
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)

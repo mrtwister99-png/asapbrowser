@@ -148,8 +148,10 @@ private fun MainActivity.stageDots(stage: Int, dismiss: () -> Unit): View {
 private fun MainActivity.choiceDialog(title: String, text: String, extra: View? = null, vararg buttons0: Pair<String, () -> Unit>, stage: Int = 0) {
     val buttons = if (stage > 1 && quickSeenEnd) arrayOf(*buttons0, "← Zpět" to { quickGo(stage - 1) }) else arrayOf(*buttons0)
     showStyledDialog(
-        title = title, negativeText = null, dimAmount = 0.8f, strokeColor = "#FFD600".toColorInt(),
-        topView = if (stage > 0) ({ d -> stageDots(stage, d) }) else null
+        // s pozadim s UFO staci mensi ztmaveni (jinak by UFO nebyla videt)
+        title = title, negativeText = null, dimAmount = if (firstBackdrop != null) 0.45f else 0.8f, strokeColor = "#FFD600".toColorInt(),
+        topView = if (stage > 0) ({ d -> stageDots(stage, d) }) else null,
+        onCancel = { quickSpotOff?.invoke(); hideFirstBackdrop() }
     ) { dismiss ->
         val body = LinearLayout(this)
         body.orientation = LinearLayout.VERTICAL
@@ -210,7 +212,7 @@ private fun MainActivity.askQuickSetup() {
         "Chceš si v pár krocích projít hlavní možnosti prohlížeče? Nebo to přeskoč – všechno zůstane ve výchozí podobě a nové věci ti ukážou žluté obrysy.",
         null,
         "Projdu si rychlé nastavení možností prohlížeče" to { quickStage1() },
-        "Přeskočit rychlé nastavení" to { startLiveTutorial() }
+        "Přeskočit rychlé nastavení" to { hideFirstBackdrop(); startLiveTutorial() }
     )
 }
 
@@ -397,7 +399,7 @@ private fun MainActivity.quickStage5() {
         "Záloha nastavení",
         "Veškeré nastavení si uložíš a můžeš zálohovat – nebo ho jednoduše pošleš na e-mail. Pak si ho stáhneš do telefonu a kdyžtak nahraješ zpět.\n\nNajdeš to v Nastavení → Export a Import.",
         null,
-        "Hotovo" to { quickSeenEnd = false; AppToast.show(this, "Rychlé nastavení hotové") },
+        "Hotovo" to { quickSeenEnd = false; hideFirstBackdrop(); AppToast.show(this, "Rychlé nastavení hotové") },
         stage = 5
     )
 }

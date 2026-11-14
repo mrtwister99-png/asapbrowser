@@ -467,7 +467,7 @@ class MainActivity : AppCompatActivity() {
         wireButtons()
         updateButtonVisuals()
         if (configMode) rebuildConfigPlus()   // tlacitka se postavila znovu -> "+" musi mit nove kotvy
-        if (gestureConfigMode) applyGestureConfigUi()   // znovu schovat tlacitka a listy (nastaveni gest)
+        if (gestureConfigMode && !gestureTestMode) applyGestureConfigUi()   // znovu schovat tlacitka a listy (nastaveni gest)
         chromeHidden = false   // po navratu jsou listy a tlacitka znovu postavena na vychozich mistech
         // prave pridane boci tlacitko se ~10 s svetle modre sytě problikava
         val hl = AppSettings.highlightButton.get()
@@ -573,6 +573,12 @@ class MainActivity : AppCompatActivity() {
     internal val gestPreviewStyle = mutableStateOf<Int?>(null)   // zamceny vzor (Ctverecky): jen nahled v editoru, neuklada se
     internal val gestResetKey = mutableIntStateOf(0)     // vraceni vychozi polohy plochy
     internal var gestScrim: View? = null
+    internal var gestBackdrop: View? = null           // pozadi s UFO (v TESTu schovane)
+    internal val gestTestState = mutableStateOf(false)   // TEST: panel pryc, plocha vypada jako pri beznem pouzivani, gesta jdou zkouset
+    internal val gestureTestMode: Boolean get() = gestTestState.value
+    internal var firstBackdrop: View? = null          // pozadi s UFO behem uvodniho nastaveni
+    // bocni tlacitka cela vysunuta: nastaveni tlacitek a nastaveni gest (v TESTu jsou zasunuta jako normalne)
+    internal val sideButtonsOut: Boolean get() = configMode || (gestureConfigMode && !gestureTestMode)
     internal var gestPanel: ComposeView? = null
     internal val gestHidden = HashMap<View, Int>()    // skryte prvky a jejich puvodni viditelnost
 
@@ -640,7 +646,7 @@ class MainActivity : AppCompatActivity() {
 
     // Zakladni poloha bocniho tlacitka: trvale zasunute; cele jen v konfiguracnich modech a u otevrene listy
     private fun sideBaseX(n: Int): Float =
-        if (!configMode && !gestureConfigMode && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
+        if (!sideButtonsOut && !(n == barOrigin && leftBarOpen)) hiddenX(n) else 0f
 
     // Schova / vrati horni a dolni listu a bocni tlacitka (vsechna, i pridana)
     internal fun setChromeHidden(hidden: Boolean) {
@@ -1036,6 +1042,7 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    gestureTestMode -> setGestureTest(false)   // z TESTu zpet do nastaveni gest
                     gestureConfigMode -> exitGestureConfig()
                     regionView != null -> removeRegionOverlay()
                     configMode -> exitConfigMode()

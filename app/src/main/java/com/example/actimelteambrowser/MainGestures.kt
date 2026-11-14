@@ -33,14 +33,15 @@ internal fun MainActivity.enterGestureConfig() {
     if (leftBarOpen) closeLeftBarAndHide()
     hideTabs()
     val parent = root as ViewGroup
-    val density = resources.displayMetrics.density
-    val bottomDp = ((bottomBar.height - lastSystemBottom) / density).toInt() + 16
 
-    // lehke ztmaveni (pohlti klepnuti do webu)
+    // pozadi: prechod cerna -> tmave seda se tremi UFO (nad webem, pod tlacitky a listami)
+    gestBackdrop = addSetupBackdrop(7, false)
+
+    // pruhledna vrstva: pohlti klepnuti do webu, list a tlacitek; v TESTu pusti dal jen dotyk na kulicku gest
     val scrim = View(this)
-    scrim.setBackgroundColor("#44000000".toColorInt())
     scrim.isClickable = true
-    scrim.elevation = dp(17).toFloat()   // i nad spodni listou: je videt, ale v nastaveni gest se na ni neklika
+    scrim.setOnTouchListener { _, ev -> gestureTestMode && gestureTestTouch(ev) }
+    scrim.elevation = dp(30).toFloat()   // nad listami i pruhy karet (20), pod plochou gest (35): vse je videt, ale neklika se na to
     val slp = ConstraintLayout.LayoutParams(0, 0)
     slp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
     slp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
@@ -49,21 +50,7 @@ internal fun MainActivity.enterGestureConfig() {
     parent.addView(scrim, slp)
     gestScrim = scrim
 
-    // editor plochy (pouziva stejny ComposeView jako samotna plocha gest)
-    gestureView.setContent {
-        @Suppress("UNUSED_VARIABLE", "unused") val tick = gestTick.intValue
-        GestureAreaEditor(
-            style = gestPreviewStyle.value ?: GestureLook.style(),
-            topLimitPx = gestAreaTopLimit.intValue,
-            bottomLimitPx = (bottomBar.height - lastSystemBottom).coerceAtLeast(0),
-            defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
-            bottomOffsetDp = bottomDp,
-            resetKey = gestResetKey.intValue,
-            onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) },
-            theme = GestureLook.theme(gestPreviewStyle.value ?: GestureLook.style())
-        )
-    }
-    gestureView.visibility = View.VISIBLE
+    showGestureEditor()
 
     // panel shora
     val panel = ComposeView(this)
@@ -77,7 +64,9 @@ internal fun MainActivity.enterGestureConfig() {
             },
             onClose = { exitGestureConfig() },
             onPreviewStyle = { gestPreviewStyle.value = it; orbView?.styleOverride = it; orbView?.invalidate() },
-            onAlignArea = { alignGestureAreaToOrb() }
+            onAlignArea = { alignGestureAreaToOrb() },
+            testMode = gestTestState.value,
+            onTest = { setGestureTest(it) }
         )
     }
     panel.elevation = dp(45).toFloat()
@@ -104,6 +93,81 @@ internal fun MainActivity.enterGestureConfig() {
     applyGestureConfigUi()
 }
 
+// Editor plochy gest (pouziva stejny ComposeView jako samotna plocha gest)
+private fun MainActivity.showGestureEditor() {
+    val density = resources.displayMetrics.density
+    val bottomDp = ((bottomBar.height - lastSystemBottom) / density).toInt() + 16
+    gestureView.setContent {
+        @Suppress("UNUSED_VARIABLE", "unused") val tick = gestTick.intValue
+        GestureAreaEditor(
+            style = gestPreviewStyle.value ?: GestureLook.style(),
+            topLimitPx = gestAreaTopLimit.intValue,
+            bottomLimitPx = (bottomBar.height - lastSystemBottom).coerceAtLeast(0),
+            defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
+            bottomOffsetDp = bottomDp,
+            resetKey = gestResetKey.intValue,
+            onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) },
+            theme = GestureLook.theme(gestPreviewStyle.value ?: GestureLook.style())
+        )
+    }
+    gestureView.visibility = View.VISIBLE
+}
+
+/**
+ * TEST v nastaveni gest: panel i pozadi zmizi, plocha vypada jako pri beznem pouzivani (horni a spodni lista, bocni
+ * tlacitka zasunuta) a z kulicky jde zkouset gesta - rozpoznane gesto se jen ohlasi, funkce se neprovede.
+ * Zpet do nastaveni vraci zelene OK (nebo tlacitko Zpet).
+ */
+internal fun MainActivity.setGestureTest(on: Boolean) {
+    if (!gestureConfigMode || gestureTestMode == on) return
+    gestTestState.value = on
+    testTouchActive = false
+    hideGestures()   // zavre editor / zkousenou plochu
+    if (on) {
+        gestBackdrop?.visibility = View.GONE
+        for ((v, vis) in gestHidden) v.visibility = vis
+        gestHidden.clear()
+    } else {
+        gestBackdrop?.visibility = View.VISIBLE
+        showGestureEditor()
+        applyGestureConfigUi()
+    }
+    for (n in listOf(5, 6) + extraViews.keys) buttonView(n)?.let { applySideMode(n, it) }
+    updateOrbTarget()
+}
+
+private var testTouchActive = false
+
+// Dotyk v TESTu: zacne-li na kulicce gest, otevre plochu a pokracuje na ni jednim tahem (jako pri beznem pouzivani)
+private fun MainActivity.gestureTestTouch(ev: android.view.MotionEvent): Boolean {
+    val wl = IntArray(2)
+    window.decorView.getLocationOnScreen(wl)
+    val x = ev.rawX - wl[0]
+    val y = ev.rawY - wl[1]
+    when (ev.actionMasked) {
+        android.view.MotionEvent.ACTION_DOWN -> {
+            val orb = orbView
+            val ol = IntArray(2)
+            orb?.getLocationInWindow(ol)
+            testTouchActive = orb != null && orb.isShown &&
+                x >= ol[0] && x <= ol[0] + orb.width && y >= ol[1] && y <= ol[1] + orb.height
+            if (testTouchActive) {
+                val down = com.example.actimelteambrowser.ui.ExternalTouch(x, y, 0, ++extSeq)
+                externalDown = down
+                if (!gestureView.isVisible) showGestures(test = true)
+                externalTouch.value = down
+            }
+        }
+        android.view.MotionEvent.ACTION_MOVE ->
+            if (testTouchActive) externalTouch.value = com.example.actimelteambrowser.ui.ExternalTouch(x, y, 1, ++extSeq)
+        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> if (testTouchActive) {
+            externalTouch.value = com.example.actimelteambrowser.ui.ExternalTouch(x, y, 2, ++extSeq)
+            testTouchActive = false
+        }
+    }
+    return true
+}
+
 // Skryje vse krome weboveho obsahu, kulicky gest, plochy a panelu (vola se i po onResume, ktery tlacitka obnovi)
 internal fun MainActivity.applyGestureConfigUi() {
     val parent = root as ViewGroup
@@ -116,7 +180,7 @@ internal fun MainActivity.applyGestureConfigUi() {
     for (i in 0 until parent.childCount) {
         val c = parent.getChildAt(i)
         // spodni lista s tlacitky zustava videt (plocha gest do ni nesmi)
-        if (c === gestScrim || c === gestPanel || c === gestureView || c === orbView || c === webTop || c === bottomBar) continue
+        if (c === gestScrim || c === gestBackdrop || c === gestPanel || c === gestureView || c === orbView || c === webTop || c === bottomBar) continue
         if (c.isVisible) {
             gestHidden[c] = View.VISIBLE
             c.visibility = View.INVISIBLE
@@ -127,7 +191,11 @@ internal fun MainActivity.applyGestureConfigUi() {
 internal fun MainActivity.exitGestureConfig() {
     if (!gestureConfigMode) return
     gestureConfigMode = false
+    gestTestState.value = false
+    testTouchActive = false
     val parent = root as ViewGroup
+    gestBackdrop?.let { parent.removeView(it) }
+    gestBackdrop = null
     gestPanel?.let { p ->
         p.animate().translationY(-p.height.toFloat()).setDuration(220).withEndAction { parent.removeView(p) }.start()
     }
@@ -151,7 +219,8 @@ internal fun MainActivity.exitGestureConfig() {
 
 // Otevre pruhlednou plochu pro gesta (vychozi vpravo dole, 9 je u tlacitka 6; poloha a velikost podle nastaveni)
 // demoBounds != null = ukazka: plocha nic neprovede ani nezavre, jen hlasi svou polohu (x, y, sirka, vyska v px)
-internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float) -> Unit)? = null) {
+// test = zkouseni v nastaveni gest: rozpoznane gesto se jen ohlasi (funkce se neprovede)
+internal fun MainActivity.showGestures(test: Boolean = false, demoBounds: ((Float, Float, Float, Float) -> Unit)? = null) {
     hideKeyboard()
     etSearchMain.clearFocus()
     etTopUrl.clearFocus()
@@ -177,7 +246,8 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
                     // vibrace pri rozpoznanem gestu
                     gestureTick(this)
                     hideGestures()
-                    performFunction(def.fn)
+                    if (test) AppToast.show(this, "Gesto funguje: ${def.fn.label}", false, AppToast.Kind.OK)
+                    else performFunction(def.fn)
                 }
             },
             external = externalTouch.value,
