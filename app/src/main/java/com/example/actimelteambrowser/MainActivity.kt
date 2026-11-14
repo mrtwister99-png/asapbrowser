@@ -199,12 +199,14 @@ class MainActivity : AppCompatActivity() {
             // web je mezi listami: nahore konci horni lista (status bar + 16 px + 52 dp), dole zacina spodni (nav bar + 16 px + 48 dp)
             lastSystemTopPx = systemBars.top
             updateWebPadding()
-            updateTabStrips()   // lista karet se pri klavesnici schova
             sideBarLeft?.visibility = if (imeVisible || !leftBarOpen) View.INVISIBLE else View.VISIBLE
 
             // bottomBar - kdyz je klavesnice, vysun nad ni
             lastImeShift = if (imeVisible) -(ime.bottom - systemBars.bottom).toFloat() else 0f
             for (v in extraViews.values) v.translationY = lastImeShift
+            // lista karet se pri klavesnici schova; az PO zmene lastImeShift (driv se volala pred ni a po zavreni
+            // klavesnice zustala lista schovana podle stareho stavu, dokud ji neobnovilo neco jineho)
+            updateTabStrips()
             if (imeVisible) {
                 bottomBar.translationY = -(ime.bottom - systemBars.bottom).toFloat()
                 // bocni taky nad klavesnici

@@ -18,6 +18,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -124,9 +130,9 @@ fun VaultScreen(onBack: () -> Unit) {
         }
         Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(end = 16.dp, top = 4.dp, bottom = 10.dp), horizontalArrangement = Arrangement.End) {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(V_ROW).border(1.dp, Color(0xFF555555), CircleShape).clickable { help = true },
+                Modifier.size(40.dp).clip(CircleShape).background(V_ROW).border(2.dp, V_YELLOW, CircleShape).clickable { help = true },
                 contentAlignment = Alignment.Center
-            ) { Text("?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("?", color = V_YELLOW, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
         }
     }
     if (help) VaultHelpOverlay(onClose = { help = false; AppSettings.vaultDemoSeen.set(true) })
@@ -170,52 +176,119 @@ private val HELP_STEPS = listOf(
     HelpStep("❓", "Nápověda je tu pořád", "Tuhle ukázku si kdykoli pustíš otazníkem vpravo dole.")
 )
 
-// Pruvodce trezorem: ztmaveni, karta se zlutym obrysem; klepnuti = dalsi (samo po 6 s), Preskocit = konec
+// Pruvodce trezorem: vlastni okno pres celou obrazovku (dotyky i tlacitko Zpet patri vzdy jemu - driv se na posledni
+// strance obcas "zasekl" a reagovalo jen systemove Zpet). Karta se zlutym obrysem; samo dal po 6 s,
+// sipky vlevo / vpravo = o krok zpet / dal, Preskocit a Hotovo = konec.
 @Composable
 private fun VaultHelpOverlay(onClose: () -> Unit) {
     var i by remember { mutableIntStateOf(0) }
     val last = HELP_STEPS.lastIndex
-    fun next() { if (i < last) i++ else onClose() }
-    BackHandler { onClose() }
+    var closed by remember { mutableStateOf(false) }
+    fun close() { if (!closed) { closed = true; onClose() } }
+    fun next() { if (i < last) i++ else close() }
+    fun prev() { if (i > 0) i-- }
     LaunchedEffect(i) { delay(6000); if (i < last) i++ }
     var blinkOn by remember { mutableStateOf(true) }
     LaunchedEffect(i) { if (i == last) while (true) { delay(350); blinkOn = !blinkOn } }
     val step = HELP_STEPS[i]
-    Box(
-        Modifier.fillMaxSize().background(Color(0xE0000000))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { next() }
+    Dialog(
+        onDismissRequest = { close() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Column(
-            Modifier.align(Alignment.Center).padding(horizontal = 28.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp)).background(Color(0xFF242424))
-                .border(2.dp, V_YELLOW, RoundedCornerShape(18.dp)).padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Box(
+            Modifier.fillMaxSize().background(Color(0xE0000000))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { next() }
         ) {
-            Text(step.icon, fontSize = 36.sp)
-            Text(step.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-            Text(step.text, color = Color(0xFFDDDDDD), fontSize = 15.sp, textAlign = TextAlign.Center)
-            Text("${i + 1} / ${HELP_STEPS.size}", color = V_MUTED, fontSize = 12.sp)
+            Column(
+                Modifier.align(Alignment.Center).padding(horizontal = 28.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp)).background(Color(0xFF242424))
+                    .border(2.dp, V_YELLOW, RoundedCornerShape(18.dp)).padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(step.icon, fontSize = 36.sp)
+                Text(step.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Text(step.text, color = Color(0xFFDDDDDD), fontSize = 15.sp, textAlign = TextAlign.Center)
+                Text("${i + 1} / ${HELP_STEPS.size}", color = V_MUTED, fontSize = 12.sp)
+            }
+            Column(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 70.dp).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // sipky: o krok zpet / dal (uzivatel se muze vratit a precist si krok znovu)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    @Composable
+                    fun Arrow(right: Boolean, enabled: Boolean, onClick: () -> Unit) {
+                        Box(
+                            Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(V_ROW)
+                                .border(1.dp, if (enabled) V_YELLOW else Color(0xFF3A3A3A), RoundedCornerShape(14.dp))
+                                .clickable(enabled = enabled, onClick = onClick),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.foundation.Image(
+                                androidx.compose.ui.res.painterResource(com.example.actimelteambrowser.R.drawable.ic_nav_back), null,
+                                modifier = Modifier.size(22.dp).then(if (right) Modifier.graphicsLayer { rotationZ = 180f } else Modifier),
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (enabled) V_YELLOW else Color(0xFF555555))
+                            )
+                        }
+                    }
+                    Arrow(false, i > 0) { prev() }
+                    Arrow(true, i < last) { next() }
+                }
+                // Preskocit (cerveny obrys) a Dalsi / Hotovo (zlute)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).border(2.dp, Color(0xFFE53935), RoundedCornerShape(14.dp)).clickable { close() },
+                        contentAlignment = Alignment.Center
+                    ) { Text("Přeskočit", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                    Box(
+                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).background(V_YELLOW).clickable { next() },
+                        contentAlignment = Alignment.Center
+                    ) { Text(if (i < last) "Další" else "Hotovo", color = Color(0xFF1A1A1A), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                }
+            }
+            // posledni krok: zluty blikajici krouzek kolem otazniku vpravo dole
+            if (i == last && blinkOn) Box(
+                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = 6.dp).size(48.dp)
+                    .border(3.dp, V_YELLOW, CircleShape)
+            )
         }
-        // dole: Preskocit (cerveny obrys) a Dalsi / Hotovo (zlute)
-        Row(
-            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 70.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).border(2.dp, Color(0xFFE53935), RoundedCornerShape(14.dp)).clickable(onClick = onClose),
-                contentAlignment = Alignment.Center
-            ) { Text("Přeskočit", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-            Box(
-                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).background(V_YELLOW).clickable { next() },
-                contentAlignment = Alignment.Center
-            ) { Text(if (i < last) "Další" else "Hotovo", color = Color(0xFF1A1A1A), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-        }
-        // posledni krok: zluty blikajici krouzek kolem otazniku vpravo dole
-        if (i == last && blinkOn) Box(
-            Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = 6.dp).size(48.dp)
-                .border(3.dp, V_YELLOW, CircleShape)
-        )
+    }
+}
+
+/** Tlacitko, ktere se musi drzet [seconds] s: zleva doprava se plni zlute, text "x s / 5 s"; pusteni driv = zpet na 0. */
+@Composable
+private fun HoldButton(seconds: Int, onDone: () -> Unit) {
+    val prog = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var done by remember { mutableStateOf(false) }
+    val shown = (prog.value * seconds).toInt().coerceIn(0, seconds)
+    Box(
+        Modifier
+            .padding(16.dp)
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(V_ACCENT)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown()
+                    val job = scope.launch {
+                        prog.animateTo(1f, androidx.compose.animation.core.tween(((1f - prog.value) * seconds * 1000).toInt(), easing = androidx.compose.animation.core.LinearEasing))
+                        if (!done) { done = true; onDone() }
+                    }
+                    waitForUpOrCancellation()
+                    if (!done) {
+                        job.cancel()
+                        scope.launch { prog.animateTo(0f, androidx.compose.animation.core.tween(300)) }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // zluta vypln zleva doprava podle casu drzeni
+        Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(prog.value).background(V_YELLOW))
+        Text("$shown s / $seconds s", color = V_ON_ACCENT, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -230,6 +303,57 @@ private fun VaultIntro(error: String?, onBack: () -> Unit, onStart: () -> Unit) 
             )
             if (error != null) Text(error, color = Color(0xFFEF5350), fontSize = 14.sp)
             BigButton("Vytvořit trezor", V_ACCENT, V_ON_ACCENT, onClick = onStart)
+            // co kdyz slova ztratim
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF2A1414))
+                    .border(1.dp, Color(0xFF7A2A2A), RoundedCornerShape(16.dp)).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("⚠ Když 12 slov ztratíš nebo zapomeneš", color = Color(0xFFFF8A80), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Bohužel se k tvému trezoru už nikdo nedostane – ani ty, ani já. Obnovit to nejde, protože klíč máš jen ty.",
+                    color = Color(0xFFDDDDDD), fontSize = 14.sp
+                )
+            }
+            // rozklikavaci otazka: kde jsou hesla a kdo je vidi
+            var faq by remember { mutableStateOf(false) }
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(V_PANEL)
+                    .clickable { faq = !faq }.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Kde jsou moje hesla a může je někdo vidět?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(if (faq) "▲" else "▼", color = V_YELLOW, fontSize = 14.sp)
+                }
+                if (faq) {
+                    Text("📱  Jen v tomhle telefonu", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Jméno a heslo, které si do trezoru uložíš, se zapíše jen do paměti tohoto telefonu – a to zašifrované. " +
+                            "Klíč k šifře vzniká z tvých 12 slov. Bez nich jsou data jen nečitelná změť znaků.",
+                        color = Color(0xFFDDDDDD), fontSize = 14.sp
+                    )
+                    Text("💾  Export = zašifrovaná záloha", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Když dáš Nastavení → Export a zaškrtneš trezor, uloží se do souboru tvůj trezor zašifrovaný tvými 12 slovy. " +
+                            "Samotná slova v souboru nejsou. Soubor si můžeš schovat kamkoli – kdo nezná slova, nic z něj nepřečte.",
+                        color = Color(0xFFDDDDDD), fontSize = 14.sp
+                    )
+                    Text("📲  Import = trezor zpátky", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Na novém telefonu dáš Import, vybereš soubor a zadáš svých 12 slov. Trezor se rozšifruje a máš ho zpátky. " +
+                            "Pokud budeš soubor uchovávat, budeš mít trezor vždycky uložený u sebe.",
+                        color = Color(0xFFDDDDDD), fontSize = 14.sp
+                    )
+                    Text("🚫  Žádný server", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Tvoje údaje se nikdy – ani při exportu a importu – neposílají na žádný server. Nemám je, nevidím je, " +
+                            "a proto je ani nemůžu zneužít já, ani nikdo jiný.",
+                        color = Color(0xFFDDDDDD), fontSize = 14.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -253,7 +377,11 @@ private fun VaultWords(phrase: String, onBack: () -> Unit, onNext: () -> Unit) {
                     }
                 }
             }
-            BigButton("Opsal jsem na papír", V_ACCENT, V_ON_ACCENT, onClick = onNext)
+            Text(
+                "Až budeš mít slova opsaná na papíře, podrž tlačítko 5 sekund.",
+                color = Color(0xFFCCCCCC), fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            )
+            HoldButton(5, onDone = onNext)
         }
     }
 }

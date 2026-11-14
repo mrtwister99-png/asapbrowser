@@ -394,7 +394,31 @@ private fun SettingsRoot(
         )
     }
     val found = remember(query) { if (query.isBlank()) emptyList() else index.filter { it.matches(query) } }
-    ScreenScaffold(title = "Nastavení", onBack = onBack) {
+    // vpravo nahore: zlute cislo = kolik reklam AdBlock celkem zablokoval; klepnuti = pochvala
+    var showBlocked by remember { mutableStateOf(false) }
+    val blocked = remember { AppSettings.totalBlocked.get() }
+    val fmtBlocked = remember(blocked) { java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("cs")).format(blocked) }
+    if (showBlocked) StyledDialog(
+        onDismissRequest = { showBlocked = false },
+        title = { Text("Zablokované reklamy") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text("Celkem jsme spolu zablokovali", color = Color(0xFFCCCCCC), fontSize = 15.sp)
+                Text(fmtBlocked, color = Color(0xFFFFD600), fontSize = 38.sp, fontWeight = FontWeight.Bold)
+                Text(if (blocked == 1) "reklamu!" else if (blocked in 2..4) "reklamy!" else "reklam!", color = Color(0xFFCCCCCC), fontSize = 15.sp)
+                Spacer(Modifier.height(14.dp))
+                Text("Dobrá práce!", color = Color(0xFF00B055), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        confirmButton = { TextButton(onClick = { showBlocked = false }) { Text("Díky") } },
+        dismissButton = {}
+    )
+    ScreenScaffold(title = "Nastavení", onBack = onBack, trailing = {
+        Box(
+            Modifier.clip(RoundedCornerShape(14.dp)).clickable { showBlocked = true }.padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) { Text(fmtBlocked, color = Color(0xFFFFD600), fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+    }) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it.take(60) },
