@@ -127,7 +127,8 @@ object AppSettings {
     // Bocni tlacitka (5, 6, 9-12) jsou trvale zasunuta za okraj: o kolik % sirky (50 nebo 70)
     val buttonRetract: List<IntSetting> = (1..12).map { IntSetting("btn${it}_retract", 50) }
     // Gesta: vzhled plochy (0 = ciselna klavesnice, 1 = kulicky), velikost v dp a seznam gest (JSON)
-    val gestureStyle = IntSetting("gesture_style", 0)
+    val gestureStyle = IntSetting("gesture_style", 1)   // vychozi kolecka (s UFO na kulicce a mini UFO pri projeti)
+    val gestureStyleChanged = BoolSetting("gesture_style_changed", false)   // uzivatel uz vzhled zmenil = UFO uz nema
     val gestureSize = IntSetting("gesture_size", 260)
     // Poloha a velikost plochy gest: "l,t,r,b" v tisicinach okna; prazdne = vychozi misto vpravo dole
     val gestureRect = StringSetting("gesture_rect", "")
@@ -225,7 +226,7 @@ object AppSettings {
         homeUrl, startupRestoreTabs
     ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
         listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, adBlockStrictSites, sitePermissions, totalBlocked, startShowFavorites,
-        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, gestureGlyphColor, gestureTrailColor, gestureTrail, gestureEffect, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
+        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, gestureGlyphColor, gestureTrailColor, gestureTrail, gestureEffect, gestureStyleChanged, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
 
     // Vsechna nastaveni pro kodovy export (SettingsCodes)
     val allSettings: List<Setting<*>> get() = all

@@ -102,9 +102,18 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
         val cy = height / 2f
         canvas.drawCircle(cx, cy, orbR, fill)
         // znak podle vzhledu plochy: cisla = vyrazne zelene G, kolecka = tecka, ctverecky = ctverecek, hvezdicky = hvezdicka
-        when (styleOverride ?: com.example.actimelteambrowser.ui.GestureLook.style()) {
+        val st = styleOverride ?: com.example.actimelteambrowser.ui.GestureLook.style()
+        // dokud uzivatel vzhled nezmenil: zelene UFO (raritni - po zmene vzhledu uz se nevrati)
+        val ufo = styleOverride == null && !com.example.actimelteambrowser.core.settings.AppSettings.gestureStyleChanged.get()
+        when (if (ufo) -1 else st) {
             0 -> {
-                // zelene UFO (raritni znak: ma ho jen ten, kdo si vzhled nezmeni)
+                letter.color = dot.color
+                letter.textSize = 30f * d
+                val fm = letter.fontMetrics
+                canvas.drawText("G", cx, cy - (fm.ascent + fm.descent) / 2f, letter)
+            }
+            -1 -> {
+                // zelene UFO
                 val r = 7.5f * d
                 canvas.drawOval(cx - r * 1.75f, cy - r * 0.15f, cx + r * 1.75f, cy + r * 0.85f, dot)
                 canvas.drawArc(cx - r * 0.9f, cy - r * 1.05f, cx + r * 0.9f, cy + r * 0.75f, 180f, 180f, true, dot)

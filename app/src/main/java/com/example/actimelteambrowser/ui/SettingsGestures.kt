@@ -502,8 +502,11 @@ object GestureLook {
 
     fun keyColors(): IntArray? = if (AppSettings.gestureColorsOwned.get()) rawKeyColors().takeIf { a -> a.any { it != 0 } } else null
 
+    /** Efekt projeti podle vzhledu: vychozi (nezmeneny vzhled) = mini UFO; jinak kruh / ctverecek / hvezdicky. */
+    fun autoEffect(style: Int): Int = if (!AppSettings.gestureStyleChanged.get()) 1 else when (style) { 2 -> 3; 3 -> 4; else -> 2 }
+
     /** Cely vzhled plochy podle nastaveni (barvy, spoj a efekt jen s odemcenymi Barvami). */
-    fun theme(): GestureTheme {
+    fun theme(forStyle: Int = style()): GestureTheme {
         val owned = AppSettings.gestureColorsOwned.get()
         return GestureTheme(
             areaBg = areaBg(),
@@ -511,7 +514,7 @@ object GestureLook {
             glyph = AppSettings.gestureGlyphColor.get().takeIf { owned && it != 0 }?.let { Color(it) },
             trail = AppSettings.gestureTrailColor.get().takeIf { owned && it != 0 }?.let { Color(it) } ?: GESTURE_GREEN,
             trailStyle = if (owned) AppSettings.gestureTrail.get().coerceIn(0, 7) else 0,
-            effect = if (owned) AppSettings.gestureEffect.get().coerceIn(-1, 4) else -1,
+            effect = AppSettings.gestureEffect.get().takeIf { owned && it in 0..4 } ?: autoEffect(forStyle),
             areaAlpha = areaAlpha(),
             keyAlpha = keyAlpha()
         )
@@ -565,8 +568,8 @@ fun GestureOverlay(
             val sz = sizeDp.toFloat()
             DpArea(if (right) wDp - 12f - sz else 12f, (hDp - bottomOffsetDp - sz).coerceAtLeast(0f), sz, sz)
         }
-        val aw = area.width.coerceAtLeast(120f)
-        val ah = area.height.coerceAtLeast(120f)
+        val aw = area.width.coerceIn(120f, maxOf(120f, wDp * 0.6f))
+        val ah = area.height.coerceIn(120f, maxOf(120f, androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f))
 
         GestureSurface(
             style = style,
@@ -1007,12 +1010,19 @@ fun GestureAreaEditor(
     bottomOffsetDp: Int,
     resetKey: Int,
     onChange: (GestureRect) -> Unit,
-    theme: GestureTheme = GestureTheme()
+    theme: GestureTheme = GestureTheme(),
+    topLimitPx: Int = 0,          // plocha nesmi pod zavreny panel gest
+    bottomLimitPx: Int = 0        // ani do spodni listy s tlacitky
 ) {
     val density = LocalDensity.current
+    val screenH = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0x55000000))) {
         val wPx = with(density) { maxWidth.toPx() }
         val hPx = with(density) { maxHeight.toPx() }
+        val minT = topLimitPx.toFloat().coerceIn(0f, hPx / 2f)
+        val maxB = (hPx - bottomLimitPx).coerceIn(hPx / 2f, hPx)
+        val maxW = wPx * 0.6f          // nejvetsi plocha: 60 % sirky a 50 % vysky displeje
+        val maxH = screenH * 0.5f
         val minPx = with(density) { 150.dp.toPx() }
         val handleR = with(density) { 11.dp.toPx() }
         val hitR = with(density) { 34.dp.toPx() }
@@ -1021,8 +1031,17 @@ fun GestureAreaEditor(
         // vychozi umisteni = jako drive: vpravo dole, ctvercova plocha
         fun initial(): FloatArray {
             val saved = GestureArea.parse(AppSettings.gestureRect.get())
-            if (saved != null) return floatArrayOf(saved.l / 1000f * wPx, saved.t / 1000f * hPx, saved.r / 1000f * wPx, saved.b / 1000f * hPx)
-            val s = with(density) { defaultSizeDp.dp.toPx() }
+            if (saved != null) {
+                // ulozena plocha se srovna do mezi (velikost, panel nahore, lista dole)
+                val w = (saved.r - saved.l) / 1000f * wPx
+                val h = (saved.b - saved.t) / 1000f * hPx
+                val cw = w.coerceIn(minOf(minPx, maxW), maxW)
+                val chh = h.coerceIn(minOf(minPx, maxH), minOf(maxH, maxB - minT))
+                val l = (saved.l / 1000f * wPx + (w - cw) / 2f).coerceIn(0f, wPx - cw)
+                val t = (saved.t / 1000f * hPx + (h - chh) / 2f).coerceIn(minT, maxB - chh)
+                return floatArrayOf(l, t, l + cw, t + chh)
+            }
+            val s = minOf(with(density) { defaultSizeDp.dp.toPx() }, maxW, maxH)
             val bottom = hPx - with(density) { bottomOffsetDp.dp.toPx() }
             if (Gestures.startKey() == 7) {
                 // tlacitko gest vlevo: plocha vlevo dole (klavesa 7 u tlacitka)
@@ -1086,17 +1105,17 @@ fun GestureAreaEditor(
                             val dy = ch.positionChange().y
                             if (hx == 0 && hy == 0) {
                                 rawL = (rawL + dx).coerceIn(0f, wPx - moveW)
-                                rawT = (rawT + dy).coerceIn(0f, hPx - moveH)
+                                rawT = (rawT + dy).coerceIn(minT, maxOf(minT, maxB - moveH))
                                 var nl = rawL
                                 var nt = rawT
                                 if (nl < snapPx) nl = 0f else if (wPx - moveW - nl < snapPx) nl = wPx - moveW
-                                if (nt < snapPx) nt = 0f else if (hPx - moveH - nt < snapPx) nt = hPx - moveH
+                                if (nt < minT + snapPx) nt = minT else if (maxB - moveH - nt < snapPx) nt = maxOf(minT, maxB - moveH)
                                 rl = nl; rr = nl + moveW; rt = nt; rb = nt + moveH
                             } else {
-                                if (hx == -1) rl = (rl + dx).coerceIn(0f, rr - minPx)
-                                if (hx == 1) rr = (rr + dx).coerceIn(rl + minPx, wPx)
-                                if (hy == -1) rt = (rt + dy).coerceIn(0f, rb - minPx)
-                                if (hy == 1) rb = (rb + dy).coerceIn(rt + minPx, hPx)
+                                if (hx == -1) rl = (rl + dx).coerceIn(maxOf(0f, rr - maxW), rr - minPx)
+                                if (hx == 1) rr = (rr + dx).coerceIn(rl + minPx, minOf(wPx, rl + maxW))
+                                if (hy == -1) rt = (rt + dy).coerceIn(maxOf(minT, rb - maxH), rb - minPx)
+                                if (hy == 1) rb = (rb + dy).coerceIn(rt + minPx, minOf(maxB, rt + maxH))
                             }
                             ch.consume()
                         } while (event.changes.any { it.pressed })
@@ -1256,6 +1275,11 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
     fun ownedStyle(st: Int) = when (st) { 2 -> squareOwned; 3 -> starOwned; else -> true }
 
     fun pickStyle(st: Int) {
+        if (ownedStyle(st) && (st != style || !AppSettings.gestureStyleChanged.get())) {
+            AppSettings.gestureStyleChanged.set(true)
+            AppSettings.gestureEffect.set(-1)   // novy vzhled = jeho efekt (vlastni efekt si s Barvami zase vybere)
+            effect = -1
+        }
         style = st
         if (ownedStyle(st)) { AppSettings.gestureStyle.set(st); onPreviewStyle(null) } else onPreviewStyle(st)
         onChanged()

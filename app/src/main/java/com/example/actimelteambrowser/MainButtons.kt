@@ -61,6 +61,8 @@ internal fun MainActivity.rebuildExtraButtons() {
             anchorId = b.id
         }
     }
+    // "+" zive napovedy byla ukotvena ke starym tlacitkum (po odebrani by "ulétla" nahoru): postavit znovu
+    if (tutorialPlus.isNotEmpty() || liveIds().any { it in 9..12 }) rebuildTutorialPlus(!configMode && liveIds().any { it in 9..12 })
 }
 
 // Tlacitko s funkci Gesta (kulicka, vychozi je 6): prst polozeny na kulicku hned ukaze plochu a dotyk pokracuje

@@ -243,45 +243,27 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                 Modifier.weight(1f).fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // vyberove tecky
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    for (p in 0..2) {
-                        Box(
-                            Modifier.size(36.dp).clip(CircleShape).clickable { goPage(p) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                Modifier.size(if (p == page) 14.dp else 10.dp).clip(CircleShape)
-                                    .background(if (p == page) Color(0xFFFFD600) else Color(0x66FFFFFF))
-                            )
-                        }
-                    }
-                }
-                Text(
-                    when (page) { 0 -> "Co chystáme dále"; 1 -> "Recenze"; else -> "Nahlásit chybu" },
-                    color = MUTED, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
                 if (page == 0) Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xD91E1E1E)).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text("Co chystáme dále?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "🛠  Na prohlížeči budu nadále pracovat a vylepšovat ho.",
-                        color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.example.actimelteambrowser.R.drawable.ic_tools), null, Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Na prohlížeči budu nadále pracovat a vylepšovat ho.", color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp)
+                    }
                     Text("V dalších aktualizacích se chystá:", color = Color(0xFFFFD600), fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    for ((icon, t) in listOf("📖" to "Slovník", "🏠" to "Ukládání adres", "🗂" to "Ukládání karet", "🎙" to "Ovládání hlasem")) {
+                    for ((icon, t) in listOf(
+                        com.example.actimelteambrowser.R.drawable.ic_dictionary to "Slovník",
+                        com.example.actimelteambrowser.R.drawable.ic_address to "Ukládání adres",
+                        com.example.actimelteambrowser.R.drawable.ic_credit_card to "Ukládání kreditních karet",
+                        com.example.actimelteambrowser.R.drawable.ic_mic to "Ovládání hlasem")) {
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x332A2A2A)).padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(icon, fontSize = 20.sp)
+                            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(icon), null, Modifier.size(24.dp))
                             Spacer(Modifier.width(12.dp))
                             Text(t, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
@@ -376,6 +358,32 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(16.dp))
+            }
+            // vyberove tecky: pevne dole pod formularem (vzdy na spodku obrazovky)
+            Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+                // vyberove tecky
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (p in 0..2) {
+                        Box(
+                            Modifier.size(36.dp).clip(CircleShape).clickable { goPage(p) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                Modifier.size(if (p == page) 14.dp else 10.dp).clip(CircleShape)
+                                    .background(if (p == page) Color(0xFFFFD600) else Color(0x66FFFFFF))
+                            )
+                        }
+                    }
+                }
+                Text(
+                    when (page) { 0 -> "Co chystáme dále"; 1 -> "Recenze"; else -> "Nahlásit chybu" },
+                    color = MUTED, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
     }

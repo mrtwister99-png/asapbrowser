@@ -18,6 +18,9 @@ import com.example.actimelteambrowser.core.settings.ButtonFunction
 import android.view.ViewGroup
 
 // Gesta: plocha, kulička a konfigurační mód gest (rozšíření MainActivity).
+
+// Horni hranice plochy v editoru = vyska zavreneho panelu gest (px v plose pod status barem)
+internal val gestAreaTopLimit = androidx.compose.runtime.mutableIntStateOf(0)
 internal fun MainActivity.enterGestureConfig() {
     if (gestureConfigMode) return
     if (configMode) exitConfigMode()
@@ -37,7 +40,7 @@ internal fun MainActivity.enterGestureConfig() {
     val scrim = View(this)
     scrim.setBackgroundColor("#44000000".toColorInt())
     scrim.isClickable = true
-    scrim.elevation = dp(7).toFloat()
+    scrim.elevation = dp(17).toFloat()   // i nad spodni listou: je videt, ale v nastaveni gest se na ni neklika
     val slp = ConstraintLayout.LayoutParams(0, 0)
     slp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
     slp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
@@ -51,11 +54,13 @@ internal fun MainActivity.enterGestureConfig() {
         @Suppress("UNUSED_VARIABLE", "unused") val tick = gestTick.intValue
         GestureAreaEditor(
             style = gestPreviewStyle.value ?: GestureLook.style(),
+            topLimitPx = gestAreaTopLimit.intValue,
+            bottomLimitPx = (bottomBar.height - lastSystemBottom).coerceAtLeast(0),
             defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
             bottomOffsetDp = bottomDp,
             resetKey = gestResetKey.intValue,
             onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) },
-            theme = GestureLook.theme()
+            theme = GestureLook.theme(gestPreviewStyle.value ?: GestureLook.style())
         )
     }
     gestureView.visibility = View.VISIBLE
@@ -84,6 +89,8 @@ internal fun MainActivity.enterGestureConfig() {
     parent.addView(panel, plp)
     gestPanel = panel
     panel.post {
+        // panel je na zacatku zavreny: jeho vyska = horni hranice plochy gest
+        gestAreaTopLimit.intValue = (panel.height - lastSystemTopPx).coerceAtLeast(0)
         panel.translationY = -panel.height.toFloat()
         panel.visibility = View.VISIBLE
         panel.animate().translationY(0f).setDuration(280).start()
@@ -107,7 +114,8 @@ internal fun MainActivity.applyGestureConfigUi() {
     }
     for (i in 0 until parent.childCount) {
         val c = parent.getChildAt(i)
-        if (c === gestScrim || c === gestPanel || c === gestureView || c === orbView || c === webTop) continue
+        // spodni lista s tlacitky zustava videt (plocha gest do ni nesmi)
+        if (c === gestScrim || c === gestPanel || c === gestureView || c === orbView || c === webTop || c === bottomBar) continue
         if (c.isVisible) {
             gestHidden[c] = View.VISIBLE
             c.visibility = View.INVISIBLE
