@@ -12,6 +12,7 @@ import com.example.actimelteambrowser.ui.GestureOverlay
 import com.example.actimelteambrowser.ui.GestureArea
 import com.example.actimelteambrowser.ui.GestureAreaEditor
 import com.example.actimelteambrowser.ui.GesturePanel
+import com.example.actimelteambrowser.ui.GestureLook
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.example.actimelteambrowser.core.settings.ButtonFunction
 import android.view.ViewGroup
@@ -49,12 +50,15 @@ internal fun MainActivity.enterGestureConfig() {
     gestureView.setContent {
         @Suppress("UNUSED_VARIABLE", "unused") val tick = gestTick.intValue
         GestureAreaEditor(
-            style = gestPreviewStyle.value ?: AppSettings.gestureStyle.get(),
+            style = gestPreviewStyle.value ?: GestureLook.style(),
             opacity = AppSettings.gestureOpacity.get() / 100f,
             defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
             bottomOffsetDp = bottomDp,
             resetKey = gestResetKey.intValue,
-            onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) }
+            onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) },
+            keyOpacity = GestureLook.keyAlpha(),
+            keyColors = GestureLook.keyColors(),
+            areaBg = GestureLook.areaBg()
         )
     }
     gestureView.visibility = View.VISIBLE
@@ -63,14 +67,14 @@ internal fun MainActivity.enterGestureConfig() {
     val panel = ComposeView(this)
     panel.setContent {
         GesturePanel(
-            onChanged = { gestTick.intValue += 1 },
+            onChanged = { gestTick.intValue += 1; orbView?.invalidate() },
             onResetArea = {
                 AppSettings.gestureRect.reset()
                 AppSettings.gestureSize.reset()
                 gestResetKey.intValue += 1
             },
             onClose = { exitGestureConfig() },
-            onPreviewStyle = { gestPreviewStyle.value = it },
+            onPreviewStyle = { gestPreviewStyle.value = it; orbView?.styleOverride = it; orbView?.invalidate() },
             onAlignArea = { alignGestureAreaToOrb() }
         )
     }
@@ -125,6 +129,8 @@ internal fun MainActivity.exitGestureConfig() {
     gestScrim?.let { parent.removeView(it) }
     gestScrim = null
     gestPreviewStyle.value = null   // zamceny vzor se neuklada
+    orbView?.styleOverride = null
+    orbView?.invalidate()
     orbView?.elevation = dp(20).toFloat()
     orbView?.alwaysShow = false
     for ((v, vis) in gestHidden) v.visibility = vis
@@ -143,8 +149,8 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
     etSearchMain.clearFocus()
     etTopUrl.clearFocus()
     val list = Gestures.load()
-    // Ctverecky jen kdyz jsou koupene (napr. import cizeho nastaveni je neodemkne)
-    val style = AppSettings.gestureStyle.get().let { if (it == 2 && !AppSettings.squareStyleOwned.get()) 0 else it }
+    // Ctverecky / Hvezdicky jen kdyz jsou odemcene (napr. import cizeho nastaveni je neodemkne)
+    val style = GestureLook.style()
     val size = AppSettings.gestureSize.get().coerceIn(180, 340)
     val density = resources.displayMetrics.density
     val bottomDp = ((bottomBar.height - lastSystemBottom) / density).toInt() + 16
@@ -169,7 +175,10 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
             externalDown = externalDown,
             onUnknown = { if (demoBounds == null) AppToast.show(this, "Neznámé gesto") },
             onSurfaceBounds = demoBounds,
-            showHints = demoBounds == null
+            showHints = demoBounds == null,
+            keyAlpha = GestureLook.keyAlpha(),
+            keyColors = GestureLook.keyColors(),
+            areaBg = GestureLook.areaBg()
         )
     }
     gestureView.visibility = View.VISIBLE

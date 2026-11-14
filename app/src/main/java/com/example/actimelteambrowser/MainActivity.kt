@@ -71,8 +71,15 @@ class MainActivity : AppCompatActivity() {
     internal val externalTouch = mutableStateOf<ExternalTouch?>(null)   // dotyk pokracujici z tlacitka 6
     internal var externalDown: ExternalTouch? = null
     internal var extSeq = 0L
-    internal var overviewIncognito = false            // prehled karet ukazuje anonymni (true) nebo bezne karty
-    internal var overviewGroups = false               // prehled karet ukazuje zalozku Skupiny
+    // stav prepinace v prehledu karet je Compose stav: prepnuti se prekresli, i kdyz se seznam dlazdic nezmeni
+    private val overviewIncognitoState = mutableStateOf(false)
+    private val overviewGroupsState = mutableStateOf(false)
+    internal var overviewIncognito: Boolean           // prehled karet ukazuje anonymni (true) nebo bezne karty
+        get() = overviewIncognitoState.value
+        set(v) { overviewIncognitoState.value = v }
+    internal var overviewGroups: Boolean              // prehled karet ukazuje zalozku Skupiny
+        get() = overviewGroupsState.value
+        set(v) { overviewGroupsState.value = v }
     internal var lastSystemBottom = 0
     internal val tabs = BrowserTabs()
     internal val tabTiles = mutableStateOf<List<TabTile>>(emptyList())
@@ -746,7 +753,8 @@ class MainActivity : AppCompatActivity() {
         wv.settings.javaScriptEnabled = true
         wv.settings.domStorageEnabled = true
         wv.addJavascriptInterface(CosmeticBridge(), "AtbCos")   // kosmeticke filtry (viz injectCosmetic)
-        wv.addJavascriptInterface(VaultBridge(this, tab), "AtbVault")   // trezor hesel: hlaseni odeslaneho prihlaseni (viz MainVault)
+        wv.addJavascriptInterface(VaultBridge(this, tab), "AtbVault")
+        wv.addJavascriptInterface(BlobDownloadBridge(this), "AtbDl")   // stahovani blob: souboru (napr. PDF vytvorene strankou)   // trezor hesel: hlaseni odeslaneho prihlaseni (viz MainVault)
         // bez setLayerType: WebView si vykresluje samo, hardwarova vrstva by drzela GPU pamet na kazdou kartu
         if (tab.incognito) {
             // anonymni karta: vlastni profil WebView = oddelene cookies, localStorage a cache od beznych karet
@@ -814,6 +822,7 @@ class MainActivity : AppCompatActivity() {
                 if (tab.id == tabs.activeId) updateAdBlockBadge()
                 injectYoutubeAdBlock(view, url)
                 injectCosmetic(view, url)
+                injectStrict(view, url)
             }
             // zmena historie (i u webu bez nacteni nove stranky) = sipky zpet / vpred sedi
             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
@@ -831,6 +840,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 injectYoutubeAdBlock(view, url)
                 injectCosmetic(view, url)
+                injectStrict(view, url)
                 rejectCookies(view)
                 vaultOnPageFinished(tab, view, url)   // trezor hesel: zachytavani prihlaseni + vyplneni
                 if (!tab.incognito) recordVisit(view, url)   // anonymni karta se do historie nezapisuje
@@ -846,7 +856,7 @@ class MainActivity : AppCompatActivity() {
         wv.isLongClickable = true
         wv.setOnLongClickListener { onWebLongPress(wv) }   // false = text/prazdne misto: vyber textu zustava systemu
         wv.setDownloadListener { dlUrl, userAgent, contentDisposition, mimeType, _ ->
-            startDownload(dlUrl, userAgent, contentDisposition, mimeType)
+            startDownload(dlUrl, userAgent, contentDisposition, mimeType, wv)
         }
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {

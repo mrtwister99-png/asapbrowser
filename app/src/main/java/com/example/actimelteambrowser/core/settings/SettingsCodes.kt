@@ -87,7 +87,7 @@ object SettingsCodes {
             sb.append(s.key).append('=').append(text).append('\n')
         }
         // kontrolni kod k poctu reklam a Ctvereckum: rucni prepsani v souboru se pri importu pozna
-        sb.append(SIG_KEY).append('=').append(rewardSig(AppSettings.totalBlocked.get(), AppSettings.squareStyleOwned.get())).append('\n')
+        sb.append(SIG_KEY).append('=').append(rewardSig(AppSettings.totalBlocked.get(), AppSettings.squareStyleOwned.get(), AppSettings.starStyleOwned.get(), AppSettings.gestureColorsOwned.get())).append('\n')
         }
 
         if ("za" in parts) {
@@ -123,6 +123,7 @@ object SettingsCodes {
             if (garr != null) for (i in 0 until garr.length()) {
                 val g = garr.optJSONObject(i) ?: continue
                 val m = g.optJSONArray("m") ?: continue
+                if (m.length() < 2) continue   // prazdna / jednokaretni skupina se neexportuje
                 val idx = (0 until m.length()).joinToString(",") { m.optInt(it).toString() }
                 sb.append("g ").append(g.optInt("c")).append('|').append(idx).append('|').append(oneLine(g.optString("n"))).append('\n')
             }
@@ -281,6 +282,8 @@ object SettingsCodes {
         var fileBlocked: Int? = null
         var fileSquare: Boolean? = null
         var fileSig: String? = null
+        var fileStar = false
+        var fileColors = false
         sec["nas"]?.forEach { l ->
             val i = l.indexOf('=')
             if (i <= 0) return@forEach
@@ -289,6 +292,8 @@ object SettingsCodes {
             when (k) {
                 AppSettings.totalBlocked.key -> { fileBlocked = v.toIntOrNull(); return@forEach }
                 AppSettings.squareStyleOwned.key -> { fileSquare = v == "1"; return@forEach }
+                AppSettings.starStyleOwned.key -> { fileStar = v == "1"; return@forEach }
+                AppSettings.gestureColorsOwned.key -> { fileColors = v == "1"; return@forEach }
                 SIG_KEY -> { fileSig = v.trim(); return@forEach }
             }
             val s = byKey[k] ?: return@forEach
@@ -304,10 +309,12 @@ object SettingsCodes {
         if (fileBlocked != null || fileSquare != null) {
             val b = fileBlocked ?: 0
             val q = fileSquare ?: false
-            if (fileSig != null && fileSig == rewardSig(b, q)) {
+            if (fileSig != null && fileSig == rewardSig(b, q, fileStar, fileColors)) {
                 // import pocet nikdy nesnizi a koupene Ctverecky nevezme
                 AppSettings.totalBlocked.set(maxOf(AppSettings.totalBlocked.get(), b))
                 if (q) AppSettings.squareStyleOwned.set(true)
+                if (fileStar) AppSettings.starStyleOwned.set(true)
+                if (fileColors) AppSettings.gestureColorsOwned.set(true)
                 count += 2
             } else rewardNote = " (počet zablokovaných reklam nebyl načten – soubor byl ručně upraven)"
         }
@@ -394,10 +401,12 @@ object SettingsCodes {
     }
 
     /** HMAC-SHA256 z hodnot, zkraceny na 24 hex znaku. Kdo zmeni cislo v souboru, nema jak spocitat novy kod. */
-    private fun rewardSig(blocked: Int, square: Boolean): String {
+    private fun rewardSig(blocked: Int, square: Boolean, star: Boolean = false, colors: Boolean = false): String {
         val mac = javax.crypto.Mac.getInstance("HmacSHA256")
         mac.init(javax.crypto.spec.SecretKeySpec(sigKey(), "HmacSHA256"))
-        val msg = "asap|total_blocked=$blocked|square_style_owned=${if (square) 1 else 0}"
+        var msg = "asap|total_blocked=$blocked|square_style_owned=${if (square) 1 else 0}"
+        // Hvezdicky a Barvy: pridaji se jen kdyz jsou odemcene (starsi soubory bez nich maji kod dal platny)
+        if (star || colors) msg += "|star_style_owned=${if (star) 1 else 0}|gesture_colors_owned=${if (colors) 1 else 0}"
         return mac.doFinal(msg.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
     }
 

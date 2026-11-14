@@ -88,6 +88,19 @@ private class DemoRegion(ctx: Context) : View(ctx) {
     }
 }
 
+/** Kolecko postupu ukazky: prazdny bily krouzek, ktery se plni zelene (p = 0..1). */
+private class DemoDot(ctx: Context) : View(ctx) {
+    var p = 0f
+    private val d = resources.displayMetrics.density
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.6f * d }
+    private val green = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = "#00B055".toColorInt() }
+    override fun onDraw(c: Canvas) {
+        val r = RectF(1.6f * d, 1.6f * d, width - 1.6f * d, height - 1.6f * d)
+        if (p > 0f) c.drawArc(r, -90f, 360f * p.coerceAtMost(1f), true, green)
+        c.drawOval(r, ring)
+    }
+}
+
 internal fun MainActivity.rectOf(v: View): RectF {
     val a = IntArray(2); val r = IntArray(2)
     v.getLocationInWindow(a); root.getLocationInWindow(r)
@@ -318,18 +331,163 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
 
     when (id) {
         7 -> {
-            // vizualne se prepne skutecne tlacitko AdBlock (nic se neulozi, stranka se nenacita znovu)
+            // Ukazka AdBlocku ve dvou castech (dve kolecka pod Preskocit se plni zelene):
+            //  1) klepnuti = vypnout / zapnout,  2) drzeni = pridat web k blokovani.
+            // Kazda cast: tip 3x problikne, tlacitko AdBlock 3x problikne, zelene "OK, pokračuj" 3x problikne a ceka na uzivatele.
             val orig = isAdBlockOn
             demoAdOrig = orig
             // ukazka zacina vzdy ze zapnuteho stavu: vypne a zase zapne (skutecny stav se po ukazce vrati)
             if (!isAdBlockOn) { isAdBlockOn = true; applyAdBlockUi() }
             fun flip() { isAdBlockOn = !isAdBlockOn; applyAdBlockUi(); AppToast.show(this, if (isAdBlockOn) "AdBlock zapnut" else "AdBlock vypnut") }
-            at(0) { say("AdBlock: klepnutím zapneš nebo vypneš blokování reklam"); moveTo(adBtn, 600) }
-            at(800) { tap() }
-            at(150) { flip() }
-            at(1900) { tap() }
-            at(150) { flip() }
-            at(2200) { endDemo() }
+            fun after(ms: Long, block: () -> Unit) { demoHandler.postDelayed({ if (demoRunning) block() }, ms) }
+
+            // Preskocit + "OK, pokračuj" vedle sebe, pod nimi dve kolecka
+            ov.removeView(skip)
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER
+            row.addView(skip)
+            val ok = TextView(this)
+            ok.text = "OK, pokračuj"
+            ok.setTextColor("#06281D".toColorInt())
+            ok.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            ok.setTypeface(ok.typeface, android.graphics.Typeface.BOLD)
+            ok.gravity = Gravity.CENTER
+            ok.setPadding(dp(24), dp(12), dp(24), dp(12))
+            val okBg = GradientDrawable()
+            okBg.setColor("#00B055".toColorInt())
+            okBg.cornerRadius = dp(22).toFloat()
+            ok.background = okBg
+            ok.visibility = View.GONE
+            val olp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            olp.marginStart = dp(12)
+            row.addView(ok, olp)
+            val rlp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+            rlp.bottomMargin = skipBottom + dp(16)
+            ov.addView(row, rlp)
+            (caption.layoutParams as FrameLayout.LayoutParams).bottomMargin = skipBottom + dp(88)
+            val dots = LinearLayout(this)
+            dots.orientation = LinearLayout.HORIZONTAL
+            val dot1 = DemoDot(this)
+            val dot2 = DemoDot(this)
+            for ((k, d) in listOf(dot1, dot2).withIndex()) {
+                val dl = LinearLayout.LayoutParams(dp(14), dp(14))
+                if (k == 1) dl.marginStart = dp(10)
+                dots.addView(d, dl)
+            }
+            val dlp2 = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+            dlp2.bottomMargin = skipBottom - dp(4)
+            ov.addView(dots, dlp2)
+
+            var gen = 0             // kazda faze ma sve cislo: staré problikavani se samo zastavi
+            var okAction: (() -> Unit)? = null
+            fun setOk(text: String, enabled: Boolean, action: (() -> Unit)?) {
+                ok.text = text
+                ok.visibility = View.VISIBLE
+                ok.alpha = if (enabled) 1f else 0.4f
+                okAction = if (enabled) action else null
+            }
+            ok.setOnClickListener { okAction?.let { a -> okAction = null; gen++; ok.animate().cancel(); ok.alpha = 0.4f; caption.animate().cancel(); caption.alpha = 1f; a() } }
+
+            // 3x probliknout: 0,25 s zmizi, 0,25 s se objevi, 1 s drzi
+            fun pulse(v: View, g: Int, n: Int, done: () -> Unit) {
+                if (!demoRunning || g != gen) return
+                if (n == 0) { done(); return }
+                v.animate().alpha(0f).setDuration(250).withEndAction {
+                    v.animate().alpha(1f).setDuration(250).withEndAction { after(1000) { pulse(v, g, n - 1, done) } }.start()
+                }.start()
+            }
+            // zluty ramecek pres tlacitko AdBlock (problikne stejne jako tip)
+            fun pulseButton(g: Int, done: () -> Unit) {
+                val r = screenRect(adBtn)
+                val b = IntArray(2); ov.getLocationOnScreen(b)
+                val frame = View(this)
+                val fgd = GradientDrawable()
+                fgd.setColor("#33FFD600".toColorInt())
+                fgd.cornerRadius = dp(18).toFloat()
+                fgd.setStroke(dp(3), "#FFD600".toColorInt())
+                frame.background = fgd
+                val pad = dp(4)
+                ov.addView(frame, FrameLayout.LayoutParams(r.width().toInt() + 2 * pad, r.height().toInt() + 2 * pad))
+                frame.translationX = r.left - b[0] - pad
+                frame.translationY = r.top - b[1] - pad
+                pulse(frame, g, 3) { ov.removeView(frame); done() }
+                // kdyz se faze prerusi, ramecek zmizi
+                after(6000) { if (g != gen) ov.removeView(frame) }
+            }
+            // uvod faze: tip -> tlacitko -> OK (kazde 3x), pak ceka na OK
+            fun intro(tip: String, okText: String, action: () -> Unit) {
+                val g = ++gen
+                caption.animate().cancel(); caption.alpha = 1f
+                say(tip)
+                after(700) {
+                    pulse(caption, g, 3) {
+                        pulseButton(g) {
+                            setOk(okText, true, action)
+                            pulse(ok, g, 3) { }
+                        }
+                    }
+                }
+            }
+            fun fill(d: DemoDot, ms: Long) {
+                val a = android.animation.ValueAnimator.ofFloat(0f, 1f)
+                a.duration = ms
+                a.addUpdateListener { d.p = it.animatedValue as Float; d.invalidate() }
+                a.start()
+            }
+            // prst se objevi uprostred obrazovky
+            fun fingerFromCenter() {
+                finger.animate().cancel()
+                finger.scaleX = 1f; finger.scaleY = 1f
+                finger.translationX = ov.width / 2f - fs / 2
+                finger.translationY = ov.height / 2f - fs / 2
+                finger.alpha = 0f
+                finger.animate().alpha(1f).setDuration(200).start()
+            }
+            fun fingerHide() { finger.animate().alpha(0f).setDuration(200).start() }
+
+            // cast 2: drzeni = okno pridani webu -> aktualni stranka -> OK -> vysvetleni
+            fun partTwo() {
+                setOk("OK, pokračuj", false, null)
+                fill(dot2, 7600)
+                fingerFromCenter()
+                after(250) { moveTo(adBtn, 650) }
+                after(1000) { holdFinger() }
+                after(1900) { releaseFinger(); fingerHide() }
+                after(2200) { openModal { showAdBlockSitesDialog(demo = true) } }
+                after(3100) { fingerFromCenter() }
+                after(3350) { demoTargets["site_current"]?.let { moveTo(it, 600) } }
+                after(4150) { press("site_current") }
+                after(5000) { demoTargets["site_ok"]?.let { moveTo(it, 550) } }
+                after(5800) { press("site_ok") }
+                after(6000) { raiseLayer() }   // vrstva s tlacitky nad okno s vysvetlenim
+                after(6300) { fingerHide() }
+                after(7700) {
+                    say("Hotovo – web se přidá k pravidlům (v ukázce se nic neuloží)")
+                    setOk("Hotovo", true) { endDemo() }
+                    val g = ++gen
+                    pulse(ok, g, 3) { }
+                }
+            }
+            // cast 1: klepnuti = vypnout (toast), pauza, znovu klepnuti = zapnout (toast)
+            fun partOne() {
+                setOk("OK, pokračuj", false, null)
+                fill(dot1, 5200)
+                fingerFromCenter()
+                after(250) { moveTo(adBtn, 650) }
+                after(1050) { tap() }
+                after(1200) { flip() }
+                after(1500) { fingerHide() }
+                after(3500) { fingerFromCenter() }
+                after(3750) { moveTo(adBtn, 650) }
+                after(4550) { tap() }
+                after(4700) { flip() }
+                after(5000) { fingerHide() }
+                after(5400) {
+                    intro("Podržením AdBlocku přidáš web, na kterém reklamy pořád prolézají", "OK, pokračuj") { partTwo() }
+                }
+            }
+            intro("AdBlock: klepnutím zapneš nebo vypneš blokování reklam", "OK, pokračuj") { partOne() }
         }
         103 -> {
             at(0) { say("Sdílet: pošli nebo zkopíruj adresu stránky"); moveTo(findViewById(R.id.ivUrlShare), 600) }

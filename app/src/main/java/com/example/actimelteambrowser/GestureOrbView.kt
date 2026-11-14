@@ -18,10 +18,18 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
     /** true = kulicka je videt, i kdyz je cilove tlacitko schovane (editor gest schova vsechna tlacitka) */
     var alwaysShow = false
 
+    /** Vzhled, ktery se prave zkousi v nastaveni gest (zamceny vzor); null = ulozeny vzhled. */
+    var styleOverride: Int? = null
+
     private val d = resources.displayMetrics.density
     private val orbR = 28f * d
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val letter = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+    }
+    private val path = android.graphics.Path()
     private var running = false
 
     init {
@@ -86,6 +94,28 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
         val cx = width / 2f
         val cy = height / 2f
         canvas.drawCircle(cx, cy, orbR, fill)
-        canvas.drawCircle(cx, cy, 7f * d, dot)
+        // znak podle vzhledu plochy: cisla = vyrazne zelene G, kolecka = tecka, ctverecky = ctverecek, hvezdicky = hvezdicka
+        when (styleOverride ?: com.example.actimelteambrowser.ui.GestureLook.style()) {
+            0 -> {
+                letter.color = dot.color
+                letter.textSize = 30f * d
+                val fm = letter.fontMetrics
+                canvas.drawText("G", cx, cy - (fm.ascent + fm.descent) / 2f, letter)
+            }
+            2 -> canvas.drawRect(cx - 8f * d, cy - 8f * d, cx + 8f * d, cy + 8f * d, dot)
+            3 -> {
+                path.reset()
+                for (k in 0 until 10) {
+                    val r = (if (k % 2 == 0) 13f else 5.6f) * d
+                    val a = Math.toRadians(-90.0 + k * 36.0)
+                    val x = cx + (r * Math.cos(a)).toFloat()
+                    val y = cy + 1f * d + (r * Math.sin(a)).toFloat()
+                    if (k == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+                canvas.drawPath(path, dot)
+            }
+            else -> canvas.drawCircle(cx, cy, 7f * d, dot)
+        }
     }
 }

@@ -176,7 +176,7 @@ internal fun MainActivity.showImageMenu(src: String) {
         "Obrázek",
         listOf(
             MainActivity.MenuRow("Nová karta", addr, R.drawable.ic_new_tab, true) { openInNewTab(src, false, background = true) },
-            MainActivity.MenuRow("Stáhnout", addr, R.drawable.ic_import) { startDownload(src, webView.settings.userAgentString, null, null) },
+            MainActivity.MenuRow("Stáhnout", addr, R.drawable.ic_import) { startDownload(src, webView.settings.userAgentString, null, null, webView) },
             MainActivity.MenuRow("Sdílet", addr, R.drawable.ic_share_url) { shareImage(src) }
         )
     )

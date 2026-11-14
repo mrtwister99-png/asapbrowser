@@ -4,7 +4,10 @@ package com.example.actimelteambrowser
  * Složka v přehledu karet: skupina karet (jejich id) s barvou. V přehledu se ukáže jako jedna dlaždice
  * na místě své první karty. Složka s méně než 2 kartami zaniká (viz TabManager.prune).
  */
-class TabGroup(val id: Long, val members: MutableList<Long>, var color: Int = 0xFFCDA24D.toInt(), var name: String = "")
+class TabGroup(
+    val id: Long, val members: MutableList<Long>, var color: Int = 0xFFCDA24D.toInt(), var name: String = "",
+    var keep: Boolean = false   // skupina zalozena tlacitkem "+ Nova skupina": zustava i prazdna / s jednou kartou
+)
 
 /**
  * Čistá logika složek a pořadí karet: žádný Android, žádný WebView, jen id karet.
@@ -34,7 +37,7 @@ class TabManager {
     /** Odebere zaniklé karty a zruší složky, které mají méně než 2 karty. */
     fun prune(aliveIds: Set<Long>) {
         for (g in groups) g.members.retainAll(aliveIds)
-        groups.removeAll { it.members.size < 2 }
+        groups.removeAll { it.members.size < 2 && !it.keep }
     }
 
     /** Vyjme karty ze všech složek (složky s méně než 2 kartami je pak potřeba zrušit přes prune). */

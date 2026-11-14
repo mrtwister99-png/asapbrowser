@@ -92,7 +92,8 @@ data class TabTile(
     val members: List<TabTile> = emptyList(),
     val folderColor: Int = 0xFFCDA24D.toInt(),  // barva slozky
     val folderName: String = "",                // nazev slozky (prazdny = "Složka")
-    val color: Int = 0                          // barva karty (kolecko vpravo dole); 0 = zadna
+    val color: Int = 0,                         // barva karty (kolecko vpravo dole); 0 = zadna
+    val keep: Boolean = false                   // rucne zalozena skupina: nezanika, ani kdyz v ni zbyde mene nez 2 karty
 )
 
 /** Titulek slozky: nazev (nebo "Složka") a pocet karet. */
@@ -207,7 +208,7 @@ fun TabsScreen(
     fun requestExtract(ids: List<Long>) {
         val f = openFolder ?: return
         if (dissolving) return
-        if (f.members.count { it.id !in ids } < 2) {
+        if (!f.keep && f.members.count { it.id !in ids } < 2) {
             pendingExtract = ids
             dissolving = true
         } else {
@@ -293,7 +294,7 @@ fun TabsScreen(
                 ) {
                     ModeChip("Běžné ($normalCount)", !incognito && !groupsMode, Modifier.weight(1f)) {}
                     ModeChip("Skupiny", groupsMode, Modifier.weight(1f), yellow = true) {}
-                    ModeChip("🕶 Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f), blue = true) {}
+                    ModeChip("Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f), blue = true) {}
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -341,7 +342,7 @@ fun TabsScreen(
                 ModeChip("Skupiny", groupsMode, Modifier.weight(1f).demoMark("tabs_groups"), yellow = true) {
                     endSelect(); openFolderId = null; onGroupsMode()
                 }
-                ModeChip("🕶 Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f).demoMark("tabs_incog"), blue = true) {
+                ModeChip("Anonymní ($incognitoCount)", incognito && !groupsMode, Modifier.weight(1f).demoMark("tabs_incog"), blue = true) {
                     endSelect(); openFolderId = null; onToggleIncognito(true)
                 }
             }
@@ -434,9 +435,14 @@ fun TabsScreen(
                 }
             }
 
-            if (tiles.isEmpty()) {
+            if (shown.isEmpty()) {
                 Text(
-                    if (incognito) "Žádné anonymní karty. Klepni na + NOVÁ KARTA." else "Žádné běžné karty. Klepni na + NOVÁ KARTA.",
+                    when {
+                        openFolder != null -> "Skupina je prázdná. Klepni na + NOVÁ KARTA."
+                        groupsMode -> "Žádné skupiny. Klepni na + NOVÁ SKUPINA."
+                        incognito -> "Žádné anonymní karty. Klepni na + NOVÁ KARTA."
+                        else -> "Žádné běžné karty. Klepni na + NOVÁ KARTA."
+                    },
                     color = MUTED, fontSize = 14.sp, modifier = Modifier.padding(16.dp)
                 )
             }
@@ -679,19 +685,20 @@ fun TabsScreen(
                     }
                 }
             } else {
+                val newGroupBtn = groupsMode && openFolder == null   // v otevrene skupine se pridava karta
                 Box(
                     Modifier
                         .padding(16.dp)
                         .fillMaxWidth()
                         .height(54.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (groupsMode) YELLOW else accent)
-                        .clickable { if (groupsMode) onNewGroup() else onNew(openFolderId) },
+                        .background(if (newGroupBtn) YELLOW else accent)
+                        .clickable { if (newGroupBtn) onNewGroup() else onNew(openFolderId) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        if (groupsMode) "+ NOVÁ SKUPINA" else "+ NOVÁ KARTA",
-                        color = if (groupsMode) Color(0xFF1A1A1A) else onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                        if (newGroupBtn) "+ NOVÁ SKUPINA" else "+ NOVÁ KARTA",
+                        color = if (newGroupBtn) Color(0xFF1A1A1A) else onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }

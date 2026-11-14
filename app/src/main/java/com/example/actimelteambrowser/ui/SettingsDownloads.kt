@@ -159,9 +159,49 @@ internal fun DownloadsScreen(onBack: () -> Unit) {
         delay(1000)
         tick++
     }
-    val dm = remember { ctx.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager }
+    // misto ulozeni: vychozi Stazene nebo slozka, kterou si uzivatel vybere (pristup k ni se pamatuje)
+    var folderLabel by remember { mutableStateOf(com.example.actimelteambrowser.data.DownloadsStore.folderLabel(ctx)) }
+    val pickFolder = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            ctx.contentResolver.takePersistableUriPermission(uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            // predchozi vybranou slozku uz nepotrebujeme
+            com.example.actimelteambrowser.data.DownloadsStore.folder(ctx)?.let { old ->
+                if (old != uri) runCatching { ctx.contentResolver.releasePersistableUriPermission(old,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            }
+            com.example.actimelteambrowser.core.settings.AppSettings.downloadFolder.set(uri.toString())
+            folderLabel = com.example.actimelteambrowser.data.DownloadsStore.folderLabel(ctx)
+            AppToast.show(ctx, "Soubory se budou ukládat do: $folderLabel")
+        }.onFailure { AppToast.show(ctx, "Tuhle složku nejde použít") }
+    }
 
     ScreenScaffold(title = "Stahování", onBack = onBack) {
+        Column(
+            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp)).background(PANEL).padding(14.dp)
+        ) {
+            Text("Místo uložení", color = MUTED, fontSize = 12.sp)
+            Text("📁  $folderLabel", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(12.dp)).background(ACCENT).clickable { runCatching { pickFolder.launch(null) } },
+                    contentAlignment = Alignment.Center
+                ) { Text("Vybrat složku", color = Color(0xFF06281D), fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                if (com.example.actimelteambrowser.data.DownloadsStore.folder(ctx) != null) Box(
+                    Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(12.dp)).background(ROW).clickable {
+                        com.example.actimelteambrowser.core.settings.AppSettings.downloadFolder.set("")
+                        folderLabel = com.example.actimelteambrowser.data.DownloadsStore.folderLabel(ctx)
+                        AppToast.show(ctx, "Soubory se budou ukládat do Stažených")
+                    },
+                    contentAlignment = Alignment.Center
+                ) { Text("Výchozí (Stažené)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
         if (loaded && items.isEmpty()) {
             EmptyText("Zatím nic nestaženo.\nSoubory se stahují podržením na odkazu nebo obrázku, případně klepnutím na odkaz na soubor.")
         }
@@ -181,7 +221,7 @@ internal fun DownloadsScreen(onBack: () -> Unit) {
                         .clickable(enabled = d.status == android.app.DownloadManager.STATUS_SUCCESSFUL) {
                             // otevrit stazeny soubor
                             try {
-                                val uri = dm.getUriForDownloadedFile(d.id)
+                                val uri = com.example.actimelteambrowser.data.DownloadsStore.openUri(ctx, d)
                                 val view = android.content.Intent(android.content.Intent.ACTION_VIEW)
                                 view.setDataAndType(uri, d.mime ?: "*/*")
                                 view.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -204,10 +244,9 @@ internal fun DownloadsScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (running) {
-                            Text("Zrušit", color = Color(0xFFEF5350), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            if (d.uri == null) Text("Zrušit", color = Color(0xFFEF5350), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.clickable {
-                                    try { dm.remove(d.id) } catch (e: Exception) { }
-                                    com.example.actimelteambrowser.data.DownloadsStore.forget(ctx, d.id)
+                                    com.example.actimelteambrowser.data.DownloadsStore.delete(ctx, d)
                                     tick++
                                 })
                         } else {
@@ -218,8 +257,7 @@ internal fun DownloadsScreen(onBack: () -> Unit) {
                                 })
                             Text("Smazat soubor", color = Color(0xFFEF5350), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.clickable {
-                                    try { dm.remove(d.id) } catch (e: Exception) { }
-                                    com.example.actimelteambrowser.data.DownloadsStore.forget(ctx, d.id)
+                                    com.example.actimelteambrowser.data.DownloadsStore.delete(ctx, d)
                                     tick++
                                 })
                         }

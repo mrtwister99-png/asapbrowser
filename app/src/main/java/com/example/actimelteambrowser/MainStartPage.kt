@@ -17,7 +17,8 @@ import android.view.ViewGroup
 
 // Úvodní stránka nové karty, náhledy a ikony webů, stahování souborů (rozšíření MainActivity).
 // Stahovani souboru ze stranky pres systemovy DownloadManager (notifikace, seznam v "Stahovani")
-internal fun MainActivity.startDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
+internal fun MainActivity.startDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, wv: WebView? = null) {
+    if (startSpecialDownload(url, contentDisposition, mimeType, wv)) return   // data: / blob: (PDF z tlacitka Stahnout apod.)
     if (!isWebUrl(url)) {
         AppToast.show(this, "Tenhle typ odkazu nejde stáhnout")
         return
@@ -30,14 +31,18 @@ internal fun MainActivity.startDownload(url: String, userAgent: String?, content
         if (!userAgent.isNullOrBlank()) req.addRequestHeader("User-Agent", userAgent)
         req.setTitle(name)
         req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        // vybrana slozka: DownloadManager do ni psat neumi -> stahne do slozky appky a po dokonceni se soubor presune
+        val folder = com.example.actimelteambrowser.data.DownloadsStore.folder(this)
+        if (folder != null) {
+            req.setDestinationInExternalFilesDir(this, android.os.Environment.DIRECTORY_DOWNLOADS, name)
         // Android 10+: verejna slozka Stazene; starsi: slozka appky (bez nutnosti povoleni uloziste)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             req.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name)
         } else {
             req.setDestinationInExternalFilesDir(this, android.os.Environment.DIRECTORY_DOWNLOADS, name)
         }
         val id = (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-        com.example.actimelteambrowser.data.DownloadsStore.track(this, id, name)
+        com.example.actimelteambrowser.data.DownloadsStore.track(this, id, name, folder?.toString())
         startDownloadPoll()
         AppToast.show(this, "Stahuji: $name")
     }.onFailure {

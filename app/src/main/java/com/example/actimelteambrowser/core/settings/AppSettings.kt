@@ -98,7 +98,10 @@ object AppSettings {
     val startShowFavorites = BoolSetting("start_show_favorites", false)   // nova karta: false = nejnavstevovanejsi, true = oblibene
     val totalBlocked = IntSetting("total_blocked", 0)                  // kolik reklam AdBlock zablokoval celkem (uvodni stranka)
     val squareStyleOwned = BoolSetting("square_style_owned", false)    // vzhled gest "Ctverecky" koupeny za 100 000 zablokovanych reklam
+    val starStyleOwned = BoolSetting("star_style_owned", false)        // vzhled gest "Hvezdicky" koupeny za 1 000 000 zablokovanych reklam
+    val gestureColorsOwned = BoolSetting("gesture_colors_owned", false) // barvy plochy gest (zatim jen tajnym kodem)
     val adBlockExceptions = StringSetting("adblock_exceptions", "")    // weby, kde je AdBlock vypnuty (domeny oddelene carkou)
+    val adBlockStrictSites = StringSetting("adblock_strict_sites", "") // weby s prisnejsim blokovanim (pridane drzenim AdBlocku)
     val sitePermissions = StringSetting("site_permissions", "")        // povoleni webu (JSON: domena -> {geo, cam, mic})
 
     // VPN (zatim jen prepinac, bez napojeni na skutecnou VPN)
@@ -130,6 +133,11 @@ object AppSettings {
     val gestureRect = StringSetting("gesture_rect", "")
     // Viditelnost plochy gest v %: 100 = plne videt, 0 = neviditelna (gesta funguji dal)
     val gestureOpacity = IntSetting("gesture_opacity", 100)
+    // Viditelnost klaves (cisla / kolecka / ...) v %; -1 = stejne jako plocha (puvodni chovani)
+    val gestureKeysOpacity = IntSetting("gesture_keys_opacity", -1)
+    // Barvy pod klavesami 1-9: "c1,...,c9" (ARGB, 0 = bez barvy) a barva cele plochy (0 = vychozi pruhledna)
+    val gestureKeyColors = StringSetting("gesture_key_colors", "")
+    val gestureAreaColor = IntSetting("gesture_area_color", 0)
     val gestureList = StringSetting("gesture_list", "")   // prazdne = vychozi gesta
     val gestureNewTabMigrated = BoolSetting("gesture_newtab_migrated", false)   // jednorazova zmena gesta "nova karta" 98741 -> 9852 (neexportuje se)
     val gestureIncognitoMigrated = BoolSetting("gesture_incognito_migrated", false)   // jednorazova migrace gesta "nove anonymni okno" (neexportuje se)
@@ -141,6 +149,7 @@ object AppSettings {
 
     // Seznam stahovani (JSON: id, nazev). NENI v `all` - do exportu nepatri.
     val downloadList = StringSetting("download_list", "")
+    val downloadFolder = StringSetting("download_folder", "")          // slozka pro stazene soubory (SAF strom); "" = Stazene. Neexportuje se (je vazana na telefon)
 
     // Zobrazeni tlacitek: 1-4 jsou stala, 5-8 si uzivatel muze skryt (odebrat), 9-12 se pridavaji/odebiraji zvlast
     val buttonEnabled: List<BoolSetting> = (1..12).map { BoolSetting("btn${it}_enabled", true) }
@@ -211,8 +220,8 @@ object AppSettings {
         vpnOn,
         homeUrl, startupRestoreTabs
     ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
-        listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, sitePermissions, totalBlocked, startShowFavorites,
-        squareStyleOwned, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
+        listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, adBlockStrictSites, sitePermissions, totalBlocked, startShowFavorites,
+        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
 
     // Vsechna nastaveni pro kodovy export (SettingsCodes)
     val allSettings: List<Setting<*>> get() = all
@@ -400,6 +409,9 @@ object Gestures {
         GestureDef("98752", ButtonFunction.NEW_INCOGNITO)
     )
 
+    /** Vychozi gesta pro aktualni stranu tlacitka gest. */
+    fun defaults(): List<GestureDef> = defaultsFor(startKey())
+
     fun valid(code: String): Boolean = code.length in 2..20 && code.all { it in '1'..'9' }
 
     /** Zrcadlove prevraceni kodu zleva doprava (1<->3, 4<->6, 7<->9; stred zustava). */
@@ -535,6 +547,42 @@ object SiteRules {
         val set = AppSettings.adBlockExceptions.get().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
         if (off) set.add(h) else set.remove(h)
         AppSettings.adBlockExceptions.set(set.sorted().take(500).joinToString(","))
+    }
+
+    private var sRaw = "\u0000"
+    private var sSet: Set<String> = emptySet()
+
+    /** Weby s prisnejsim blokovanim reklam (serazene). */
+    fun strictSites(): List<String> = AppSettings.adBlockStrictSites.get().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** true = na tomhle webu (nebo jeho subdomene) je zapnute prisnejsi blokovani. Vola se casto (i z pozadi). */
+    fun strict(host: String?): Boolean {
+        val raw = AppSettings.adBlockStrictSites.get()
+        if (raw != sRaw) {
+            sSet = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            sRaw = raw
+        }
+        if (sSet.isEmpty()) return false
+        val h = norm(host)
+        return h.isNotEmpty() && sSet.any { h == it || h.endsWith(".$it") }
+    }
+
+    fun setStrict(host: String?, on: Boolean) {
+        val h = norm(host)
+        if (h.isEmpty()) return
+        val set = strictSites().toMutableSet()
+        if (on) set.add(h) else set.remove(h)
+        AppSettings.adBlockStrictSites.set(set.sorted().take(500).joinToString(","))
+    }
+
+    /** Adresa nebo domena zadana rucne -> domena (bez www); null = neplatna. */
+    fun hostOf(input: String): String? {
+        var t = input.trim().lowercase()
+        if (t.isEmpty()) return null
+        if (!t.contains("://")) t = "https://$t"
+        val h = runCatching { java.net.URI(t).host }.getOrNull() ?: return null
+        val n = norm(h)
+        return if (n.contains('.') && n.all { it.isLetterOrDigit() || it == '.' || it == '-' }) n else null
     }
 
     private var dRaw = "\u0000"

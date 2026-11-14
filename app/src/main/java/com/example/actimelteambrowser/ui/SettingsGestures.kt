@@ -156,7 +156,11 @@ fun GestureSurface(
     instant: (String) -> Boolean = { false },       // true = gesto je jednoznacne, vyhodnotit hned po zvednuti
     external: ExternalTouch? = null,                 // pokracovani dotyku z tlacitka 6
     externalDown: ExternalTouch? = null,             // misto, kde dotyk zacal (aby se nezratila klavesa 9)
-    onBounds: ((Float, Float, Float, Float) -> Unit)? = null   // poloha a velikost plochy v okne (x, y, sirka, vyska v px) - pro ukazku
+    onBounds: ((Float, Float, Float, Float) -> Unit)? = null,  // poloha a velikost plochy v okne (x, y, sirka, vyska v px) - pro ukazku
+    areaBg: Color? = null,                           // barva plochy kreslena primo (null = pozadi dava modifier)
+    keyColors: IntArray? = null,                     // barvy pod klavesami 1-9 (0 = bez barvy)
+    areaAlpha: Float = 1f,                           // viditelnost plochy (pozadi a barvy pod klavesami)
+    keyAlpha: Float = 1f                             // viditelnost klaves a tahu prstem
 ) {
     val density = LocalDensity.current
     val sizePx = with(density) { sizeDp.dp.toPx() }
@@ -269,10 +273,21 @@ fun GestureSurface(
                 }
             }
     ) {
+        val ka = keyAlpha.coerceIn(0f, 1f)
+        val aa = areaAlpha.coerceIn(0f, 1f)
+        fun Color.k() = copy(alpha = alpha * ka)
+        // plocha: barva pozadi, pak barvy pod klavesami (vsech 9 obarvenych = cela plocha)
+        if (areaBg != null && aa > 0f) drawRect(areaBg.copy(alpha = areaBg.alpha * aa))
+        if (keyColors != null && aa > 0f) for (i in 0..8) {
+            val c = keyColors.getOrElse(i) { 0 }
+            if (c == 0) continue
+            drawRect(Color(c).copy(alpha = aa), topLeft = Offset((i % 3) * cw, (i / 3) * ch), size = Size(cw, ch))
+        }
         val numPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
         numPaint.textAlign = android.graphics.Paint.Align.CENTER
         numPaint.textSize = cell * 0.38f
         numPaint.color = android.graphics.Color.WHITE
+        numPaint.alpha = (255 * ka).toInt()
         numPaint.isFakeBoldText = true
 
         for (row in 0..2) {
@@ -287,11 +302,11 @@ fun GestureSurface(
                     val sz = Size(cw - 2 * pad, ch - 2 * pad)
                     val cr = CornerRadius(cell * 0.2f)
                     drawRoundRect(
-                        color = if (active) GESTURE_GREEN.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.12f),
+                        color = (if (active) GESTURE_GREEN.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.12f)).k(),
                         topLeft = tl, size = sz, cornerRadius = cr
                     )
                     drawRoundRect(
-                        color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.35f),
+                        color = (if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.35f)).k(),
                         topLeft = tl, size = sz, cornerRadius = cr, style = Stroke(width = 2.dp.toPx())
                     )
                     drawContext.canvas.nativeCanvas.drawText(n.toString(), cx, cy + numPaint.textSize * 0.35f, numPaint)
@@ -300,19 +315,24 @@ fun GestureSurface(
                     val half = cell * 0.26f
                     val tl = Offset(cx - half, cy - half)
                     val sz = Size(half * 2, half * 2)
-                    drawRect(color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.14f), topLeft = tl, size = sz)
+                    drawRect(color = (if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.14f)).k(), topLeft = tl, size = sz)
                     drawRect(
-                        color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.6f),
+                        color = (if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.6f)).k(),
                         topLeft = tl, size = sz, style = Stroke(width = 2.dp.toPx())
                     )
+                } else if (style == 3) {
+                    // Hvezdicky (zamceny vzor za 1 000 000 reklam)
+                    val star = starPath(Offset(cx, cy), cell * (if (active) 0.32f else 0.28f))
+                    drawPath(star, (if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.14f)).k())
+                    drawPath(star, (if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.6f)).k(), style = Stroke(width = 2.dp.toPx()))
                 } else {
                     drawCircle(
-                        color = if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.85f),
+                        color = (if (active) GESTURE_GREEN else Color.White.copy(alpha = 0.85f)).k(),
                         radius = cell * (if (active) 0.13f else 0.09f),
                         center = Offset(cx, cy)
                     )
                     drawCircle(
-                        color = if (active) GESTURE_GREEN.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.22f),
+                        color = (if (active) GESTURE_GREEN.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.22f)).k(),
                         radius = cell * 0.3f, center = Offset(cx, cy), style = Stroke(width = 1.5.dp.toPx())
                     )
                 }
@@ -321,19 +341,68 @@ fun GestureSurface(
         for (s in strokes) {
             for (i in 1 until s.size) {
                 drawLine(
-                    color = GESTURE_GREEN.copy(alpha = 0.9f),
+                    color = GESTURE_GREEN.copy(alpha = 0.9f * maxOf(ka, aa)),
                     start = s[i - 1], end = s[i], strokeWidth = 7.dp.toPx(), cap = StrokeCap.Round
                 )
             }
         }
-        finger?.let { drawCircle(Color.White.copy(alpha = 0.6f), 16.dp.toPx(), it) }
+        finger?.let { drawCircle(Color.White.copy(alpha = 0.6f * maxOf(ka, aa)), 16.dp.toPx(), it) }
+    }
+}
+
+/** Pevna hvezda s 5 cipy (vzhled plochy Hvezdicky a kulicka tlacitka gest). */
+internal fun starPath(c: Offset, r: Float): androidx.compose.ui.graphics.Path {
+    val p = androidx.compose.ui.graphics.Path()
+    for (k in 0 until 10) {
+        val rad = if (k % 2 == 0) r else r * 0.45f
+        val a = Math.toRadians(-90.0 + k * 36.0)
+        val x = c.x + (rad * kotlin.math.cos(a)).toFloat()
+        val y = c.y + (rad * kotlin.math.sin(a)).toFloat()
+        if (k == 0) p.moveTo(x, y) else p.lineTo(x, y)
+    }
+    p.close()
+    return p
+}
+
+/** Vzhled plochy gest podle nastaveni (zamcene vzory a barvy jen kdyz jsou odemcene). */
+object GestureLook {
+    const val SQUARE_PRICE = 100_000
+    const val STAR_PRICE = 1_000_000
+    val DEFAULT_BG = Color(0x33000000)
+
+    fun owned(style: Int): Boolean = when (style) {
+        2 -> AppSettings.squareStyleOwned.get()
+        3 -> AppSettings.starStyleOwned.get()
+        else -> true
+    }
+
+    /** Ulozeny vzhled; zamceny (napr. z importu cizeho nastaveni) = cisla. */
+    fun style(): Int = AppSettings.gestureStyle.get().let { if (it in 0..3 && owned(it)) it else 0 }
+
+    fun areaAlpha(): Float = AppSettings.gestureOpacity.get() / 100f
+    fun keyAlpha(): Float = AppSettings.gestureKeysOpacity.get().let { if (it < 0) AppSettings.gestureOpacity.get() else it } / 100f
+
+    fun rawKeyColors(): IntArray {
+        val out = IntArray(9)
+        AppSettings.gestureKeyColors.get().split(",").forEachIndexed { i, v -> if (i < 9) out[i] = v.trim().toIntOrNull() ?: 0 }
+        return out
+    }
+
+    fun saveKeyColors(c: IntArray) = AppSettings.gestureKeyColors.set(if (c.all { it == 0 }) "" else c.joinToString(","))
+
+    fun keyColors(): IntArray? = if (AppSettings.gestureColorsOwned.get()) rawKeyColors().takeIf { a -> a.any { it != 0 } } else null
+
+    fun areaBg(): Color {
+        val c = AppSettings.gestureAreaColor.get()
+        return if (c != 0 && AppSettings.gestureColorsOwned.get()) Color(c) else DEFAULT_BG
     }
 }
 
 /**
  * Pruhledna plocha pres cely web. Vychozi misto je vpravo dole (9 je u tlacitka 6); kdyz si uzivatel v konfiguracnim
  * modu plochu upravil, je podle rect (poloha a velikost). opacity = viditelnost plochy (gesta funguji i pri 0).
- * Klepnuti mimo plochu ji zavre.
+ * Plocha je vzdy na stejnem miste jako v editoru: zapis gesta je nad ni zvlast a nikdy ji neposune.
+ * Napoveda (gesta, ktera jdou dokreslit) je vzdy nahore. Klepnuti mimo plochu ji zavre.
  */
 @Composable
 fun GestureOverlay(
@@ -349,59 +418,16 @@ fun GestureOverlay(
     rect: GestureRect? = null,
     opacity: Float = 1f,
     onSurfaceBounds: ((Float, Float, Float, Float) -> Unit)? = null,
-    showHints: Boolean = true                       // nahore seznam gest, ktera jdou dokreslit (v ukazce vypnuto)
+    showHints: Boolean = true,                      // nahore seznam gest, ktera jdou dokreslit (v ukazce vypnuto)
+    keyAlpha: Float = opacity,
+    keyColors: IntArray? = null,
+    areaBg: Color = GestureLook.DEFAULT_BG
 ) {
     var progress by remember { mutableStateOf("") }
     val matched = gestures.firstOrNull { it.code == progress }
     // gesta, ktera zacinaji tim, co uz je nakreslene (na zacatku vsechna)
     val possible = gestures.filter { it.code.startsWith(progress) }
-
-    @Composable
-    fun Content(w: Int, h: Int, align: Alignment.Horizontal) {
-        Column(horizontalAlignment = align) {
-            if (progress.isEmpty()) {
-                Text(
-                    "Nakresli gesto – začni " + Gestures.startText(),
-                    color = Color(0xCCFFFFFF), fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp, end = 4.dp)
-                )
-            } else {
-                // co uzivatel prave zadava: zlute nad plochou (kod + funkce, kdyz uz nejaka odpovida)
-                Text(
-                    progress.toCharArray().joinToString(" › "),
-                    color = GESTURE_YELLOW, fontSize = 26.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(end = 4.dp)
-                )
-                Text(
-                    matched?.fn?.label ?: if (possible.isEmpty()) "Takové gesto není" else "…",
-                    color = if (possible.isEmpty() && matched == null) Color(0xFFFF6B6B) else GESTURE_YELLOW,
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp, end = 4.dp)
-                )
-            }
-            GestureSurface(
-                style = style,
-                sizeDp = w,
-                heightDp = h,
-                modifier = Modifier
-                    .alpha(opacity.coerceIn(0f, 1f))
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color(0x33000000)),
-                onProgress = { progress = it },
-                instant = { c -> gestures.any { it.code == c } && gestures.none { it.code != c && it.code.startsWith(c) } },
-                external = external,
-                externalDown = externalDown,
-                onBounds = onSurfaceBounds,
-                onComplete = { c ->
-                    // jedna klavesa (napr. jen klepnuti na tlacitko 6) neni gesto - plocha zustane otevrena
-                    if (c.length >= 2) {
-                        val m = gestures.firstOrNull { it.code == c }
-                        if (m != null) onMatch(m) else onUnknown()
-                    }
-                }
-            )
-        }
-    }
+    val right = Gestures.startKey() != 7   // zapis gesta u strany tlacitka gest
 
     BoxWithConstraints(
         Modifier
@@ -409,26 +435,103 @@ fun GestureOverlay(
             .background(Color(0x99000000))
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismiss() }
     ) {
-        // napoveda: gesta, ktera jdou z toho, co je uz nakreslene, dokoncit (nahore; kdyz je plocha nahore, tak dole)
+        val wDp = maxWidth.value
+        val hDp = maxHeight.value
+        // presne stejne misto jako v editoru plochy (GestureAreaEditor)
+        val area = if (rect != null) areaDp(rect, wDp, hDp) else {
+            val sz = sizeDp.toFloat()
+            DpArea(if (right) wDp - 12f - sz else 12f, (hDp - bottomOffsetDp - sz).coerceAtLeast(0f), sz, sz)
+        }
+        val aw = area.width.coerceAtLeast(120f)
+        val ah = area.height.coerceAtLeast(120f)
+
+        GestureSurface(
+            style = style,
+            sizeDp = aw.toInt(),
+            heightDp = ah.toInt(),
+            modifier = Modifier
+                .offset(x = area.left.dp, y = area.top.dp)
+                .clip(RoundedCornerShape(24.dp)),
+            areaBg = areaBg,
+            keyColors = keyColors,
+            areaAlpha = opacity,
+            keyAlpha = keyAlpha,
+            onProgress = { progress = it },
+            instant = { c -> gestures.any { it.code == c } && gestures.none { it.code != c && it.code.startsWith(c) } },
+            external = external,
+            externalDown = externalDown,
+            onBounds = onSurfaceBounds,
+            onComplete = { c ->
+                // jedna klavesa (napr. jen klepnuti na tlacitko 6) neni gesto - plocha zustane otevrena
+                if (c.length >= 2) {
+                    val m = gestures.firstOrNull { it.code == c }
+                    if (m != null) onMatch(m) else onUnknown()
+                }
+            }
+        )
+
+        // zapis gesta: pevny pruh nad plochou (kdyz nahore neni misto, tak pod ni), zarovnany k okraji plochy u tlacitka
+        val labelH = 72f
+        val above = area.top >= labelH
+        val labelTop = if (above) area.top - labelH else (area.top + ah).coerceAtMost(hDp - labelH)
+        Box(
+            Modifier
+                .offset(y = labelTop.dp)
+                .fillMaxWidth()
+                .height(labelH.dp)
+                .padding(
+                    start = if (right) 8.dp else area.left.dp,
+                    end = if (right) (wDp - area.left - aw).coerceAtLeast(0f).dp else 8.dp
+                ),
+            contentAlignment = when {
+                above && right -> Alignment.BottomEnd
+                above -> Alignment.BottomStart
+                right -> Alignment.TopEnd
+                else -> Alignment.TopStart
+            }
+        ) {
+            Column(
+                horizontalAlignment = if (right) Alignment.End else Alignment.Start,
+                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp)
+            ) {
+                if (progress.isEmpty()) {
+                    Text(
+                        "Nakresli gesto – začni " + Gestures.startText(),
+                        color = Color(0xCCFFFFFF), fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                    )
+                } else {
+                    // co uzivatel prave zadava: zlute (kod + funkce, kdyz uz nejaka odpovida)
+                    Text(
+                        progress.toCharArray().joinToString(" › "),
+                        color = GESTURE_YELLOW, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                    )
+                    Text(
+                        matched?.fn?.label ?: if (possible.isEmpty()) "Takové gesto není" else "…",
+                        color = if (possible.isEmpty() && matched == null) Color(0xFFFF6B6B) else GESTURE_YELLOW,
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                    )
+                }
+            }
+        }
+
+        // napoveda: gesta, ktera jdou z toho, co je uz nakreslene, dokoncit - vzdy nahore, vetsi
         if (showHints && possible.isNotEmpty()) {
-            val areaTop = rect?.let { it.t / 1000f } ?: 1f
             Column(
                 Modifier
-                    .align(if (areaTop < 0.45f) Alignment.BottomCenter else Alignment.TopCenter)
-                    .systemBarsPadding()
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
                     .fillMaxWidth()
-                    .heightIn(max = (maxHeight.value * 0.42f).dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xCC141414))
+                    .heightIn(max = (hDp * 0.45f).dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xD9141414))
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 for (g in possible) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        GesturePathPreview(g.code, Modifier.size(30.dp))
-                        Spacer(Modifier.width(10.dp))
+                        GesturePathPreview(g.code, Modifier.size(40.dp))
+                        Spacer(Modifier.width(12.dp))
                         // uz nakreslena cast kodu zlute, zbytek bile
                         Text(
                             androidx.compose.ui.text.buildAnnotatedString {
@@ -438,28 +541,11 @@ fun GestureOverlay(
                                 val rest = g.code.drop(progress.length)
                                 if (rest.isNotEmpty()) append((if (progress.isNotEmpty()) "-" else "") + codeText(rest))
                             },
-                            color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(110.dp)
+                            color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(150.dp)
                         )
-                        Text(g.fn.label, color = Color(0xFFCCCCCC), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(g.fn.label, color = Color(0xFFDDDDDD), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-            }
-        }
-        if (rect == null) {
-            // vychozi misto podle tlacitka gest: vlevo (klavesa 7) nebo vpravo (klavesa 9)
-            val left = Gestures.startKey() == 7
-            Box(
-                Modifier
-                    .align(if (left) Alignment.BottomStart else Alignment.BottomEnd)
-                    .padding(start = 12.dp, end = 12.dp, bottom = bottomOffsetDp.dp)
-            ) {
-                Content(sizeDp, sizeDp, if (left) Alignment.Start else Alignment.End)
-            }
-        } else {
-            val area = areaDp(rect, maxWidth.value, maxHeight.value)
-            // nadpis nad plochou (kdyz je plocha uplne nahore, je pres ni)
-            Box(Modifier.offset(x = area.left.dp, y = (area.top - 28f).coerceAtLeast(0f).dp)) {
-                Content(area.width.toInt().coerceAtLeast(120), area.height.toInt().coerceAtLeast(120), Alignment.Start)
             }
         }
     }
@@ -787,7 +873,10 @@ fun GestureAreaEditor(
     defaultSizeDp: Int,
     bottomOffsetDp: Int,
     resetKey: Int,
-    onChange: (GestureRect) -> Unit
+    onChange: (GestureRect) -> Unit,
+    keyOpacity: Float = opacity,
+    keyColors: IntArray? = null,
+    areaBg: Color = GestureLook.DEFAULT_BG
 ) {
     val density = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0x55000000))) {
@@ -826,9 +915,12 @@ fun GestureAreaEditor(
             heightDp = ((rb - rt) / density.density).toInt().coerceAtLeast(1),
             modifier = Modifier
                 .offset { IntOffset(rl.roundToInt(), rt.roundToInt()) }
-                .alpha(maxOf(opacity, 0.3f))   // v editoru je plocha videt aspon slabe, i kdyz je viditelnost 0
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color(0x33000000)),
+                .clip(RoundedCornerShape(24.dp)),
+            // v editoru je plocha videt aspon slabe, i kdyz je viditelnost 0
+            areaBg = areaBg,
+            keyColors = keyColors,
+            areaAlpha = maxOf(opacity, 0.3f),
+            keyAlpha = maxOf(keyOpacity, 0.3f),
             onComplete = {}
         )
 
@@ -911,29 +1003,132 @@ fun GestureAreaEditor(
  * Panel, ktery se pri nastaveni gest vysune shora: vzhled plochy, viditelnost, odezva, poloha a seznam gest.
  * Je scrollovaci. onChanged = zmena se projevila (editor se prekresli), onResetArea = vratit polohu a velikost plochy.
  */
-/** Cena vzhledu Ctverecky: pocet zablokovanych reklam. */
-private const val SQUARE_PRICE = 100_000
+/** Nadpis sekce panelu gest. */
+@Composable
+private fun PanelLabel(text: String) = Text(text, color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
 
+/** Sipka (stejna jako zpet / dal ve spodnim poli): zavreno = dolu, otevreno = nahoru. */
+@Composable
+private fun OpenArrow(open: Boolean, tint: Color = Color.White, sizeDp: Int = 16) {
+    val rot by androidx.compose.animation.core.animateFloatAsState(if (open) 90f else -90f, label = "arrow")
+    Image(
+        painterResource(R.drawable.ic_nav_back), null,
+        modifier = Modifier.size(sizeDp.dp).graphicsLayer { rotationZ = rot },
+        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint)
+    )
+}
+
+/** Prepinac v panelu (zabrneni, zvuk). */
+@Composable
+private fun PanelSwitch(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** Siroke tlacitko v panelu. */
+@Composable
+private fun PanelButton(text: String, bg: Color = ROW, fg: Color = Color.White, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).background(bg).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Text(text, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+}
+
+/** Vyber barvy: "bez barvy" + vsechny barvy karet. */
+@Composable
+private fun ColorGrid(selected: Int, onPick: (Int) -> Unit) {
+    val all = listOf(0) + com.example.actimelteambrowser.TabColors.ALL
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (row in all.chunked(8)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (c in row) {
+                    Box(
+                        Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(if (c == 0) Color(0xFF151515) else Color(c))
+                            .border(if (c == selected) 3.dp else 1.dp, if (c == selected) Color.White else Color(0x55FFFFFF), CircleShape)
+                            .clickable { onPick(c) },
+                        contentAlignment = Alignment.Center
+                    ) { if (c == 0) Text("✕", color = MUTED, fontSize = 12.sp) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Panel, ktery se pri nastaveni gest vysune shora. Nahore tri samostatne otviraci sekce (sipky):
+ *  Vzhled (styl, viditelnost plochy a klaves, poloha), Odezva a barvy (zabrneni, zvuk, barvy - zamcene), Gesta (seznam).
+ * Tajny kod: vypnout zabrneni i zvuk a smazat vychozi gesto Zpet = odemkne Ctverecky, Hvezdicky i Barvy.
+ */
 @Composable
 fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> Unit, onPreviewStyle: (Int?) -> Unit = {}, onAlignArea: () -> Unit = {}) {
+    val ctx = LocalContext.current
     var style by remember { mutableStateOf(AppSettings.gestureStyle.get()) }
-    var owned by remember { mutableStateOf(AppSettings.squareStyleOwned.get()) }   // Ctverecky koupene
+    var squareOwned by remember { mutableStateOf(AppSettings.squareStyleOwned.get()) }
+    var starOwned by remember { mutableStateOf(AppSettings.starStyleOwned.get()) }
+    var colorsOwned by remember { mutableStateOf(AppSettings.gestureColorsOwned.get()) }
     var opacity by remember { mutableStateOf(AppSettings.gestureOpacity.get()) }
+    var keysOpacity by remember { mutableStateOf((GestureLook.keyAlpha() * 100).roundToInt()) }
     var hapticOn by remember { mutableStateOf(AppSettings.gestureHaptic.get()) }
     var soundOn by remember { mutableStateOf(AppSettings.gestureSound.get()) }
+    var areaColor by remember { mutableStateOf(AppSettings.gestureAreaColor.get()) }
+    val keyColors = remember { mutableStateListOf<Int>().apply { addAll(GestureLook.rawKeyColors().toList()) } }
+    var colorKey by remember { mutableStateOf(-1) }        // vybrana klavesa pro barvu (-1 = plocha)
+    var colorsOpen by remember { mutableStateOf(false) }
     val gestures = remember { mutableStateListOf<GestureDef>().apply { addAll(Gestures.load()) } }
     var pickFunction by remember { mutableStateOf(false) }
     var pendingFn by remember { mutableStateOf<ButtonFunction?>(null) }
     var recordFor by remember { mutableStateOf<Int?>(null) }   // index prenahravaneho gesta, -1 = nove
-    var minimized by remember { mutableStateOf(false) }   // true = z panelu zustane jen hlavicka (plocha je pak lepe videt a jde upravit)
+    // tri sekce, kazda se otevira zvlast
+    var openLook by remember { mutableStateOf(false) }
+    var openFeedback by remember { mutableStateOf(false) }
+    var openList by remember { mutableStateOf(false) }
 
     fun persist() = Gestures.save(gestures.toList())
+    fun ownedStyle(st: Int) = when (st) { 2 -> squareOwned; 3 -> starOwned; else -> true }
+
+    fun pickStyle(st: Int) {
+        style = st
+        if (ownedStyle(st)) { AppSettings.gestureStyle.set(st); onPreviewStyle(null) } else onPreviewStyle(st)
+        onChanged()
+    }
+
+    fun deleteGesture(index: Int) {
+        val g = gestures[index]
+        gestures.removeAt(index)
+        persist()
+        // tajny kod: zabrneni i zvuk vypnute + smazane vychozi gesto Zpet
+        val def = Gestures.defaults().firstOrNull { it.fn == ButtonFunction.BACK }
+        if (!hapticOn && !soundOn && g.fn == ButtonFunction.BACK && def != null && g.code == def.code &&
+            !(squareOwned && starOwned && colorsOwned)) {
+            AppSettings.squareStyleOwned.set(true)
+            AppSettings.starStyleOwned.set(true)
+            AppSettings.gestureColorsOwned.set(true)
+            squareOwned = true; starOwned = true; colorsOwned = true
+            // gesto Zpet se hned vrati na sve misto (smazani bylo jen soucasti kodu)
+            gestures.add(index.coerceAtMost(gestures.size), g)
+            persist()
+            gestureTick(ctx)
+            com.example.actimelteambrowser.AppToast.show(ctx, "Tajný kód! Odemčeno: Čtverečky, Hvězdičky a Barvy", true,
+                com.example.actimelteambrowser.AppToast.Kind.OK)
+            onPreviewStyle(null)
+            if (style == 2 || style == 3) AppSettings.gestureStyle.set(style)
+            onChanged()
+        }
+    }
 
     androidx.compose.material3.MaterialTheme(
         colorScheme = androidx.compose.material3.darkColorScheme(primary = ACCENT, background = BG, surface = PANEL)
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val maxPanel = maxHeight * 0.58f
+            val maxPanel = maxHeight * 0.62f
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -945,22 +1140,15 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
             ) {
                 // pevna hlavicka: nazev + zluto-oranzove tlacitko ulozit a zavrit
                 Row(
-                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 40.dp, bottom = 10.dp),
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 40.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Gesta", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    // minimalizovat / rozbalit panel
-                    Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { minimized = !minimized },
-                        contentAlignment = Alignment.Center
-                    ) { Text(if (minimized) "▼" else "▲", color = Color.White, fontSize = 16.sp) }
-                    Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(Color(0xE61E1E1E))
                             .drawBehind {
-                                // plny zlutooranzovy obrys + zluty text (stejne jako "Uložit a zavřít nastavení" u tlacitek)
                                 drawRoundRect(
                                     color = Color(0xFFFFA000), cornerRadius = CornerRadius(14.dp.toPx()),
                                     style = Stroke(width = 2.dp.toPx())
@@ -970,139 +1158,226 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) { Text("Uložit a zavřít nastavení", color = Color(0xFFFFD600), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
                 }
-                if (!minimized) Column(
+                // lista se tremi sipkami: kazda otevira / zavira svou sekci
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    @Composable
+                    fun Tab(label: String, open: Boolean, modifier: Modifier, onClick: () -> Unit) {
+                        Row(
+                            modifier
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (open) Color(0xFF14382A) else ROW)
+                                .then(if (open) Modifier.border(1.5.dp, ACCENT, RoundedCornerShape(14.dp)) else Modifier)
+                                .clickable(onClick = onClick)
+                                .padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Spacer(Modifier.width(6.dp))
+                            OpenArrow(open, if (open) ACCENT else Color.White, 14)
+                        }
+                    }
+                    Tab("Vzhled", openLook, Modifier.weight(1f)) { openLook = !openLook }
+                    Tab("Odezva", openFeedback, Modifier.weight(1f)) { openFeedback = !openFeedback }
+                    Tab("Gesta", openList, Modifier.weight(1f)) { openList = !openList }
+                }
+                if (openLook || openFeedback || openList) Column(
                     Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("STYL PLOCHY", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StyleCard("Číslice", "1 2 3 / 4 5 6 / 7 8 9", style == 0, Modifier.weight(1f)) {
-                            style = 0; AppSettings.gestureStyle.set(0); onPreviewStyle(null); onChanged()
+                    val fmt = java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("cs"))
+
+                    // ---------------- a) VZHLED
+                    if (openLook) {
+                        PanelLabel("STYL PLOCHY")
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StyleCard("Číslice", "1 2 3 / 4 5 6 / 7 8 9", style == 0, Modifier.weight(1f)) { pickStyle(0) }
+                            StyleCard("Kolečka", "mřížka 3 × 3", style == 1, Modifier.weight(1f)) { pickStyle(1) }
                         }
-                        StyleCard("Kolečka", "mřížka 3 × 3", style == 1, Modifier.weight(1f)) {
-                            style = 1; AppSettings.gestureStyle.set(1); onPreviewStyle(null); onChanged()
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StyleCard(if (squareOwned) "Čtverečky" else "🔒 Čtverečky",
+                                if (squareOwned) "ostré čtverce" else "za ${fmt.format(GestureLook.SQUARE_PRICE)} reklam", style == 2, Modifier.weight(1f)) { pickStyle(2) }
+                            StyleCard(if (starOwned) "Hvězdičky" else "🔒 Hvězdičky",
+                                if (starOwned) "pěticípé hvězdy" else "za ${fmt.format(GestureLook.STAR_PRICE)} reklam", style == 3, Modifier.weight(1f)) { pickStyle(3) }
                         }
-                        // Ctverecky: koupi se za 100 000 zablokovanych reklam; do te doby jen nahled (neulozi se)
-                        StyleCard(if (owned) "Čtverečky" else "🔒 Čtverečky", if (owned) "ostré čtverce" else "zamčeno, jen náhled", style == 2, Modifier.weight(1f)) {
-                            style = 2
-                            if (owned) { AppSettings.gestureStyle.set(2); onPreviewStyle(null) } else onPreviewStyle(2)
-                            onChanged()
-                        }
-                    }
-                    if (style == 2 && !owned) {
-                        val price = SQUARE_PRICE
-                        val have = AppSettings.totalBlocked.get()
-                        val canBuy = have >= price
-                        val fmt = java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("cs"))
-                        Text(
-                            "Čtverečky jsou zamčené: zatím je jde jen vyzkoušet (neuloží se). Cena: ${fmt.format(price)} zablokovaných reklam – máš ${fmt.format(have)}.",
-                            color = MUTED, fontSize = 12.sp
-                        )
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (canBuy) Color(0xFFFFD600) else ROW)
-                                .clickable(enabled = canBuy) {
-                                    AppSettings.squareStyleOwned.set(true)
-                                    AppSettings.gestureStyle.set(2)
-                                    owned = true
-                                    onPreviewStyle(null)
-                                    onChanged()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
+                        if ((style == 2 || style == 3) && !ownedStyle(style)) {
+                            val price = if (style == 2) GestureLook.SQUARE_PRICE else GestureLook.STAR_PRICE
+                            val name = if (style == 2) "Čtverečky" else "Hvězdičky"
+                            val have = AppSettings.totalBlocked.get()
+                            val canBuy = have >= price
                             Text(
-                                if (canBuy) "KOUPIT za ${fmt.format(price)} reklam" else "KOUPIT – chybí ${fmt.format(price - have)} reklam",
-                                color = if (canBuy) Color(0xFF1A1A1A) else MUTED, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                                "$name jsou zamčené: zatím je jde jen vyzkoušet (neuloží se). Cena: ${fmt.format(price)} zablokovaných reklam – máš ${fmt.format(have)}.",
+                                color = MUTED, fontSize = 12.sp
                             )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (canBuy) Color(0xFFFFD600) else ROW)
+                                    .clickable(enabled = canBuy) {
+                                        if (style == 2) { AppSettings.squareStyleOwned.set(true); squareOwned = true }
+                                        else { AppSettings.starStyleOwned.set(true); starOwned = true }
+                                        AppSettings.gestureStyle.set(style)
+                                        onPreviewStyle(null)
+                                        onChanged()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (canBuy) "KOUPIT za ${fmt.format(price)} reklam" else "KOUPIT – chybí ${fmt.format(price - have)} reklam",
+                                    color = if (canBuy) Color(0xFF1A1A1A) else MUTED, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
+
+                        PanelLabel("VIDITELNOST PLOCHY: $opacity %")
+                        Slider(
+                            value = opacity.toFloat(),
+                            onValueChange = { opacity = it.toInt(); AppSettings.gestureOpacity.set(opacity); onChanged() },
+                            valueRange = 0f..100f
+                        )
+                        PanelLabel("VIDITELNOST TLAČÍTEK: $keysOpacity %")
+                        Slider(
+                            value = keysOpacity.toFloat(),
+                            onValueChange = { keysOpacity = it.toInt(); AppSettings.gestureKeysOpacity.set(keysOpacity); onChanged() },
+                            valueRange = 0f..100f
+                        )
+                        Text("Při 0 % plocha ani tlačítka nejsou vidět, gesta ale fungují dál.", color = MUTED, fontSize = 12.sp)
+
+                        PanelLabel("POLOHA A VELIKOST")
+                        Text(
+                            "Tahej za bílé body na okrajích a rozích plochy (velikost) nebo za její vnitřek (poloha).",
+                            color = Color(0xFFCCCCCC), fontSize = 13.sp
+                        )
+                        PanelButton("Zarovnat k tlačítku") { onAlignArea() }
+                        PanelButton("Vrátit výchozí polohu a velikost") { onResetArea() }
                     }
 
-                    Text("VIDITELNOST PLOCHY: $opacity %", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = opacity.toFloat(),
-                        onValueChange = { opacity = it.toInt(); AppSettings.gestureOpacity.set(opacity); onChanged() },
-                        valueRange = 0f..100f
-                    )
-                    Text("Při 0 % plocha není vidět, gesta ale fungují dál.", color = MUTED, fontSize = 12.sp)
+                    // ---------------- b) ODEZVA A BARVY
+                    if (openFeedback) {
+                        PanelLabel("ODEZVA PO GESTU")
+                        PanelSwitch("Drobné zabrnění", hapticOn) { hapticOn = it; AppSettings.gestureHaptic.set(it) }
+                        PanelSwitch("Zvuk úspěšného gesta", soundOn) { soundOn = it; AppSettings.gestureSound.set(it) }
 
-                    Text("POLOHA A VELIKOST", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Tahej za bílé body na okrajích a rozích plochy (velikost) nebo za její vnitřek (poloha).",
-                        color = Color(0xFFCCCCCC), fontSize = 13.sp
-                    )
-                    Box(
-                        Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { onAlignArea() },
-                        contentAlignment = Alignment.Center
-                    ) { Text("Zarovnat k tlačítku", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                    Box(
-                        Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable { onResetArea() },
-                        contentAlignment = Alignment.Center
-                    ) { Text("Vrátit výchozí polohu a velikost", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-
-                    Text("ODEZVA PO GESTU", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Drobné zabrnění", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Switch(checked = hapticOn, onCheckedChange = { hapticOn = it; AppSettings.gestureHaptic.set(it) })
-                    }
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Zvuk úspěšného gesta", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Switch(checked = soundOn, onCheckedChange = { soundOn = it; AppSettings.gestureSound.set(it) })
-                    }
-
-                    Text("GESTA", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    for ((index, g) in gestures.withIndex()) {
+                        // barvy plochy: cela kategorie je zamcena (zatim nejde odemknout jinak nez tajnym kodem)
                         Row(
                             Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(PANEL)
-                                .clickable { recordFor = index }
-                                .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                                .clickable {
+                                    if (colorsOwned) colorsOpen = !colorsOpen
+                                    else com.example.actimelteambrowser.AppToast.show(ctx, "Barvy jsou zatím zamčené", false,
+                                        com.example.actimelteambrowser.AppToast.Kind.INFO)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    GlyphIcon(g.fn, 20.dp)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        g.fn.label, color = Color.White, fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Text(codeText(g.code), color = ACCENT, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text(if (colorsOwned) "Barvy tlačítek a plochy" else "🔒 Barvy tlačítek a plochy",
+                                    color = if (colorsOwned) Color.White else MUTED, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(if (colorsOwned) "barva pod každou klávesou a barva celé plochy" else "zamčeno",
+                                    color = MUTED, fontSize = 12.sp)
                             }
-                            GesturePathPreview(g.code, Modifier.padding(end = 6.dp).size(38.dp))
-                            Box(
-                                Modifier.size(44.dp).clickable { gestures.removeAt(index); persist() },
-                                contentAlignment = Alignment.Center
-                            ) { Text("✕", color = MUTED, fontSize = 16.sp) }
+                            OpenArrow(colorsOpen && colorsOwned, if (colorsOwned) Color.White else MUTED)
+                        }
+                        if (colorsOwned && colorsOpen) {
+                            Text("Vyber klávesu (nebo celou plochu) a pak barvu. Obarvené klávesy vyplní plochu pod sebou – všech 9 = celá plocha.",
+                                color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                            // mrizka 3x3 klaves s jejich barvami
+                            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(
+                                    Modifier.clip(RoundedCornerShape(14.dp))
+                                        .background(if (areaColor != 0) Color(areaColor) else Color(0xFF151515)),
+                                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                                ) {
+                                    for (r in 0..2) Row {
+                                        for (c in 0..2) {
+                                            val k = r * 3 + c
+                                            val kc = keyColors[k]
+                                            Box(
+                                                Modifier
+                                                    .size(44.dp)
+                                                    .background(if (kc != 0) Color(kc) else Color.Transparent)
+                                                    .border(if (colorKey == k) 3.dp else 0.5.dp, if (colorKey == k) Color.White else Color(0x33FFFFFF))
+                                                    .clickable { colorKey = k },
+                                                contentAlignment = Alignment.Center
+                                            ) { Text("${k + 1}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                                        }
+                                    }
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                                    StyleCard("Plocha", "barva celé plochy", colorKey == -1, Modifier.fillMaxWidth()) { colorKey = -1 }
+                                    StyleCard("Všechny klávesy", "jedna barva pro 1–9", colorKey == 9, Modifier.fillMaxWidth()) { colorKey = 9 }
+                                }
+                            }
+                            ColorGrid(
+                                selected = when (colorKey) { -1 -> areaColor; 9 -> keyColors.distinct().singleOrNull() ?: -2; else -> keyColors[colorKey] }
+                            ) { picked ->
+                                when (colorKey) {
+                                    -1 -> { areaColor = picked; AppSettings.gestureAreaColor.set(picked) }
+                                    9 -> { for (k in 0..8) keyColors[k] = picked; GestureLook.saveKeyColors(keyColors.toIntArray()) }
+                                    else -> { keyColors[colorKey] = picked; GestureLook.saveKeyColors(keyColors.toIntArray()) }
+                                }
+                                onChanged()
+                            }
+                            PanelButton("Bez barev (výchozí)") {
+                                areaColor = 0
+                                AppSettings.gestureAreaColor.set(0)
+                                for (k in 0..8) keyColors[k] = 0
+                                GestureLook.saveKeyColors(IntArray(9))
+                                onChanged()
+                            }
                         }
                     }
-                    Text("Klepnutím na gesto ho přenahraješ novým kódem.", color = MUTED, fontSize = 12.sp)
-                    Box(
-                        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).background(ACCENT).clickable { pickFunction = true },
-                        contentAlignment = Alignment.Center
-                    ) { Text("+ PŘIDAT GESTO", color = Color(0xFF06281D), fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                    Box(
-                        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).background(ROW).clickable {
+
+                    // ---------------- c) GESTA
+                    if (openList) {
+                        PanelLabel("GESTA")
+                        for ((index, g) in gestures.withIndex()) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(PANEL)
+                                    .clickable { recordFor = index }
+                                    .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        GlyphIcon(g.fn, 20.dp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            g.fn.label, color = Color.White, fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Text(codeText(g.code), color = ACCENT, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
+                                GesturePathPreview(g.code, Modifier.padding(end = 6.dp).size(38.dp))
+                                Box(
+                                    Modifier.size(44.dp).clickable { deleteGesture(index) },
+                                    contentAlignment = Alignment.Center
+                                ) { Text("✕", color = MUTED, fontSize = 16.sp) }
+                            }
+                        }
+                        Text("Klepnutím na gesto ho přenahraješ novým kódem.", color = MUTED, fontSize = 12.sp)
+                        PanelButton("+ NOVÉ GESTO", ACCENT, Color(0xFF06281D)) { pickFunction = true }
+                        PanelButton("Obnovit výchozí gesta") {
                             Gestures.reset()
                             gestures.clear()
                             gestures.addAll(Gestures.load())
-                        },
-                        contentAlignment = Alignment.Center
-                    ) { Text("Obnovit výchozí gesta", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                        }
+                    }
                     Spacer(Modifier.height(16.dp))
                 }
             }
@@ -1144,7 +1419,7 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                     )
                     Spacer(Modifier.height(12.dp))
                     GestureSurface(
-                        style = style,
+                        style = if (ownedStyle(style)) style else 0,
                         sizeDp = 260,
                         modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(Color(0xFF151515)),
                         onComplete = { c ->

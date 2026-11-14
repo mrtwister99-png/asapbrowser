@@ -141,7 +141,12 @@ internal fun MainActivity.extractTabs(ids: List<Long>) {
 internal fun MainActivity.closeTabs(ids: List<Long>) {
     val all = tabManager.expandIds(ids)
     val toClose = tabs.list.filter { it.id in all }
-    if (toClose.isEmpty()) return
+    // mazana skupina zanikne cela (i rucne zalozena, ktera by jinak zustala prazdna)
+    val removedGroup = groups.removeAll { -it.id in ids }
+    if (toClose.isEmpty()) {
+        if (removedGroup) { refreshTiles(); updateTabStrips(); saveTabs() }
+        return
+    }
     flyBurst("−", "#E53935")   // cervene minus pri zavreni
     val activeClosed = toClose.any { it.id == tabs.activeId }
     val mode = toClose[0].incognito
@@ -244,7 +249,7 @@ internal fun MainActivity.saveTabs() {
     val garr = JSONArray()
     for (g in groups) {
         val idxs = g.members.mapNotNull { savedIdx[it] }
-        if (idxs.size >= 2) garr.put(JSONObject().put("m", JSONArray(idxs)).put("c", g.color).put("n", g.name))
+        if (idxs.size >= 2 || g.keep) garr.put(JSONObject().put("m", JSONArray(idxs)).put("c", g.color).put("n", g.name).put("k", g.keep))
     }
     AppSettings.savedTabs.set(JSONObject().put("active", activeIdx).put("tabs", arr).put("groups", garr).toString())
     writePreviewsAsync(previewDir, previews)
@@ -447,8 +452,10 @@ internal fun MainActivity.restoreTabs() {
                     val p = srcIdx.indexOf(one.optInt(k, -1))
                     if (p >= 0 && groupOf(created[p].id) == null) ids.add(created[p].id)
                 }
-                if (ids.size >= 2) {
+                val keep = obj?.optBoolean("k", false) == true   // rucne zalozena skupina: obnovi se i prazdna
+                if (ids.size >= 2 || keep) {
                     val g = tabManager.newGroup(ids)
+                    g.keep = keep
                     if (obj != null && obj.has("c")) g.color = obj.optInt("c", g.color)
                     if (obj != null && obj.has("n")) g.name = obj.optString("n")
                 }
@@ -515,6 +522,7 @@ internal fun MainActivity.setupTabsOverlay() {
             groupsMode = overviewGroups,
             onGroupsMode = {
                 overviewGroups = true
+                overviewIncognito = false   // Skupiny = skupiny beznych karet
                 applyAccent(false)
                 refreshTiles()
             },
@@ -594,10 +602,14 @@ internal fun MainActivity.hideTabs() {
 internal fun MainActivity.refreshTiles() {
     fun tileOf(t: BrowserTab) = TabTile(t.id, t.title, t.url, t.preview, t.id == tabs.activeId, t.incognito, color = t.color)
     val inc = overviewIncognito && !overviewGroups   // Skupiny = skupiny beznych karet
-    tabTiles.value = buildItems(inc).mapNotNull { (g, ms) ->
+    val tiles = buildItems(inc).mapNotNull { (g, ms) ->
         if (g == null) { if (overviewGroups) null else tileOf(ms[0]) }
-        else TabTile(-g.id, "", "", null, ms.any { it.id == tabs.activeId }, inc, true, ms.map { tileOf(it) }, g.color, g.name)
+        else TabTile(-g.id, "", "", null, ms.any { it.id == tabs.activeId }, inc, true, ms.map { tileOf(it) }, g.color, g.name, keep = g.keep)
     }
+    // prazdne (rucne zalozene) skupiny nemaji zadnou kartu, podle ktere by se zaradily: jsou na konci beznych karet
+    val empty = if (inc) emptyList() else groups.filter { it.keep && it.members.isEmpty() }
+        .map { g -> TabTile(-g.id, "", "", null, false, false, true, emptyList(), g.color, g.name, keep = true) }
+    tabTiles.value = tiles + empty
 }
 
 // Ulozi nahled (screenshot) karty, hotovo() se zavola vzdy (i kdyz se nahled nepovede)
@@ -786,6 +798,18 @@ private fun MainActivity.setHint(top: Boolean, count: Int) {
     }
     tv.text = getString(R.string.hint_more, count)
     tv.visibility = if (count > 0) View.VISIBLE else View.GONE
+}
+
+// Kde zacinaji toasty: tesne pod horni listou karet, kdyz je videt; jinak pod hornim polem. null = horni okraj obrazovky.
+internal fun MainActivity.toastTopY(): Int? {
+    var bottom = 0
+    val loc = IntArray(2)
+    for (v in listOfNotNull(topBar, stripTop)) {
+        if (!v.isShown || v.height <= 0) continue
+        v.getLocationOnScreen(loc)
+        bottom = maxOf(bottom, loc[1] + v.height)
+    }
+    return if (bottom > 0) bottom + dp(6) else null
 }
 
 // Web je mezi listami: nahore konci horni lista (+ lista karet), dole zacina spodni (+ lista karet)
@@ -1158,7 +1182,7 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
 // Presun karty do existujici slozky (skupiny karet) stejneho rezimu (bezne / anonymni)
 private fun MainActivity.showMoveToFolder(tab: BrowserTab) {
     val options = groups.filter { g ->
-        tab.id !in g.members && tabs.list.firstOrNull { it.id == g.members.firstOrNull() }?.incognito == tab.incognito
+        tab.id !in g.members && (tabs.list.firstOrNull { it.id == g.members.firstOrNull() }?.incognito ?: false) == tab.incognito
     }
     showStyledDialog(title = "Přesunout do složky", negativeText = "Zrušit") { dismiss ->
         val box = LinearLayout(this)
@@ -1218,30 +1242,29 @@ internal fun MainActivity.deleteCardWithUndo(id: Long) {
 }
 
 
-// Skupiny -> "+ Nova skupina": vyber aspon 2 beznych karet, ktere jeste nejsou ve skupine
+// Skupiny -> "+ Nova skupina": skupina jde zalozit i prazdna; karty (bezne, ktere jeste nejsou ve skupine) jsou volitelne
 internal fun MainActivity.showNewGroupDialog() {
     val free = tabs.list.filter { !it.incognito && groupOf(it.id) == null }
-    if (free.size < 2) {
-        AppToast.show(this, "Na novou skupinu potřebuješ aspoň 2 karty mimo skupiny", true, AppToast.Kind.INFO)
-        return
-    }
     val chosen = LinkedHashSet<Long>()
     showStyledDialog(title = "Nová skupina", positiveText = "Vytvořit", onPositive = {
-        if (chosen.size < 2) {
-            AppToast.show(this, "Vyber aspoň 2 karty", false, AppToast.Kind.INFO)
-            false
-        } else {
-            val g = tabManager.newGroup(tabs.list.filter { it.id in chosen }.map { it.id }.toMutableList())
-            g.color = TabColors.random()
-            g.name = "Skupina " + groups.size
-            softBuzz()
-            refreshTiles(); updateTabStrips(); saveTabs()
-            AppToast.show(this, "Skupina vytvořena")
-            true
-        }
+        val g = tabManager.newGroup(tabs.list.filter { it.id in chosen }.map { it.id }.toMutableList())
+        g.keep = true   // zustava i bez karet
+        g.color = TabColors.random()
+        g.name = "Skupina " + groups.size
+        softBuzz()
+        refreshTiles(); updateTabStrips(); saveTabs()
+        AppToast.show(this, "Skupina vytvořena")
+        true
     }) { _ ->
         val list = LinearLayout(this)
         list.orientation = LinearLayout.VERTICAL
+        val hint = TextView(this)
+        hint.text = if (free.isEmpty()) "Skupina se vytvoří prázdná. Karty do ní přidáš později."
+        else "Vyber karty do skupiny, nebo ji vytvoř prázdnou a karty přidej později."
+        hint.setTextColor("#CCCCCC".toColorInt())
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        hint.setPadding(0, 0, 0, dp(12))
+        list.addView(hint)
         for (t in free) {
             val row = TextView(this)
             fun paint() {
@@ -1266,7 +1289,7 @@ internal fun MainActivity.showNewGroupDialog() {
         }
         val scroll = ScrollView(this)
         scroll.addView(list)
-        scroll.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, minOf(dp(52) * free.size, dp(360)))
+        scroll.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, minOf(dp(52) * free.size + dp(64), dp(360)))
         scroll
     }
 }

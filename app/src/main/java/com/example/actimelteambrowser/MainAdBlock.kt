@@ -16,6 +16,10 @@ import com.example.actimelteambrowser.core.settings.SiteRules
 import org.json.JSONObject
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.ViewGroup
+import androidx.core.graphics.toColorInt
 
 // AdBlock: pravidla, kosmetické filtry, YouTube, počítadlo a odmítání cookie lišt (rozšíření MainActivity).
 // AdBlock je zapnuty a pro tenhle web neni vypnuta vyjimka (Informace o strance)
@@ -71,6 +75,7 @@ internal fun MainActivity.shouldBlockRequest(request: WebResourceRequest, tab: B
         tab.pageUrl = url                           // zapamatuj stranku, ze ktere pozadavky jdou
         return false
     }
+    if (strictBlock(request, tab)) return true      // web pridany drzenim AdBlocku: prisnejsi pravidla
     if (!adblockReady) return false
     val source = tab.pageUrl.ifEmpty { request.requestHeaders["Referer"] ?: url }
     return try {
@@ -151,5 +156,220 @@ internal fun MainActivity.rejectCookies(view: WebView?) {
     if (!adBlockFor(view?.url) || !AppSettings.adBlockCookies.get() || view == null) return
     for (d in CookieReject.delaysMs) {
         view.postDelayed({ view.evaluateJavascript(CookieReject.script, null) }, d)
+    }
+}
+
+
+// ---------------- Prisnejsi blokovani na webech, ktere si uzivatel pridal (drzeni tlacitka AdBlock) ----------------
+// Bezne seznamy (EasyList, EasyPrivacy) bezi dal. Navic se na takovem webu:
+//  - zablokuji vlozene ramecky (iframe) z cizich domen (vetsina bannerovych reklam),
+//  - zablokuji pozadavky na cizi domeny, ktere adresou vypadaji jako reklama nebo mereni,
+//  - skryji prvky stranky, ktere jsou v kodu oznacene jako reklama.
+// Vlastni server webu se neblokuje nikdy (jinak by se rozbil obsah); videa a overeni (captcha) take ne.
+
+private val STRICT_AD = Regex("""(?i)(^|[/._?=&-])(ads?|adv|advert[a-z]*|adserv[a-z]*|adsystem|adtech|banners?|sponsor[a-z]*|promo[a-z]*|popunder|popads|doubleclick|googlesyndication|taboola|outbrain|affiliate|tracking|tracker|pixel|prebid|criteo|adnxs|pubmatic|rubicon|smartadserver|teads)([/._?=&-]|$)""")
+private val STRICT_SAFE = listOf(
+    "youtube.com", "youtube-nocookie.com", "ytimg.com", "vimeo.com", "recaptcha", "hcaptcha.com",
+    "challenges.cloudflare.com", "gstatic.com", "google.com/maps", "googleapis.com/maps"
+)
+private const val STRICT_CSS = "ins.adsbygoogle,[id^='ad-'],[id^='ad_'],[id^='ads-'],[id^='ads_'],[class^='ad-'],[class*=' ad-']," +
+    "[class^='ads-'],[class*=' ads-'],[class*='advert'],[id*='advert'],[class*='sponsor'],[id*='sponsor'],[class*='banner-ad']," +
+    "[class*='ad-banner'],[class*='ad-slot'],[class*='adslot'],[data-ad],[data-ad-slot],[data-adunit],[aria-label='Advertisement']," +
+    "[aria-label='Reklama'],div[id*='google_ads'],iframe[src*='doubleclick'],iframe[id*='google_ads']{display:none!important}"
+
+// "sub.priklad.cz" -> "priklad.cz" (stejny web = stejna posledni dve casti domeny)
+private fun baseDomain(h: String): String {
+    val p = h.lowercase().removePrefix("www.").split('.')
+    return if (p.size <= 2) p.joinToString(".") else p.takeLast(2).joinToString(".")
+}
+
+// Bezi na pozadi vlakne (shouldInterceptRequest)
+internal fun MainActivity.strictBlock(request: WebResourceRequest, tab: BrowserTab): Boolean {
+    val page = runCatching { tab.pageUrl.toUri().host }.getOrNull() ?: return false
+    if (!SiteRules.strict(page)) return false
+    val host = request.url.host?.lowercase() ?: return false
+    val base = baseDomain(page)
+    if (host == base || host.endsWith(".$base")) return false   // vlastni server webu
+    val url = request.url.toString()
+    if (STRICT_SAFE.any { url.contains(it) }) return false
+    if (guessResourceType(request) == "subdocument") return true   // cizi ramecek = skoro vzdy reklama
+    return STRICT_AD.containsMatchIn(url)
+}
+
+// Skryje prvky oznacene jako reklama (jen na pridanych webech)
+internal fun MainActivity.injectStrict(view: WebView?, url: String?) {
+    if (view == null || url == null || !adBlockFor(url)) return
+    val host = runCatching { url.toUri().host }.getOrNull()
+    if (!SiteRules.strict(host)) return
+    val js = "(function(){if(document.getElementById('__atbStrict'))return;var s=document.createElement('style');s.id='__atbStrict';" +
+        "s.textContent=" + JSONObject.quote(STRICT_CSS) + ";(document.head||document.documentElement).appendChild(s);})();"
+    view.evaluateJavascript(js, null)
+}
+
+/**
+ * Drzeni tlacitka AdBlock: pridat web k prisnejsimu blokovani - aktualni stranku, nebo web zadany rucne.
+ * Po OK se ukaze vysvetleni (blokovani nemusi fungovat vzdy). demo = ukazka: nic se neulozi (demoTargets site_current, site_ok).
+ */
+internal fun MainActivity.showAdBlockSitesDialog(demo: Boolean = false) {
+    if (demo) demoTargets.clear()
+    val cur = webView.url?.takeIf { isWebUrl(it) }?.let { SiteRules.hostOf(it) } ?: if (demo) "priklad.cz" else null
+    var useCurrent = false
+    var input: EditText? = null
+    showStyledDialog(
+        title = "Přidat web k blokování reklam",
+        positiveText = "OK",
+        onPositive = {
+            val typed = input?.text?.toString().orEmpty()
+            val host = if (useCurrent) cur else SiteRules.hostOf(typed)
+            if (host == null) {
+                AppToast.show(this, if (typed.isBlank()) "Vyber stránku nebo zadej adresu webu" else "Neplatná adresa webu")
+                false
+            } else {
+                showStrictInfo(host, demo)
+                true
+            }
+        },
+        negativeText = "Zavřít"
+    ) { _ ->
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+
+        val intro = TextView(this)
+        intro.text = "Když na nějakém webu reklamy pořád prolézají, přidej ho. Prohlížeč na něm zapne přísnější blokování."
+        intro.setTextColor("#BBBBBB".toColorInt())
+        intro.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        box.addView(intro)
+
+        // a) aktualni stranka (vybira se klepnutim)
+        val curBtn = styledButton(if (cur != null) "Přidat aktuální stránku k pravidlům\n$cur" else "Aktuální stránka není web", false)
+        val curBg = GradientDrawable()
+        curBg.cornerRadius = dp(14).toFloat()
+        curBtn.background = curBg
+        fun paintCur() {
+            curBg.setColor((if (useCurrent) "#14382A" else "#2A2A2A").toColorInt())
+            curBg.setStroke(dp(2), (if (useCurrent) "#00B055" else "#2A2A2A").toColorInt())
+            curBtn.setTextColor((if (useCurrent) "#FFFFFF" else "#CCCCCC").toColorInt())
+        }
+        paintCur()
+        curBtn.setPadding(dp(14), dp(14), dp(14), dp(14))
+        curBtn.isEnabled = cur != null
+        curBtn.setOnClickListener {
+            useCurrent = !useCurrent
+            if (useCurrent) input?.setText("")
+            paintCur()
+        }
+        val clp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        clp.topMargin = dp(14)
+        box.addView(curBtn, clp)
+        if (demo) demoTargets["site_current"] = curBtn
+
+        // b) rucne zadany web
+        val lbl = TextView(this)
+        lbl.text = "nebo zadej web ručně:"
+        lbl.setTextColor("#888888".toColorInt())
+        lbl.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        lbl.setPadding(dp(2), dp(14), 0, dp(6))
+        box.addView(lbl)
+        val et = EditText(this)
+        et.hint = "např. priklad.cz"
+        et.setHintTextColor("#666666".toColorInt())
+        et.setTextColor(Color.WHITE)
+        et.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        et.isSingleLine = true
+        et.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        val ebg = GradientDrawable()
+        ebg.cornerRadius = dp(12).toFloat()
+        ebg.setColor("#2A2A2A".toColorInt())
+        et.background = ebg
+        et.setPadding(dp(14), dp(12), dp(14), dp(12))
+        et.isEnabled = !demo
+        et.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (!s.isNullOrBlank() && useCurrent) { useCurrent = false; paintCur() }
+            }
+        })
+        box.addView(et)
+        input = et
+
+        // uz pridane weby (klepnutim na ✕ se odeberou)
+        val sites = SiteRules.strictSites()
+        if (sites.isNotEmpty() && !demo) {
+            val head = TextView(this)
+            head.text = "Přidané weby"
+            head.setTextColor("#888888".toColorInt())
+            head.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            head.setPadding(dp(2), dp(16), 0, dp(4))
+            box.addView(head)
+            for (site in sites) {
+                val row = LinearLayout(this)
+                row.orientation = LinearLayout.HORIZONTAL
+                row.gravity = Gravity.CENTER_VERTICAL
+                val tv = TextView(this)
+                tv.text = site
+                tv.setTextColor(Color.WHITE)
+                tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                row.addView(tv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                val x = TextView(this)
+                x.text = "✕"
+                x.setTextColor("#E53935".toColorInt())
+                x.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                x.setPadding(dp(14), dp(8), dp(8), dp(8))
+                x.setOnClickListener {
+                    SiteRules.setStrict(site, false)
+                    row.visibility = View.GONE
+                    AppToast.show(this, "Web odebrán z pravidel: $site")
+                }
+                row.addView(x)
+                box.addView(row)
+            }
+        }
+        val sv = ScrollView(this)
+        sv.addView(box)
+        sv.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        sv
+    }
+    // tlacitko OK (posledni v radku tlacitek) pro ukazku
+    if (demo) {
+        val card = lastDialogCard as? ViewGroup
+        val row = card?.getChildAt(card.childCount - 1) as? ViewGroup
+        row?.getChildAt(row.childCount - 1)?.let { demoTargets["site_ok"] = it }
+    }
+}
+
+// Vysvetleni po vyberu webu; "Rozumím, přidat" web prida a stranku nacte znovu
+private fun MainActivity.showStrictInfo(host: String, demo: Boolean) {
+    showStyledDialog(
+        title = "Přidat $host?",
+        positiveText = "Rozumím, přidat",
+        onPositive = {
+            if (!demo) {
+                SiteRules.setStrict(host, true)
+                AppToast.show(this, "Web přidán k pravidlům: $host")
+                val now = webView.url?.let { runCatching { it.toUri().host }.getOrNull() }
+                if (SiteRules.strict(now)) webView.reload()
+            }
+            true
+        },
+        negativeText = "Zrušit"
+    ) { _ ->
+        val tv = TextView(this)
+        tv.setTextColor("#DDDDDD".toColorInt())
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        tv.setLineSpacing(0f, 1.15f)
+        tv.text = "Stránka bude přidána k aktuálním pravidlům a prohlížeč se pokusí reklamu zablokovat. " +
+            "Měj však na paměti, že toto blokování nemusí fungovat vždy.\n\n" +
+            "Jak to funguje: kromě běžných seznamů reklam (EasyList, EasyPrivacy) se na tomto webu zapne přísnější režim. " +
+            "Prohlížeč zablokuje vložené rámečky (iframe) a skripty z cizích serverů, které podle adresy vypadají jako reklama " +
+            "nebo sledování, a skryje části stránky, které jsou v jejím kódu označené jako reklama.\n\n" +
+            "Proč to nemusí fungovat: některé weby posílají reklamu ze svého vlastního serveru, nebo ji mají přímo v textu stránky – " +
+            "taková reklama se od obsahu nedá spolehlivě odlišit, a proto ji prohlížeč nechá být. " +
+            "Výjimečně se může skrýt i něco, co reklama není (třeba vložené okno nebo přehrávač). " +
+            "Pak web z pravidel zase odeber: podrž AdBlock a klepni na ✕ u webu."
+        val sv = ScrollView(this)
+        sv.addView(tv)
+        sv.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.5f).toInt())
+        sv
     }
 }

@@ -163,7 +163,8 @@ object AppToast {
         val wp = win.attributes
         wp.width = w
         wp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-        wp.y = inset + (8 * d).toInt()
+        // v prohlizeci: pod horni listou karet (nebo pod hornim polem, kdyz lista karet neni)
+        wp.y = (if (act is MainActivity) act.toastTopY() else null) ?: (inset + (8 * d).toInt())
         wp.windowAnimations = 0
         win.attributes = wp
         runCatching { dlg.show() }.onFailure { return }

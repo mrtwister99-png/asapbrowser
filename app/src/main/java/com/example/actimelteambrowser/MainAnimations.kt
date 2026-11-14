@@ -139,7 +139,7 @@ internal fun MainActivity.applyDownloadFill(items: List<DlItem>): Boolean {
     for (id in dlActiveIds) {
         if (id in nowIds) continue
         items.firstOrNull { it.id == id }?.let {
-            if (it.status == DownloadManager.STATUS_SUCCESSFUL) AppToast.show(this, "Staženo: " + it.name)
+            if (it.status == DownloadManager.STATUS_SUCCESSFUL && it.id > 0) AppToast.show(this, "Staženo: " + it.name)   // soubory z webu (id < 0) hlasi samy
         }
     }
     dlActiveIds = nowIds
@@ -464,12 +464,11 @@ internal fun MainActivity.spinTabs(onDone: () -> Unit) {
     anim.start()
 }
 
-// Drzeni Domu: jen ikona - zespoda nahoru se vyplni (plna ikona), az je cela vyplnena, zvetsi se 1,5x;
+// Drzeni Domu: jen vychozi ikona domecku - zespoda nahoru se zelene vyplni (nic dalsiho, zadne zvetsovani);
 // teprve potom se provede funkce (nastaveni domovske stranky). Tlacitko samo se nemeni.
 internal fun MainActivity.animateHome(onDone: () -> Unit) {
     if (homeAnimating) return
     homeAnimating = true
-    val icon = findViewById<ImageView>(R.id.ivHome)
     val green = findViewById<ImageView>(R.id.ivHomeGreen)
     val w = green.width
     val h = green.height
@@ -487,18 +486,14 @@ internal fun MainActivity.animateHome(onDone: () -> Unit) {
     anim.addListener(object : AnimatorListenerAdapter() {
         override fun onAnimationEnd(animation: Animator) {
             green.clipBounds = null
-            // plna ikona (i obrys pod ni) se zvetsi 1,5x, pak se otevre okno a ikona se vrati
-            for (v in listOf(icon, green)) v.animate().scaleX(1.5f).scaleY(1.5f).setDuration(260).start()
+            // vyplnena ikona chvili zustane, pak se otevre okno a vypln zmizi
             green.postDelayed({
                 onDone()
                 green.postDelayed({
-                    for (v in listOf(icon, green)) v.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
-                    green.postDelayed({
-                        green.visibility = View.INVISIBLE
-                        homeAnimating = false
-                    }, 200)
+                    green.visibility = View.INVISIBLE
+                    homeAnimating = false
                 }, 250)
-            }, 330)
+            }, 150)
         }
     })
     anim.start()

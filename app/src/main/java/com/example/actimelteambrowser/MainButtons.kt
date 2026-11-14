@@ -133,7 +133,7 @@ internal fun MainActivity.enterConfigMode() {
 
     // pruhledna vrstva; pohlti klepnuti do webu (tlacitka maji vyssi elevation)
     val scrim = View(this)
-    scrim.setBackgroundColor(Color.TRANSPARENT)   // bez ztmaveni: zmeny tlacitek jsou videt hned
+    scrim.setBackgroundColor("#80000000".toColorInt())   // zbytek plochy ztmaveny na 50 %, tlacitka jsou nad tim
     scrim.isClickable = true
     scrim.elevation = dp(7).toFloat()
     val slp = ConstraintLayout.LayoutParams(0, 0)
@@ -324,6 +324,10 @@ internal fun MainActivity.runLongPress(i: Int) {
     if (buttonFunction(i, false) == ButtonFunction.GESTURES) return   // tlacitko Gest: jen gesto, zadne klepnuti / drzeni
     if (liveTutorialDone(i)) return
     val fn = buttonFunction(i, true)
+    if (i == 7 && fn == ButtonFunction.NONE && buttonFunction(7, false) == ButtonFunction.ADBLOCK_TOGGLE) {
+        if (!isDemoRunning()) showAdBlockSitesDialog()
+        return
+    }
     if (fn != ButtonFunction.NONE && fn == ButtonDefaults.long(i) && isDefaultVisual(i) && AppSettings.animationsOn.get()) {
         when (i) {
             1 -> { animateHome { performFunction(fn) }; return }
@@ -522,9 +526,9 @@ internal fun MainActivity.toggleBarFrom(origin: Int) {
     barOrigin = origin
     applyBarSide()
     val btn = barBtn()
-    // tlacitka nad listou na teze strane zajedou za okraj postupne (nejdriv horni, pak dalsi), az potom vyjede lista
+    // tlacitka nad listou na teze strane zajedou za okraj postupne (nejdriv spodni, pak to nad nim), az potom vyjede lista
     val left = origin != 6
-    val above = AppSettings.extraButtons(left).reversed().mapNotNull { n -> extraViews[n]?.let { n to it } }
+    val above = AppSettings.extraButtons(left).mapNotNull { n -> extraViews[n]?.let { n to it } }
     fun hideNext(i: Int) {
         if (i >= above.size) { setLeftBar(true, true); return }
         val (n, v) = above[i]
