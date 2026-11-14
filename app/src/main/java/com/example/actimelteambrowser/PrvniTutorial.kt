@@ -769,9 +769,12 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             val code = com.example.actimelteambrowser.core.settings.Gestures.load()
                 .firstOrNull { it.fn == ButtonFunction.NEW_TAB }?.code ?: "9852"
             val keys = code.map { it - '0' }
-            at(0) { say("Gesta: kuličkou otevřeš plochu pro gesta"); moveTo(target, 600) }
-            at(800) { tap() }
-            at(300) {
+            // klepl sam uzivatel (rychle nastaveni): bez prstu, plocha se otevre hned a tip je hned nahore
+            val fromUser = quickSetupStage == 21
+            if (fromUser) t = 0L
+            at(0) { say("Gesta: kuličkou otevřeš plochu pro gesta"); if (!fromUser) moveTo(target, 600) }
+            at(if (fromUser) 0L else 800L) { if (!fromUser) tap() }
+            at(if (fromUser) 0L else 300L) {
                 // plocha si ztmavi pozadi sama, ukazkove ztmaveni se odstrani
                 demoOverlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
                 demoOverlay = null

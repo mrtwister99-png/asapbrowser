@@ -32,7 +32,7 @@ internal var quickSetupStage = 0
 // Ztmaveni rychleho nastaveni (vse tmave krome [targets], tip nahore); zavola se pro odstraneni
 internal var quickSpotOff: (() -> Unit)? = null
 
-private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle: Boolean = false, onSkip: (() -> Unit)? = null) {
+private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle: Boolean = false, onSkip: (() -> Unit)? = null, holeScale: Float = 1f) {
     quickSpotOff?.invoke()
     val parent = root as ConstraintLayout
     val dim = DemoDim(this)
@@ -83,7 +83,12 @@ private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle
     }
     dim.post {
         dim.holes.clear()
-        for (t in targets) if (t.isShown) dim.holes.add(rectOf(t).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) })
+        // holeScale > 1: dira je vetsi (pulzujici UFO se do ni vejde i na 200 %)
+        for (t in targets) if (t.isShown) dim.holes.add(rectOf(t).apply {
+            val gx = width() * (holeScale - 1f) / 2f
+            val gy = height() * (holeScale - 1f) / 2f
+            inset(-dp(4).toFloat() - gx, -dp(4).toFloat() - gy)
+        })
         dim.invalidate()
     }
     quickSpotOff = { parent.removeView(dim); parent.removeView(cap); skip?.let { parent.removeView(it) }; quickSpotOff = null }
@@ -281,7 +286,19 @@ private fun MainActivity.quickStage2() {
             quickSpotlight(listOf(it), tip, circle = it === orbView, onSkip = {
                 quickSetupStage = 0
                 quickStage3()
-            })
+            }, holeScale = if (it === orbView) 2.1f else 1f)
+            if (it === orbView) {
+                val orb = it
+                val pulse = android.animation.ValueAnimator.ofFloat(1f, 2f)
+                pulse.duration = 1100
+                pulse.repeatMode = android.animation.ValueAnimator.REVERSE
+                pulse.repeatCount = android.animation.ValueAnimator.INFINITE
+                pulse.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                pulse.addUpdateListener { a -> val k = a.animatedValue as Float; orb.scaleX = k; orb.scaleY = k }
+                pulse.start()
+                val off = quickSpotOff
+                quickSpotOff = { pulse.cancel(); orb.scaleX = 1f; orb.scaleY = 1f; off?.invoke() }
+            }
         }
     }, 350)
 }
