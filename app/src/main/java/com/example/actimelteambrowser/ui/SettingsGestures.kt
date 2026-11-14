@@ -541,7 +541,8 @@ fun GestureOverlay(
     theme: GestureTheme = GestureTheme(),
     topInsetDp: Int = 8,                             // kde konci horni pole (napoveda zacina pod nim)
     onMatchAt: ((Float, Float) -> Unit)? = null,     // stred posledni klavesy rozpoznaneho gesta (v okne, px) - ohnostroj
-    hintColor: Color = GESTURE_GREEN                 // barva nahledu gest v napovede (anonymni karta = modra)
+    hintColor: Color = GESTURE_GREEN,                // barva nahledu gest v napovede (anonymni karta = modra)
+    labelBelow: Boolean = false                      // zapis gesta vzdy pod plochou (tlacitko gest je na nejvyssi pozici)
 ) {
     var progress by remember { mutableStateOf("") }
     val matched = gestures.firstOrNull { it.code == progress }
@@ -593,7 +594,7 @@ fun GestureOverlay(
 
         // zapis gesta: pevny pruh nad plochou; plocha v horni polovine (tlacitko nahore) nebo bez mista nad ni = pod plochou
         val labelH = 72f
-        val below = area.top + ah / 2f < hDp / 2f || area.top < labelH
+        val below = labelBelow || area.top + ah / 2f < hDp / 2f || area.top < labelH
         val labelTop = if (below) (area.top + ah).coerceAtMost(hDp - labelH) else area.top - labelH
         Box(
             Modifier

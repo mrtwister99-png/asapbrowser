@@ -715,6 +715,10 @@ internal fun MainActivity.applyLiveTutorial() {
         paintTutorialIcon(n, n in left)
         if (n in left) liveIcons.add(findViewById(if (n == 103) R.id.ivUrlShare else R.id.ivUrlLock))
     }
+    // sipky: zluty znak (bez obrysu), blika spolu s ostatnimi
+    if (105 in left) { liveIcons.add(findViewById(R.id.ivNavBack)); liveIcons.add(findViewById(R.id.ivNavForward)) }
+    else for (id in listOf(R.id.ivNavBack, R.id.ivNavForward)) findViewById<View>(id).alpha = 1f
+    updateNavArrows()
     rebuildTutorialPlus(left.any { it in 9..12 })
     if (left.isEmpty()) return
     val yellow = "#FFD600".toColorInt()
@@ -725,8 +729,6 @@ internal fun MainActivity.applyLiveTutorial() {
             in 1..12 -> buttonView(n)
             101 -> findViewById(R.id.urlContainer)
             102 -> etSearchMain
-            105 -> findViewById(R.id.btnNavBack)
-            106 -> findViewById(R.id.btnNavForward)
             in 201..204 -> (sideBarLeft as? ViewGroup)?.getChildAt(n - 201)
             else -> null
         }
@@ -890,6 +892,10 @@ internal fun MainActivity.liveTutorialDone(n: Int): Boolean {
     val gone = if (n == 105 || n == 106) setOf(105, 106) else setOf(n)
     AppSettings.liveTutorial.set(left.filter { it !in gone }.joinToString(","))
     for (g in gone) liveOutlines.remove(g)?.let { (v, d) -> v.overlay.remove(d) }
+    if (n == 105 || n == 106) {
+        for (id in listOf(R.id.ivNavBack, R.id.ivNavForward)) { val iv = findViewById<View>(id); liveIcons.remove(iv); iv.alpha = 1f }
+        updateNavArrows()   // sipky zpet do bezne barvy
+    }
     if (n == 103 || n == 104) {
         liveIcons.remove(findViewById(if (n == 103) R.id.ivUrlShare else R.id.ivUrlLock))
         paintTutorialIcon(n, false)

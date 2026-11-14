@@ -824,6 +824,7 @@ private fun MainActivity.ensureStrip(top: Boolean): HorizontalScrollView {
     sv.isHorizontalScrollBarEnabled = false
     sv.overScrollMode = View.OVER_SCROLL_NEVER
     sv.visibility = View.GONE
+    sv.elevation = dp(5).toFloat()   // nad pozadim s UFO v prvotnim nastaveni (4)
     val row = LinearLayout(this)
     row.orientation = LinearLayout.HORIZONTAL
     row.setPadding(dp(8), 0, dp(8), 0)

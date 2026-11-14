@@ -259,6 +259,7 @@ internal fun MainActivity.showGestures(test: Boolean = false, demoBounds: ((Floa
             theme = theme,
             hintColor = if (tabs.active()?.incognito == true) androidx.compose.ui.graphics.Color(0xFF006AFF) else com.example.actimelteambrowser.ui.GESTURE_GREEN,
             topInsetDp = topDp,
+            labelBelow = gestureButtonOnTop(),
             onMatchAt = { x, y -> if (demoBounds == null) showFirework(x, y) }
         )
     }
@@ -352,4 +353,16 @@ internal fun MainActivity.alignGestureAreaToOrb() {
     )
     AppSettings.gestureRect.set(GestureArea.format(rect))
     gestResetKey.intValue += 1   // editor nacte novou polohu
+}
+
+/** Tlacitko gest je pridane bocni tlacitko a nad nim na jeho strane uz zadne jine neni (nejvyssi pozice). */
+internal fun MainActivity.gestureButtonOnTop(): Boolean {
+    val n = gestureButtonN()
+    if (n !in 9..12) return false
+    val v = buttonView(n) ?: return false
+    val left = isLeftSide(n)
+    val top = rectOf(v).top
+    return (listOf(5, 6) + extraViews.keys).none { k ->
+        k != n && isLeftSide(k) == left && buttonView(k)?.let { it.isShown && rectOf(it).top < top } == true
+    }
 }

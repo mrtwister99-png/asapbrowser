@@ -138,6 +138,7 @@ internal fun MainActivity.showWelcomeOnce() {
     AppSettings.welcomeShown.set(true)
     window.decorView.post {
         showFirstBackdrop()   // pozadi s UFO po celou dobu uvodniho nastaveni
+        applyFirstLook()      // tlacitka bez ikon, seda pole a listy karet (postupne se odkryji)
         val pages = listOf(
             "Zdar, jsem rád, že ses dostal k téhle aplikaci! 😃\n\nAť máš představu, o co jde: tohle je jednoduchý, rychlý a CELOUŽIVATELSKY nastavitelný webový prohlížeč, který byl primárně dělaný pro YouTube bez reklam.",
             "Ve finále se z toho všeho stal propracovaný všestranný pomocník, který je buď super jednoduchý, nebo pro opravdu náročné uživatele.\n\nDoporučil bych věnovat prvních pár chvilek jednoduchému nastavení – čím víc si to nakonfiguruješ podle sebe, tím to budeš mít rychlejší."

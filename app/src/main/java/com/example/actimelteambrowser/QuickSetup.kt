@@ -213,7 +213,7 @@ private fun MainActivity.ensureSetupLayer(): FrameLayout {
     return l
 }
 
-// 5 kolecek dole: aktualni zlute a vetsi, ostatni polopruhledne bile; vsechna jdou klepnout
+// 6 kolecek dole: aktualni zlute a vetsi, ostatni polopruhledne bile; vsechna jdou klepnout
 private fun MainActivity.setupDots(stage: Int) {
     val l = ensureSetupLayer()
     l.findViewWithTag<View>("setup_dots")?.let { l.removeView(it) }
@@ -221,7 +221,7 @@ private fun MainActivity.setupDots(stage: Int) {
     row.tag = "setup_dots"
     row.orientation = LinearLayout.HORIZONTAL
     row.gravity = Gravity.CENTER
-    for (k in 1..5) {
+    for (k in 1..SETUP_STEPS) {
         val dot = View(this)
         val g = GradientDrawable()
         g.shape = GradientDrawable.OVAL
@@ -281,7 +281,7 @@ private fun MainActivity.cardButton(card: LinearLayout, label: String, primary: 
     card.addView(b, lp)
 }
 
-// Prechod na krok n (1-5): uklidi predchozi krok (ztmaveni, karta, lista) a ukaze novy
+// Prechod na krok n (1-6): uklidi predchozi krok (ztmaveni, karta, lista) a ukaze novy
 private fun MainActivity.quickGo(n: Int) {
     quickSpotOff?.invoke()
     removeSetupCard()
@@ -290,8 +290,16 @@ private fun MainActivity.quickGo(n: Int) {
     setupStageNow = n
     if (firstBackdrop == null) showFirstBackdrop()
     setupDots(n)
-    when (n) { 1 -> quickStage1(); 2 -> quickStage2(); 3 -> quickStage3(); 4 -> quickStage4(); else -> quickStage5() }
+    // sipky a lupa mohly zustat schovane (preskoceni kroku 2 uprostred animace)
+    for (id in listOf(R.id.btnNavBack, R.id.btnNavForward)) findViewById<View>(id).alpha = 1f
+    etSearchMain.compoundDrawablesRelative[0]?.alpha = 255
+    uncoverFields()                    // pole maji zlute nadpisy
+    if (n >= 3) revealAllFirstLook()   // od gest dal uz je vse odkryte (horni lista prijde na radu priste)
+    when (n) { 1 -> quickStage1(); 2 -> quickStageBottom(); 3 -> quickStage2(); 4 -> quickStage3(); 5 -> quickStage4(); else -> quickStage5() }
 }
+
+// Kroky: 1 domovska stranka, 2 spodni cast, 3 gesta, 4 pridatelna tlacitka, 5 bocni lista, 6 export a import
+private const val SETUP_STEPS = 6
 
 private fun MainActivity.endQuickSetup() {
     quickSpotOff?.invoke()
@@ -308,6 +316,8 @@ private fun MainActivity.endQuickSetup() {
 /** Nastaveni -> Tutorialy -> Prvotni nastaveni: projit vsech 5 kroku znovu. */
 internal fun MainActivity.startQuickSetupAgain() {
     if (setupStageNow != 0) return
+    showFirstBackdrop()
+    applyFirstLook()   // znovu od zacatku: tlacitka bez ikon, postupne se odkryji
     quickGo(1)
 }
 
@@ -365,7 +375,7 @@ private fun MainActivity.quickStage1() {
             if (u.isNotEmpty() && runCatching { u.toUri().host }.getOrNull()?.contains('.') == true) AppSettings.homeUrl.set(u)
             AppSettings.startupRestoreTabs.set(restore)
             hideKeyboard()
-            quickGo(2)
+            quickGo(2)   // spodni cast
         }
     }
 }
@@ -374,13 +384,13 @@ private fun MainActivity.quickStage1() {
 private fun MainActivity.quickStage2() {
     showFieldTitles("GESTA UKÁZKA", "DEMO VIDEO")
     startLiveTutorial()
-    if (gestureButtonN() == 0) { quickGo(3); return }
+    if (gestureButtonN() == 0) { quickGo(4); return }
     quickSetupStage = 2
     window.decorView.postDelayed({
-        if (quickSetupStage == 2 && setupStageNow == 2) gestureTarget()?.let {
+        if (quickSetupStage == 2 && setupStageNow == 3) gestureTarget()?.let {
             // vychozi vzhled ma na kulicce UFO
             val tip = if (AppSettings.gestureStyleChanged.get()) "Klikni na kuličku 👆" else "Klikni na UFO 👆"
-            quickSpotlight(listOf(it), tip, circle = it === orbView, onSkip = { quickGo(3) }, holeScale = if (it === orbView) 2.1f else 1f)
+            quickSpotlight(listOf(it), tip, circle = it === orbView, onSkip = { quickGo(4) }, holeScale = if (it === orbView) 2.1f else 1f)
             if (it === orbView) {
                 val orb = it
                 val pulse = android.animation.ValueAnimator.ofFloat(1f, 2f)
@@ -402,17 +412,17 @@ internal fun MainActivity.onQuickSetupDemoEnded() {
     if (quickSetupStage != 21) return
     quickSetupStage = 0
     window.decorView.postDelayed({
-        if (setupStageNow != 2) return@postDelayed
+        if (setupStageNow != 3) return@postDelayed
         showFieldTitles("GESTA UKÁZKA", "DEMO VIDEO")
         showSetupCard { card ->
             cardText(card, "Chceš tlačítko pro gesta nechat?")
-            cardButton(card, "Ano – tlačítko gest zkusím", true, true) { quickGo(3) }
+            cardButton(card, "Ano – tlačítko gest zkusím", true, true) { quickGo(4) }
             cardButton(card, "✕ – Kdyžtak si ho pak zapnu", false, false) {
                 val n = gestureButtonN()
                 if (n in 5..8) AppSettings.buttonEnabled[n - 1].set(false)
                 else if (n != 0) AppSettings.buttonTap[n - 1].set(ButtonFunction.NONE.key)
                 updateButtonVisuals()
-                quickGo(3)
+                quickGo(4)
             }
         }
     }, 400)
@@ -455,10 +465,10 @@ private fun MainActivity.quickStage3() {
     val off = quickSpotOff
     quickSpotOff = { ghosts.forEach { parent.removeView(it) }; off?.invoke() }
     window.decorView.postDelayed({
-        if (setupStageNow != 3) return@postDelayed
+        if (setupStageNow != 4) return@postDelayed
         showSetupCard(top = true) { card ->
             cardText(card, "Na každou stranu můžeš přidat až 2 další tlačítka – žluté „+“ nad bočními tlačítky.\n\nKaždé tlačítko umí dvě věci: klepnutí a podržení. Obojí si nastavíš v Nastavení → Tlačítka.")
-            cardButton(card, "OK, pokračuj", true, true) { quickGo(4) }
+            cardButton(card, "OK, pokračuj", true, true) { quickGo(5) }
         }
     }, delay + 600)
 }
@@ -469,7 +479,7 @@ private fun MainActivity.quickStage4() {
     val barBtn = buttonView(defaultBarOrigin())
     quickSpotlight(listOfNotNull(barBtn), "")
     window.decorView.postDelayed({
-        if (setupStageNow != 4) return@postDelayed
+        if (setupStageNow != 5) return@postDelayed
         barBtn?.takeIf { it.isShown }?.let { blinkOutline(ensureSetupLayer(), rectOf(it).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) }) }
         showSetupCard(top = true) { card ->
             cardText(card, "V liště se nachází další užitečné věci.")
@@ -478,10 +488,10 @@ private fun MainActivity.quickStage4() {
                 removeSetupCard()
                 toggleBarFrom(defaultBarOrigin())
                 window.decorView.postDelayed({
-                    if (setupStageNow != 4) return@postDelayed
+                    if (setupStageNow != 5) return@postDelayed
                     showSetupCard(top = true) { c2 ->
                         cardText(c2, "Pozor: tlačítko lišty a tlačítko gest nemůžou být jedno a to samé tlačítko.\n\nLišta vyjíždí jen ze spodního bočního tlačítka vlevo nebo vpravo, gesta si můžeš dát na kterékoli jiné.")
-                        cardButton(c2, "OK, pokračuj", true, true) { quickGo(5) }
+                        cardButton(c2, "OK, pokračuj", true, true) { quickGo(6) }
                     }
                 }, 450)
             }
@@ -499,4 +509,67 @@ private fun MainActivity.quickStage5() {
             AppToast.show(this, "Prvotní nastavení hotové")
         }
     }
+}
+
+// 2) spodni cast: a) tlacitka Domu, karty, Oblibene, Nastaveni 2x zlute probliknou a ikony se pomalu objevi,
+//    b) textove pole a lista zalozek 2x zlute probliknou a pak se pomalu objevi sipky, lupa a skutecna lista karet
+private fun MainActivity.setupBlink2(v: View?) {
+    if (v != null && v.isShown) blinkOutline(ensureSetupLayer(), rectOf(v).apply { inset(-dp(3).toFloat(), -dp(3).toFloat()) }, times = 2, stepMs = 260)
+}
+
+private fun MainActivity.quickStageBottom() {
+    showFieldTitles("SPODNÍ ČÁST", "TLAČÍTKA")
+    showSetupCard(top = true) { card -> cardText(card, "Spodní část – tlačítka") }
+    window.decorView.postDelayed({
+        if (setupStageNow != 2) return@postDelayed
+        bottomButtonViews().forEach { setupBlink2(it) }
+        window.decorView.postDelayed({
+            if (setupStageNow != 2) return@postDelayed
+            revealFirstLook(bottomButtonViews()) {
+                if (setupStageNow != 2) return@revealFirstLook
+                showSetupCard(top = true) { card ->
+                    cardText(card, "Spodní část – tlačítka\n\nDomů, karty, Oblíbené a Nastavení. Každé tlačítko umí klepnutí i podržení – ukážou ti to žluté obrysy a demo videa.")
+                    cardButton(card, "OK, pokračuj", true, true) { quickStageBottomField() }
+                }
+            }
+        }, 1200)
+    }, 400)
+}
+
+private fun MainActivity.quickStageBottomField() {
+    val arrows = listOf(findViewById<View>(R.id.btnNavBack), findViewById<View>(R.id.btnNavForward))
+    showFieldTitles("SPODNÍ LIŠTA", "TEXTOVÉ POLE", keep = setOf(R.id.btnNavBack, R.id.btnNavForward))
+    // sipky a lupa se objevi az po probliknuti
+    arrows.forEach { it.alpha = 0f }
+    val lupa = etSearchMain.compoundDrawablesRelative[0]?.mutate()
+    lupa?.alpha = 0
+    showSetupCard(top = true) { card -> cardText(card, "Spodní lišta – textové pole + lišta záložek") }
+    window.decorView.postDelayed({
+        if (setupStageNow != 2) return@postDelayed
+        setupBlink2(bottomFieldView())
+        setupBlink2(stripPlaceholderView(false))
+        window.decorView.postDelayed({
+            if (setupStageNow != 2) return@postDelayed
+            val a = android.animation.ValueAnimator.ofFloat(0f, 1f)
+            a.duration = 1400
+            a.addUpdateListener { an ->
+                val k = an.animatedValue as Float
+                arrows.forEach { it.alpha = k }
+                lupa?.alpha = (255 * k).toInt()
+                etSearchMain.invalidate()
+            }
+            a.start()
+            revealFirstLook(emptyList(), listOf(false)) {
+                if (setupStageNow != 2) return@revealFirstLook
+                showSetupCard(top = true) { card ->
+                    cardText(card, "Spodní lišta – textové pole + lišta záložek\n\nDo pole napíšeš adresu nebo hledaný text, šipkami jdeš o stránku zpět a vpřed. Nad polem jsou tvoje otevřené karty.")
+                    cardButton(card, "OK, pokračuj", true, true) {
+                        arrows.forEach { it.alpha = 1f }
+                        lupa?.alpha = 255
+                        quickGo(3)
+                    }
+                }
+            }
+        }, 1200)
+    }, 400)
 }

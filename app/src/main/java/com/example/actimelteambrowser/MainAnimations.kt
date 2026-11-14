@@ -609,6 +609,8 @@ internal fun MainActivity.setupNavArrows() {
 internal fun MainActivity.updateNavArrows() {
     if (!isWebViewReady()) return
     val gray = ColorStateList.valueOf(0xFFC4C4C4.toInt())
-    findViewById<ImageView>(R.id.ivNavBack)?.imageTintList = if (webView.canGoBack()) null else gray
-    findViewById<ImageView>(R.id.ivNavForward)?.imageTintList = if (webView.canGoForward()) null else gray
+    // zivy tutorial: sipky maji zluty znak, dokud na ne uzivatel poprve neklepne
+    val yellow = if (105 in liveIds()) ColorStateList.valueOf(0xFFFFD600.toInt()) else null
+    findViewById<ImageView>(R.id.ivNavBack)?.imageTintList = yellow ?: if (webView.canGoBack()) null else gray
+    findViewById<ImageView>(R.id.ivNavForward)?.imageTintList = yellow ?: if (webView.canGoForward()) null else gray
 }

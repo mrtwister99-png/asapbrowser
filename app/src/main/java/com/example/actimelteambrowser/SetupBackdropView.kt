@@ -290,6 +290,7 @@ internal fun MainActivity.showFirstBackdrop() {
 }
 
 internal fun MainActivity.hideFirstBackdrop() {
+    revealAllFirstLook()   // konec / preskoceni uvodniho nastaveni: vsechny ikony se ukazou
     val v = firstBackdrop ?: return
     firstBackdrop = null
     v.animate().alpha(0f).setDuration(220).withEndAction { (root as android.view.ViewGroup).removeView(v) }.start()

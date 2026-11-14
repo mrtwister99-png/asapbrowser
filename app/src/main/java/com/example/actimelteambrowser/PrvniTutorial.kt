@@ -619,18 +619,19 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
     layerContent = ov
     val skipBottom = if (bottom) (if (bottomBar.height > 0) bottomBar.height else lastSystemBottom + dp(80)) + dp(12) else lastSystemBottom + dp(20)
 
+    // rozlozeni odspodu: kolecka (jen u vic casti), nad nimi Preskocit, nad nim OK, pokracuj a nad nim tip
+    val dotsRow = LinearLayout(this)
+    dotsRow.orientation = LinearLayout.HORIZONTAL
+    dotsRow.gravity = Gravity.CENTER
+    val dlp2 = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+    dlp2.bottomMargin = skipBottom
+    ov.addView(dotsRow, dlp2)
+
     val skip = demoButton(getString(R.string.tutorial_skip), false)
     skip.setPadding(dp(28), dp(12), dp(28), dp(12))
     val slp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
     slp.bottomMargin = skipBottom
     ov.addView(skip, slp)
-
-    val dotsRow = LinearLayout(this)
-    dotsRow.orientation = LinearLayout.HORIZONTAL
-    dotsRow.gravity = Gravity.CENTER
-    val dlp2 = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
-    dlp2.bottomMargin = skipBottom + dp(54)
-    ov.addView(dotsRow, dlp2)
 
     val box = LinearLayout(this)
     box.orientation = LinearLayout.VERTICAL
@@ -648,7 +649,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
     box.addView(ok, olp)
     val blp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
     blp.marginStart = dp(24); blp.marginEnd = dp(24)
-    blp.bottomMargin = skipBottom + dp(104)
+    blp.bottomMargin = skipBottom + dp(58)
     ov.addView(box, blp)
 
     // Preskocit: jen tento tutorial, nebo vsechny (to se jeste potvrzuje)
@@ -681,7 +682,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
     choice.visibility = View.GONE
     val chlp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
     chlp.marginStart = dp(24); chlp.marginEnd = dp(24)
-    chlp.bottomMargin = skipBottom + dp(60)
+    chlp.bottomMargin = skipBottom + dp(58)
     ov.addView(choice, chlp)
     var boxWasVisible = true
     fun closeChoice() { choice.visibility = View.GONE; if (boxWasVisible) box.visibility = View.VISIBLE }
@@ -1092,6 +1093,12 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
         caption.text = parts[k].intro
         setOk("OK, pokračuj") { runAnim(k) }
         ov.post { blink(target) }   // ukazovane tlacitko 3x zlute problikne
+    }
+    if (parts.size > 1) {
+        // kolecka jsou uplne dole: Preskocit, OK a tip se posunou nad ne
+        slp.bottomMargin = skipBottom + dp(42); skip.layoutParams = slp
+        blp.bottomMargin = skipBottom + dp(100); box.layoutParams = blp
+        chlp.bottomMargin = skipBottom + dp(100); choice.layoutParams = chlp
     }
     if (parts.size > 1) for (k in parts.indices) {
         val hit = FrameLayout(this)
