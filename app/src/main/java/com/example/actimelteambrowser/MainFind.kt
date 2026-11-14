@@ -129,7 +129,7 @@ internal fun MainActivity.setFindDemo(text: String, counter: String) {
 private fun MainActivity.focusFind() {
     val e = findEdit ?: return
     e.requestFocus()
-    e.post { (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(e, InputMethodManager.SHOW_IMPLICIT) }
+    e.post { (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(e, 0) }
 }
 
 private fun MainActivity.hideFindKeyboard() {

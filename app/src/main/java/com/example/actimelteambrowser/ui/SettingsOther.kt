@@ -158,7 +158,7 @@ internal fun OtherSettingsScreen(section: String, isDefaultBrowser: Boolean, onD
             for (d in listOf("site_thumbs", "site_icons")) {
                 java.io.File(ctx.filesDir, d).listFiles()?.forEach { bytes += it.length(); count++ }
             }
-            val size = if (bytes < 1024L * 1024) "%d kB".format(bytes / 1024) else "%.1f MB".format(java.util.Locale("cs"), bytes / 1048576.0)
+            val size = if (bytes < 1024L * 1024) "%d kB".format(bytes / 1024) else "%.1f MB".format(java.util.Locale.forLanguageTag("cs"), bytes / 1048576.0)
             "Uloženo teď: $size ($count souborů)"
         }
     }

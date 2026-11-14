@@ -55,6 +55,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -386,31 +387,50 @@ private fun VaultWords(phrase: String, onBack: () -> Unit, onNext: () -> Unit) {
     }
 }
 
+/** Zabrneni trezoru: 0,5 s - pauza 0,5 s - 0,5 s (vytvoreni trezoru a ulozeni hesla). */
+internal fun vaultBuzz(context: Context) {
+    if (!AppSettings.vibrationOn.get()) return
+    val vib = if (Build.VERSION.SDK_INT >= 31)
+        (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager)?.defaultVibrator
+    else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
+    vib ?: return
+    val pattern = longArrayOf(0, 500, 500, 500)
+    runCatching {
+        if (Build.VERSION.SDK_INT >= 26) vib.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+        else @Suppress("DEPRECATION") vib.vibrate(pattern, -1)
+    }
+}
+
+// Kontrola: uzivatel zada 2 nahodna slova z papiru; po Dokoncit se trezor vytvori, zabrni a ukaze se info
 @Composable
 private fun VaultCheck(phrase: String, onBack: () -> Unit, onDone: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val words = phrase.split(" ")
-    val n = remember { (1..VaultCrypto.WORD_COUNT).random() }
-    var answer by remember { mutableStateOf("") }
+    val picks = remember { (1..VaultCrypto.WORD_COUNT).shuffled().take(2).sorted() }
+    val answers = remember { mutableStateListOf("", "") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var created by remember { mutableStateOf(false) }
     ScreenScaffold(title = "Kontrola", onBack = onBack) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Jaké bylo slovo č. $n?", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            OutlinedTextField(
-                value = answer,
-                onValueChange = { answer = it; error = null },
-                label = { Text("Slovo č. $n") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Text("Napiš 2 slova z papíru", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            for ((k, n) in picks.withIndex()) {
+                OutlinedTextField(
+                    value = answers[k],
+                    onValueChange = { answers[k] = it; error = null },
+                    label = { Text("Slovo č. $n") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             if (error != null) Text(error ?: "", color = Color(0xFFEF5350), fontSize = 14.sp)
             BigButton(if (busy) "Vytvářím trezor…" else "Dokončit", V_ACCENT, V_ON_ACCENT) {
-                if (!busy) {
-                    if (VaultCrypto.normalize(answer) != words[n - 1]) {
-                        error = "Nesedí, zkontroluj papír."
+                if (!busy && !created) {
+                    val wrong = picks.withIndex().filter { (k, n) -> VaultCrypto.normalize(answers[k]) != words[n - 1] }.map { it.value }
+                    if (wrong.isNotEmpty()) {
+                        error = "Nesedí slovo č. ${wrong.joinToString(" a ")}, zkontroluj papír."
                     } else {
                         busy = true
                         scope.launch {
@@ -418,11 +438,32 @@ private fun VaultCheck(phrase: String, onBack: () -> Unit, onDone: () -> Unit) {
                                 runCatching { VaultManager.create(context, phrase) }.isSuccess
                             }
                             busy = false
-                            if (ok) onDone() else error = "Trezor se nepodařilo vytvořit."
+                            if (ok) { created = true; vaultBuzz(context) } else error = "Trezor se nepodařilo vytvořit."
                         }
                     }
                 }
             }
+        }
+    }
+    // po vytvoreni: info, ze takhle telefon zabrni i pri ulozeni hesla
+    if (created) Dialog(onDismissRequest = { }) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color(0xFF242424))
+                .border(2.dp, V_ACCENT, RoundedCornerShape(20.dp)).padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("✅", fontSize = 34.sp)
+            Text("Trezor je vytvořený", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(
+                "Cítil jsi to dvojí zabrnění? Přesně takhle telefon zabrní pokaždé, když si do trezoru uložíš nějaké heslo – " +
+                    "poznáš tak, že je bezpečně uložené.",
+                color = Color(0xFFDDDDDD), fontSize = 15.sp, textAlign = TextAlign.Center
+            )
+            Box(
+                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(V_ACCENT).clickable { onDone() },
+                contentAlignment = Alignment.Center
+            ) { Text("Rozumím", color = V_ON_ACCENT, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -746,7 +787,7 @@ private fun VaultEdit(entry: VaultEntry?, onBack: () -> Unit, onSaved: () -> Uni
                                 else VaultManager.update(context, entry.copy(domain = d, username = username.trim(), password = password, note = note))
                             }.isSuccess
                         }
-                        if (ok) onSaved() else error = "Uložení se nepovedlo (je trezor odemčený?)."
+                        if (ok) { vaultBuzz(context); onSaved() } else error = "Uložení se nepovedlo (je trezor odemčený?)."
                     }
                 }
             }

@@ -693,7 +693,7 @@ private val ROW_ICONS = mapOf(
     "Domovská stránka" to R.drawable.ic_home, "Výchozí prohlížeč" to R.drawable.ic_set_globe, "Obnovit stránku tažením dolů" to R.drawable.ic_refresh,
     "Vyhledávač" to R.drawable.ic_set_search, "Záložky" to R.drawable.ic_tabs_overview, "Lišta záložek" to R.drawable.ic_tab_strip,
     "Oblíbené" to R.drawable.ic_bookmarks, "Stažené položky" to R.drawable.ic_download, "Historie" to R.drawable.ic_history,
-    "Gesta" to R.drawable.ic_gestures, "Tlačítka" to R.drawable.ic_button_settings, "Trezor hesel" to R.drawable.ic_vault,
+    "Gesta" to R.drawable.ic_gesture_orb, "Tlačítka" to R.drawable.ic_button_settings, "Trezor hesel" to R.drawable.ic_vault,
     "Animace" to R.drawable.ic_animation, "Zvuky" to R.drawable.ic_sound, "Vibrace" to R.drawable.ic_vibration,
     "Export" to R.drawable.ic_export, "Import" to R.drawable.ic_import, "Tutoriály" to R.drawable.ic_tutorial,
     "O aplikaci" to R.drawable.ic_info, "Restartovat vše" to R.drawable.ic_reset

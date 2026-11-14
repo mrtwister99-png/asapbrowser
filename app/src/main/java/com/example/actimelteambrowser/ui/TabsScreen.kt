@@ -1106,7 +1106,7 @@ fun StartPage(
                 Text("CELKEM ZABLOKOVÁNO REKLAM", color = MUTED, fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 12.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    java.text.NumberFormat.getInstance(java.util.Locale("cs")).format(blockedTotal),
+                    java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("cs")).format(blockedTotal),
                     color = Color(0xFFFFC107), fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1   // zlata
                 )
             }

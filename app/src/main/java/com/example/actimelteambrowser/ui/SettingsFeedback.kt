@@ -221,6 +221,9 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var rating by remember { mutableStateOf(0) }
     var type by remember { mutableStateOf(0) }            // 0 = recenze, 1 = chyba
+    // tri tecky nahore: 0 = Co chystame dale (vychozi), 1 = Recenze, 2 = Chyba (ukazka zacina rovnou na recenzi)
+    var page by remember { mutableStateOf(if (com.example.actimelteambrowser.DemoMarks.demo) 1 else 0) }
+    fun goPage(p: Int) { page = p; if (p > 0) type = p - 1 }
     var message by remember { mutableStateOf("") }
     var contact by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
@@ -240,7 +243,53 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                 Modifier.weight(1f).fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(
+                // vyberove tecky
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (p in 0..2) {
+                        Box(
+                            Modifier.size(36.dp).clip(CircleShape).clickable { goPage(p) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                Modifier.size(if (p == page) 14.dp else 10.dp).clip(CircleShape)
+                                    .background(if (p == page) Color(0xFFFFD600) else Color(0x66FFFFFF))
+                            )
+                        }
+                    }
+                }
+                Text(
+                    when (page) { 0 -> "Co chystáme dále"; 1 -> "Recenze"; else -> "Nahlásit chybu" },
+                    color = MUTED, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                if (page == 0) Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xD91E1E1E)).padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("Co chystáme dále?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "🛠  Na prohlížeči budu nadále pracovat a vylepšovat ho.",
+                        color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp
+                    )
+                    Text("V dalších aktualizacích se chystá:", color = Color(0xFFFFD600), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    for ((icon, t) in listOf("📖" to "Slovník", "🏠" to "Ukládání adres", "🗂" to "Ukládání karet", "🎙" to "Ovládání hlasem")) {
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x332A2A2A)).padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(icon, fontSize = 20.sp)
+                            Spacer(Modifier.width(12.dp))
+                            Text(t, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Text("Máš nápad, co by se hodilo? Napiš mi ho v recenzi →", color = MUTED, fontSize = 13.sp,
+                        modifier = Modifier.clickable { goPage(1) })
+                }
+                if (page != 0) Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xD91E1E1E)).padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -261,8 +310,8 @@ internal fun FeedbackScreen(onBack: () -> Unit) {
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StyleCard("Recenze", "Co se ti líbí a co ne", type == 0, Modifier.weight(1f).demoMark("fb_review")) { type = 0 }
-                        StyleCard("Chyba", "Něco nefunguje", type == 1, Modifier.weight(1f).demoMark("fb_bug"), accent = ORANGE, fill = Color(0xFF3D2410)) { type = 1 }
+                        StyleCard("Recenze", "Co se ti líbí a co ne", type == 0, Modifier.weight(1f).demoMark("fb_review")) { goPage(1) }
+                        StyleCard("Chyba", "Něco nefunguje", type == 1, Modifier.weight(1f).demoMark("fb_bug"), accent = ORANGE, fill = Color(0xFF3D2410)) { goPage(2) }
                     }
                     OutlinedTextField(
                         value = nickname,
