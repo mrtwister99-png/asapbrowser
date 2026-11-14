@@ -652,6 +652,10 @@ internal fun MainActivity.ensureSettingsReachable() {
 private val liveOutlines = HashMap<Int, Pair<View, GradientDrawable>>()
 @SuppressLint("StaticFieldLeak")
 private val tutorialPlus = ArrayList<View>()
+
+/** Zlute "+" zive napovedy (pri schovani list pri posouvani zajedou za okraj spolu s bocnimi tlacitky). */
+@Suppress("UnusedReceiverParameter")
+internal fun MainActivity.tutorialPlusViews(): List<View> = tutorialPlus
 private var liveAnim: ValueAnimator? = null
 @SuppressLint("StaticFieldLeak")
 private val liveIcons = ArrayList<View>()   // ikony Sdilet / zamek, ktere ted blikaji zlute
@@ -698,7 +702,7 @@ internal fun MainActivity.applyLiveTutorial() {
             in 1..12 -> buttonView(n)
             101 -> findViewById(R.id.urlContainer)
             102 -> etSearchMain
-            in 201..203 -> (sideBarLeft as? ViewGroup)?.getChildAt(n - 201)
+            in 201..204 -> (sideBarLeft as? ViewGroup)?.getChildAt(n - 201)
             else -> null
         }
         val v: View = found ?: continue
@@ -828,7 +832,7 @@ internal fun MainActivity.showTutorialPlusDialog() {
 
 // Zacatek zive tutorialu (po "Okay" v uvodni zprave): tlacitka, pole, Sdilet a tlacitka v liste dostanou obrys
 internal fun MainActivity.startLiveTutorial() {
-    AppSettings.liveTutorial.set(((1..12) + listOf(101, 102, 103, 104, 201, 202, 203)).joinToString(","))
+    AppSettings.liveTutorial.set(((1..12) + listOf(101, 102, 103, 104, 201, 202, 203) + (if (AppSettings.vaultDemoSeen.get()) emptyList() else listOf(204))).joinToString(","))
     applyLiveTutorial()
 }
 

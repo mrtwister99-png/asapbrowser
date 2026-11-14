@@ -44,6 +44,9 @@ internal fun MainActivity.showStyledDialog(
     positiveText: String? = null,
     onPositive: (() -> Boolean)? = null,
     negativeText: String? = "Zrušit",
+    dimAmount: Float = 0.6f,
+    strokeColor: Int? = null,
+    topView: ((dismiss: () -> Unit) -> View)? = null,
     bodyBuilder: (dismiss: () -> Unit) -> View
 ) {
     val dialog = Dialog(this)
@@ -58,8 +61,14 @@ internal fun MainActivity.showStyledDialog(
     val cardBg = GradientDrawable()
     cardBg.setColor("#1E1E1E".toColorInt())
     cardBg.cornerRadius = dp(24).toFloat()
-    cardBg.setStroke(dp(1), "#2A2A2A".toColorInt())
+    if (strokeColor != null) cardBg.setStroke(dp(2), strokeColor) else cardBg.setStroke(dp(1), "#2A2A2A".toColorInt())
     card.background = cardBg
+    topView?.let { tv ->
+        val v = tv(dismiss)
+        val tlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        tlp.bottomMargin = dp(12)
+        card.addView(v, tlp)
+    }
 
     val titleView = TextView(this)
     titleView.text = title
@@ -97,7 +106,7 @@ internal fun MainActivity.showStyledDialog(
     dialog.window?.let { w ->
         w.setBackgroundDrawableResource(android.R.color.transparent)
         w.setLayout((resources.displayMetrics.widthPixels * 0.9).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
-        w.setDimAmount(0.6f)
+        w.setDimAmount(dimAmount)
     }
     card.alpha = 0f
     card.scaleX = 0.85f

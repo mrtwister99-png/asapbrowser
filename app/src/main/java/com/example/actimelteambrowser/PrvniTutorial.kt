@@ -341,31 +341,38 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             fun flip() { isAdBlockOn = !isAdBlockOn; applyAdBlockUi(); AppToast.show(this, if (isAdBlockOn) "AdBlock zapnut" else "AdBlock vypnut") }
             fun after(ms: Long, block: () -> Unit) { demoHandler.postDelayed({ if (demoRunning) block() }, ms) }
 
-            // Preskocit + "OK, pokračuj" vedle sebe, pod nimi dve kolecka
+            // tip a hned pod nim: vlevo cervene Preskocit (klikaci celou dobu), vpravo zelene "OK, pokračuj"; pod tim dve kolecka
             ov.removeView(skip)
+            ov.removeView(caption)
+            val box = LinearLayout(this)
+            box.orientation = LinearLayout.VERTICAL
+            box.addView(caption, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             val row = LinearLayout(this)
             row.orientation = LinearLayout.HORIZONTAL
-            row.gravity = Gravity.CENTER
-            row.addView(skip)
+            val slp2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            row.addView(skip, slp2)
             val ok = TextView(this)
             ok.text = "OK, pokračuj"
             ok.setTextColor("#06281D".toColorInt())
             ok.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             ok.setTypeface(ok.typeface, android.graphics.Typeface.BOLD)
             ok.gravity = Gravity.CENTER
-            ok.setPadding(dp(24), dp(12), dp(24), dp(12))
+            ok.setPadding(dp(12), dp(12), dp(12), dp(12))
             val okBg = GradientDrawable()
             okBg.setColor("#00B055".toColorInt())
             okBg.cornerRadius = dp(22).toFloat()
             ok.background = okBg
-            ok.visibility = View.GONE
-            val olp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            ok.visibility = View.INVISIBLE   // misto vpravo je drzene, Preskocit zustava vlevo
+            val olp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             olp.marginStart = dp(12)
             row.addView(ok, olp)
-            val rlp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
-            rlp.bottomMargin = skipBottom + dp(16)
-            ov.addView(row, rlp)
-            (caption.layoutParams as FrameLayout.LayoutParams).bottomMargin = skipBottom + dp(88)
+            val rowLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            rowLp.topMargin = dp(12)
+            box.addView(row, rowLp)
+            val blp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+            blp.marginStart = dp(24); blp.marginEnd = dp(24)
+            blp.bottomMargin = skipBottom + dp(18)
+            ov.addView(box, blp)
             val dots = LinearLayout(this)
             dots.orientation = LinearLayout.HORIZONTAL
             val dot1 = DemoDot(this)

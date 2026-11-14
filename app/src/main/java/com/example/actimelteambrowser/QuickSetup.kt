@@ -83,9 +83,48 @@ private fun MainActivity.bodyText(t: String): TextView {
     return tv
 }
 
-// Okno s textem a tlacitky pod sebou (prvni = hlavni zelene); kazde tlacitko okno zavre a spusti svou akci
-private fun MainActivity.choiceDialog(title: String, text: String, extra: View? = null, vararg buttons: Pair<String, () -> Unit>) {
-    showStyledDialog(title = title, negativeText = null) { dismiss ->
+// Rychle nastaveni uz jednou doslo na konec (5/5): kulicky jdou klepnout a v oknech je tlacitko Zpet
+private var quickSeenEnd = false
+
+// Krok rychleho nastaveni podle cisla (1-5)
+private fun MainActivity.quickGo(n: Int) {
+    quickSpotOff?.invoke()
+    when (n) { 1 -> quickStage1(); 2 -> quickStage2(); 3 -> quickStage3(); 4 -> quickStage4(); else -> quickStage5() }
+}
+
+// 5 kulicek nahore misto "1/5": aktualni zluta, prosle bile, dalsi jen obrys; po dojeti na konec jdou klepnout
+private fun MainActivity.stageDots(stage: Int, dismiss: () -> Unit): View {
+    val row = LinearLayout(this)
+    row.orientation = LinearLayout.HORIZONTAL
+    row.gravity = Gravity.CENTER
+    for (k in 1..5) {
+        val dot = View(this)
+        val g = GradientDrawable()
+        g.shape = GradientDrawable.OVAL
+        when {
+            k == stage -> g.setColor("#FFD600".toColorInt())
+            k < stage || quickSeenEnd -> g.setColor(Color.WHITE)
+            else -> { g.setColor(Color.TRANSPARENT); g.setStroke(dp(2), "#777777".toColorInt()) }
+        }
+        dot.background = g
+        val sz = if (k == stage) dp(14) else dp(11)
+        // vetsi plocha pro klepnuti kolem tecky
+        val hit = android.widget.FrameLayout(this)
+        hit.addView(dot, android.widget.FrameLayout.LayoutParams(sz, sz, Gravity.CENTER))
+        if (quickSeenEnd && k != stage) hit.setOnClickListener { dismiss(); quickGo(k) }
+        row.addView(hit, LinearLayout.LayoutParams(dp(30), dp(30)))
+    }
+    return row
+}
+
+// Okno s textem a tlacitky pod sebou (prvni = hlavni zelene); kazde tlacitko okno zavre a spusti svou akci.
+// Uvodni prvni nastaveni: plocha za oknem hodne ztmavena, zluty obrys; stage 1-5 = kulicky nahore (+ Zpet po dojeti na konec)
+private fun MainActivity.choiceDialog(title: String, text: String, extra: View? = null, vararg buttons0: Pair<String, () -> Unit>, stage: Int = 0) {
+    val buttons = if (stage > 1 && quickSeenEnd) arrayOf(*buttons0, "← Zpět" to { quickGo(stage - 1) }) else arrayOf(*buttons0)
+    showStyledDialog(
+        title = title, negativeText = null, dimAmount = 0.8f, strokeColor = "#FFD600".toColorInt(),
+        topView = if (stage > 0) ({ d -> stageDots(stage, d) }) else null
+    ) { dismiss ->
         val body = LinearLayout(this)
         body.orientation = LinearLayout.VERTICAL
         body.addView(bodyText(text))
@@ -194,7 +233,7 @@ private fun MainActivity.quickStage1() {
     }
     paint()
     choiceDialog(
-        "1/5  Domovská stránka a karty",
+        "Domovská stránka a karty",
         "Kam se má prohlížeč vracet tlačítkem Domů a co otevřít po spuštění.",
         box,
         "OK" to {
@@ -203,7 +242,8 @@ private fun MainActivity.quickStage1() {
             if (u.isNotEmpty() && runCatching { u.toUri().host }.getOrNull()?.contains('.') == true) AppSettings.homeUrl.set(u)
             AppSettings.startupRestoreTabs.set(restore)
             quickStage2()
-        }
+        },
+        stage = 1
     )
 }
 
@@ -214,7 +254,7 @@ private fun MainActivity.quickStage2() {
     quickSetupStage = 2
     // vse ztmavene, videt je jen kulicka gest (na ni jde klepnout) a tip nahore
     window.decorView.postDelayed({
-        if (quickSetupStage == 2) gestureTarget()?.let { quickSpotlight(listOf(it), "2/5  Klikni na kuličku 👆", circle = it === orbView) }
+        if (quickSetupStage == 2) gestureTarget()?.let { quickSpotlight(listOf(it), "Klikni na kuličku 👆", circle = it === orbView) }
     }, 350)
 }
 
@@ -234,7 +274,8 @@ internal fun MainActivity.onQuickSetupDemoEnded() {
                 else if (n != 0) AppSettings.buttonTap[n - 1].set(ButtonFunction.NONE.key)
                 updateButtonVisuals()
                 quickStage3()
-            }
+            },
+            stage = 2
         )
     }, 400)
 }
@@ -242,7 +283,7 @@ internal fun MainActivity.onQuickSetupDemoEnded() {
 // 3) pridatelna tlacitka: 2 + 2, kazde umi klepnuti i drzeni
 private fun MainActivity.quickStage3() {
     // vse ztmavene, videt je tlacitko listy a gest; nad bocnimi tlacitky vyjedou 2 + 2 ukazkova tlacitka
-    quickSpotlight(listOfNotNull(buttonView(defaultBarOrigin()), gestureTarget()), "3/5  Na každou stranu přidáš 2 tlačítka")
+    quickSpotlight(listOfNotNull(buttonView(defaultBarOrigin()), gestureTarget()), "Na každou stranu přidáš 2 tlačítka")
     val parent = root as ConstraintLayout
     val ghosts = ArrayList<View>()
     var delay = 500L
@@ -277,10 +318,11 @@ private fun MainActivity.quickStage3() {
     quickSpotOff = { ghosts.forEach { parent.removeView(it) }; off?.invoke() }
     window.decorView.postDelayed({
         choiceDialog(
-            "3/5  Tlačítka",
+            "Tlačítka",
             "Na každou stranu můžeš přidat až 2 další tlačítka – žluté „+“ nad bočními tlačítky.\n\nKaždé tlačítko umí dvě věci: klepnutí a podržení. Obojí si nastavíš v Nastavení → Tlačítka.",
             null,
-            "Dále" to { quickSpotOff?.invoke(); quickStage4() }
+            "Dále" to { quickSpotOff?.invoke(); quickStage4() },
+            stage = 3
         )
     }, delay + 900)
 }
@@ -288,7 +330,7 @@ private fun MainActivity.quickStage3() {
 // 4) bocni lista + pravidlo lista / gesta (ukazka listy)
 private fun MainActivity.quickStage4() {
     choiceDialog(
-        "4/5  Boční lišta",
+        "Boční lišta",
         "Lišta vyjíždí z tlačítka a může být jen na spodních pozicích vlevo nebo vpravo (tlačítko 5 nebo 6).\n\nTlačítko gest může být kdekoli jinde. Lišta a gesta nemůžou být na jednom tlačítku.",
         null,
         "Ukázat lištu" to {
@@ -298,16 +340,19 @@ private fun MainActivity.quickStage4() {
                 window.decorView.postDelayed({ quickStage5() }, 700)
             }, 3000)
         },
-        "Dále" to { quickStage5() }
+        "Dále" to { quickStage5() },
+        stage = 4
     )
 }
 
 // 5) export a import
 private fun MainActivity.quickStage5() {
+    quickSeenEnd = true   // od ted jdou kulicky klepnout a je tu Zpet
     choiceDialog(
-        "5/5  Záloha nastavení",
+        "Záloha nastavení",
         "Veškeré nastavení si uložíš a můžeš zálohovat – nebo ho jednoduše pošleš na e-mail. Pak si ho stáhneš do telefonu a kdyžtak nahraješ zpět.\n\nNajdeš to v Nastavení → Export a Import.",
         null,
-        "Hotovo" to { AppToast.show(this, "Rychlé nastavení hotové") }
+        "Hotovo" to { quickSeenEnd = false; AppToast.show(this, "Rychlé nastavení hotové") },
+        stage = 5
     )
 }

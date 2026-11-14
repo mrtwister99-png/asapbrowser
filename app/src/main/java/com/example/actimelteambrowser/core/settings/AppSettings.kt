@@ -138,6 +138,10 @@ object AppSettings {
     // Barvy pod klavesami 1-9: "c1,...,c9" (ARGB, 0 = bez barvy) a barva cele plochy (0 = vychozi pruhledna)
     val gestureKeyColors = StringSetting("gesture_key_colors", "")
     val gestureAreaColor = IntSetting("gesture_area_color", 0)
+    val gestureGlyphColor = IntSetting("gesture_glyph_color", 0)    // barva znaku (0 = bila)
+    val gestureTrailColor = IntSetting("gesture_trail_color", 0)    // barva projeti (0 = zelena)
+    val gestureTrail = IntSetting("gesture_trail", 0)               // spoj: 0 cara, 1 carkovana, 2 teckovana, 3-7 znaky
+    val gestureEffect = IntSetting("gesture_effect", -1)            // efekt projeti: -1 podle vzhledu, 0 zadny, 1-4
     val gestureList = StringSetting("gesture_list", "")   // prazdne = vychozi gesta
     val gestureNewTabMigrated = BoolSetting("gesture_newtab_migrated", false)   // jednorazova zmena gesta "nova karta" 98741 -> 9852 (neexportuje se)
     val gestureIncognitoMigrated = BoolSetting("gesture_incognito_migrated", false)   // jednorazova migrace gesta "nove anonymni okno" (neexportuje se)
@@ -221,7 +225,7 @@ object AppSettings {
         homeUrl, startupRestoreTabs
     ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
         listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, adBlockStrictSites, sitePermissions, totalBlocked, startShowFavorites,
-        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
+        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, gestureGlyphColor, gestureTrailColor, gestureTrail, gestureEffect, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
 
     // Vsechna nastaveni pro kodovy export (SettingsCodes)
     val allSettings: List<Setting<*>> get() = all

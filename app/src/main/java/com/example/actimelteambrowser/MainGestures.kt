@@ -51,14 +51,11 @@ internal fun MainActivity.enterGestureConfig() {
         @Suppress("UNUSED_VARIABLE", "unused") val tick = gestTick.intValue
         GestureAreaEditor(
             style = gestPreviewStyle.value ?: GestureLook.style(),
-            opacity = AppSettings.gestureOpacity.get() / 100f,
             defaultSizeDp = AppSettings.gestureSize.get().coerceIn(180, 340),
             bottomOffsetDp = bottomDp,
             resetKey = gestResetKey.intValue,
             onChange = { AppSettings.gestureRect.set(GestureArea.format(it)) },
-            keyOpacity = GestureLook.keyAlpha(),
-            keyColors = GestureLook.keyColors(),
-            areaBg = GestureLook.areaBg()
+            theme = GestureLook.theme()
         )
     }
     gestureView.visibility = View.VISIBLE
@@ -154,6 +151,9 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
     val size = AppSettings.gestureSize.get().coerceIn(180, 340)
     val density = resources.displayMetrics.density
     val bottomDp = ((bottomBar.height - lastSystemBottom) / density).toInt() + 16
+    // napoveda gest zacina pod hornim polem (a listou karet); schovane listy = hned nahore
+    val topDp = if (topBar.translationY < 0f) 8 else ((topBar.height - lastSystemTopPx + stripTopPx) / density).toInt() + 6
+    val theme = GestureLook.theme()
     gestureView.setContent {
         GestureOverlay(
             style = style,
@@ -161,7 +161,6 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
             gestures = list,
             bottomOffsetDp = bottomDp,
             rect = GestureArea.parse(AppSettings.gestureRect.get()),
-            opacity = AppSettings.gestureOpacity.get() / 100f,
             onDismiss = { if (demoBounds == null) hideGestures() },
             onMatch = { def ->
                 if (demoBounds == null) {
@@ -176,9 +175,9 @@ internal fun MainActivity.showGestures(demoBounds: ((Float, Float, Float, Float)
             onUnknown = { if (demoBounds == null) AppToast.show(this, "Neznámé gesto") },
             onSurfaceBounds = demoBounds,
             showHints = demoBounds == null,
-            keyAlpha = GestureLook.keyAlpha(),
-            keyColors = GestureLook.keyColors(),
-            areaBg = GestureLook.areaBg()
+            theme = theme,
+            topInsetDp = topDp,
+            onMatchAt = { x, y -> if (demoBounds == null) showFirework(x, y) }
         )
     }
     gestureView.visibility = View.VISIBLE

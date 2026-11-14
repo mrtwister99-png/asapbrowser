@@ -85,8 +85,15 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
         val pl = IntArray(2)
         target.getLocationInWindow(tl)
         (parent as? View)?.getLocationInWindow(pl)
-        translationX = tl[0] - pl[0] + target.width / 2f - width / 2f
-        translationY = tl[1] - pl[1] + target.height / 2f - height / 2f
+        // kulicka je vzdy cela videt (i u tlacitka zasunuteho za okraj obrazovky)
+        val pw = (parent as? View)?.width ?: 0
+        val ph = (parent as? View)?.height ?: 0
+        var tx = tl[0] - pl[0] + target.width / 2f - width / 2f
+        var ty = tl[1] - pl[1] + target.height / 2f - height / 2f
+        if (pw > width) tx = tx.coerceIn(0f, (pw - width).toFloat())
+        if (ph > height) ty = ty.coerceIn(0f, (ph - height).toFloat())
+        translationX = tx
+        translationY = ty
         visibility = VISIBLE
     }
 
@@ -97,10 +104,12 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
         // znak podle vzhledu plochy: cisla = vyrazne zelene G, kolecka = tecka, ctverecky = ctverecek, hvezdicky = hvezdicka
         when (styleOverride ?: com.example.actimelteambrowser.ui.GestureLook.style()) {
             0 -> {
-                letter.color = dot.color
-                letter.textSize = 30f * d
-                val fm = letter.fontMetrics
-                canvas.drawText("G", cx, cy - (fm.ascent + fm.descent) / 2f, letter)
+                // zelene UFO (raritni znak: ma ho jen ten, kdo si vzhled nezmeni)
+                val r = 7.5f * d
+                canvas.drawOval(cx - r * 1.75f, cy - r * 0.15f, cx + r * 1.75f, cy + r * 0.85f, dot)
+                canvas.drawArc(cx - r * 0.9f, cy - r * 1.05f, cx + r * 0.9f, cy + r * 0.75f, 180f, 180f, true, dot)
+                // svetylka na talíri
+                for (k in -1..1) canvas.drawCircle(cx + k * r * 0.9f, cy + r * 0.35f, 1.3f * d, fill)
             }
             2 -> canvas.drawRect(cx - 8f * d, cy - 8f * d, cx + 8f * d, cy + 8f * d, dot)
             3 -> {

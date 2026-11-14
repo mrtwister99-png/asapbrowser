@@ -654,6 +654,11 @@ class MainActivity : AppCompatActivity() {
             val x = if (hidden) (if (isLeftSide(n)) -off else off) else sideBaseX(n)
             v.animate().translationX(x).setDuration(d).start()
         }
+        val half = resources.displayMetrics.widthPixels / 2f
+        for (p in tutorialPlusViews()) {
+            val leftSide = p.left + p.width / 2f < half
+            p.animate().translationX(if (hidden) (if (leftSide) -off else off) else 0f).setDuration(d).start()
+        }
     }
 
     private fun toggleTopBar() {
