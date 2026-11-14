@@ -108,10 +108,6 @@ private val RED = Color(0xFFAC0001)
 private val CARAMEL = Color(0xFFCDA24D)
 private val YELLOW = Color(0xFFFFD600)
 private val MUTED = Color(0xFF888888)
-/** Barvy slozek na vyber. */
-private val FOLDER_COLORS = listOf(
-    0xFFCDA24D, 0xFF00B055, 0xFF1E6BFF, 0xFFAC0001, 0xFFD9FF00, 0xFF9C27B0, 0xFFFF7A00, 0xFFE91E63
-)
 private val HEADER_H = 40.dp   // vyska hlavicky dlazdice (nazev + hvezda + krizek)
 
 /** Karty: 1 karta / 2-4 karty / 5 a vice karet (4. pad: "zavrit 1 kartu", "3 karty", "5 karet"). */

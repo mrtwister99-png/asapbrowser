@@ -311,10 +311,8 @@ object SettingsCodes {
             val q = fileSquare ?: false
             if (fileSig != null && fileSig == rewardSig(b, q, fileStar, fileColors)) {
                 // import pocet nikdy nesnizi a koupene Ctverecky nevezme
-                AppSettings.totalBlocked.set(maxOf(AppSettings.totalBlocked.get(), b))
-                if (q) AppSettings.squareStyleOwned.set(true)
-                if (fileStar) AppSettings.starStyleOwned.set(true)
-                if (fileColors) AppSettings.gestureColorsOwned.set(true)
+                RewardGuard.setBlocked(maxOf(AppSettings.totalBlocked.get(), b))
+                RewardGuard.unlock(square = q, star = fileStar, colors = fileColors)
                 count += 2
             } else rewardNote = " (počet zablokovaných reklam nebyl načten – soubor byl ručně upraven)"
         }
@@ -392,22 +390,12 @@ object SettingsCodes {
     // ---- kontrolni kod (podpis) poctu reklam a Ctverecku ----
     private const val SIG_KEY = "podpis"
 
-    // tajny klic je jen v aplikaci (poskladany z casti, aby nebyl v souboru appky jako jeden citelny text)
-    private fun sigKey(): ByteArray {
-        val a = intArrayOf(0x41, 0x53, 0x41, 0x50, 0x2d, 0x62, 0x72, 0x77)
-        val b = intArrayOf(0x7e, 0x13, 0x9c, 0x5a, 0xe1, 0x37, 0x08, 0xd4, 0x6b, 0xa2, 0x3f, 0xc9, 0x51, 0x8e, 0x24, 0xf0)
-        val c = intArrayOf(0x92, 0x1d, 0x6e, 0xb7, 0x0c, 0x45, 0xfa, 0x38)
-        return (a + b.map { it xor 0x5c } + c.reversed()).map { it.toByte() }.toByteArray()
-    }
-
     /** HMAC-SHA256 z hodnot, zkraceny na 24 hex znaku. Kdo zmeni cislo v souboru, nema jak spocitat novy kod. */
     private fun rewardSig(blocked: Int, square: Boolean, star: Boolean = false, colors: Boolean = false): String {
-        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
-        mac.init(javax.crypto.spec.SecretKeySpec(sigKey(), "HmacSHA256"))
         var msg = "asap|total_blocked=$blocked|square_style_owned=${if (square) 1 else 0}"
         // Hvezdicky a Barvy: pridaji se jen kdyz jsou odemcene (starsi soubory bez nich maji kod dal platny)
         if (star || colors) msg += "|star_style_owned=${if (star) 1 else 0}|gesture_colors_owned=${if (colors) 1 else 0}"
-        return mac.doFinal(msg.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
+        return RewardGuard.hmac(msg)
     }
 
     private fun isWebUrl(url: String) = url.startsWith("https://") || url.startsWith("http://")

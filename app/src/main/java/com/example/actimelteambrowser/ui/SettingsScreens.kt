@@ -140,8 +140,6 @@ sealed class Route {
     // trail = nadrazene slozky (pro tlacitko zpet v podslozkach)
     data class Folder(val folder: BookmarkFolder, val trail: List<BookmarkFolder> = emptyList()) : Route()
     object History : Route()
-    object Buttons : Route()
-    object Gestures : Route()
     object Downloads : Route()
     data class Section(val key: String) : Route()   // jedna skupina nastaveni (home, search, tabs, strip, anim, sounds, vibra)
     object Tutorials : Route()
@@ -210,8 +208,6 @@ fun SettingsApp(
             onOpenUrl = onOpenUrl,
             onBack = { route = Route.Main }
         )
-        is Route.Buttons -> ButtonsConfigScreen(onBack = { route = Route.Main })
-        is Route.Gestures -> GesturesScreen(onBack = { route = Route.Main })
         is Route.Downloads -> DownloadsScreen(onBack = { route = Route.Main })
         is Route.Section -> OtherSettingsScreen(section = r.key, isDefaultBrowser = isDefaultBrowser, onDefaultBrowser = onDefaultBrowser, onBack = { route = Route.Main })
         is Route.Tutorials -> TutorialsScreen(onBack = { route = Route.Main }, onRunDemo = onRunDemo)

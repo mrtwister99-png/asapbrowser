@@ -136,7 +136,6 @@ class SettingsActivity : ComponentActivity() {
         val start = when (startKey) {
             START_BOOKMARKS -> Route.Bookmarks
             START_HISTORY -> Route.History
-            START_BUTTONS -> Route.Buttons
             START_FEEDBACK -> Route.Feedback
             START_VAULT -> Route.Vault
             else -> Route.Main

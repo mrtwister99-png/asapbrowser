@@ -27,6 +27,7 @@ object AppSettings {
             prefs = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
             fixButtons()   // opravi stare/neplatne funkce tlacitek (7/8 jen on/off, Gesta a Bocni lista max 1x)
         }
+        RewardGuard.check(context)   // odmeny (pocet reklam, odemcene vzhledy) nikdo neprepsal mimo aplikaci
     }
 
     // ---------- typy nastaveni ----------

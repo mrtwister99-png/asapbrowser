@@ -8,10 +8,6 @@ object AdBlockRules {
     // Zatim nepouzivano - misto pro EasyList (30k pravidel)
     var rules: List<String> = emptyList()
 
-    fun loadFromAssets() {
-        // TODO: nacist z assets/easylist.txt
-    }
-
     // true = stranka je YouTube (youtube.com, m.youtube.com, youtu.be)
     fun isYoutube(url: String?): Boolean {
         if (url == null) return false

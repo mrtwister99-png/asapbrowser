@@ -122,7 +122,6 @@ import java.util.Date
 import java.util.Locale
 
 // Barvy ve stejném duchu jako lišty v appce (kopie ze SettingsScreens.kt, v každém souboru soukromé)
-// Barvy ve stejném duchu jako lišty v appce
 private val BG = Color(0xFF0A0A0A)
 private val PANEL = Color(0xFF1E1E1E)
 private val ROW = Color(0xFF2A2A2A)
@@ -759,221 +758,6 @@ private fun FunctionPickerDialog(onPick: (ButtonFunction) -> Unit, onDismiss: ()
     )
 }
 
-/** Nastaveni gest: vzhled a velikost plochy, vyzkouseni a seznam gest (kody jdou nahrat primo na plose). */
-@Composable
-internal fun GesturesScreen(onBack: () -> Unit) {
-    var style by remember { mutableStateOf(AppSettings.gestureStyle.get()) }
-    var size by remember { mutableStateOf(AppSettings.gestureSize.get().coerceIn(180, 340)) }
-    var hapticOn by remember { mutableStateOf(AppSettings.gestureHaptic.get()) }
-    var soundOn by remember { mutableStateOf(AppSettings.gestureSound.get()) }
-    val gestures = remember { mutableStateListOf<GestureDef>().apply { addAll(Gestures.load()) } }
-    val hostView = LocalView.current
-    var testInfo by remember { mutableStateOf("Vyzkoušej plochu: nakresli gesto.") }
-    var testProgress by remember { mutableStateOf("") }
-    var pickFunction by remember { mutableStateOf(false) }
-    var pendingFn by remember { mutableStateOf<ButtonFunction?>(null) }
-    var recordFor by remember { mutableStateOf<Int?>(null) }   // index prenahravaneho gesta, -1 = nove
-
-    fun persist() = Gestures.save(gestures.toList())
-
-    ScreenScaffold(title = "Gesta", onBack = onBack) {
-        Column(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                "Gesto se spouští tlačítkem s funkcí Gesta (kulička). Zobrazí se průhledná plocha u tlačítka; " +
-                    "kód zadáš přejetím i klepáním, začínáš ${Gestures.startText()}.",
-                color = MUTED, fontSize = 13.sp
-            )
-
-            Text("VZHLED PLOCHY", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StyleCard("Číselná klávesnice", "1 2 3 / 4 5 6 / 7 8 9", style == 0, Modifier.weight(1f)) {
-                    style = 0
-                    AppSettings.gestureStyle.set(0)
-                }
-                StyleCard("Kuličky", "mřížka 3 × 3 jako odemykání", style == 1, Modifier.weight(1f)) {
-                    style = 1
-                    AppSettings.gestureStyle.set(1)
-                }
-            }
-
-            Text("VELIKOST PLOCHY: $size dp", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Slider(
-                value = size.toFloat(),
-                onValueChange = { size = it.toInt() },
-                valueRange = 180f..340f,
-                onValueChangeFinished = { AppSettings.gestureSize.set(size) }
-            )
-
-            Text("ODEZVA PO GESTU", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Drobné zabrnění", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Switch(checked = hapticOn, onCheckedChange = { hapticOn = it; AppSettings.gestureHaptic.set(it) })
-            }
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Zvuk úspěšného gesta", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Switch(checked = soundOn, onCheckedChange = { soundOn = it; AppSettings.gestureSound.set(it) })
-            }
-
-            Text("VYZKOUŠEJ", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                GestureSurface(
-                    style = style,
-                    sizeDp = size,
-                    modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(Color(0xFF151515)),
-                    onProgress = { testProgress = it },
-                    instant = { c -> gestures.any { it.code == c } && gestures.none { it.code != c && it.code.startsWith(c) } },
-                    onComplete = { c ->
-                        val m = gestures.firstOrNull { it.code == c }
-                        // vibrace pri rozpoznanem gestu
-                        if (m != null) {
-                            gestureTick(hostView.context)
-                        }
-                        testInfo = if (m != null) "✓ " + codeText(c) + "  →  " + m.fn.label
-                        else "✗ " + codeText(c) + "  (neznámé gesto)"
-                    }
-                )
-            }
-            Text(
-                if (testProgress.isNotEmpty()) "Kód: " + codeText(testProgress) else testInfo,
-                color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
-            )
-
-            Text("GESTA", color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            for ((index, g) in gestures.withIndex()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(PANEL)
-                        .clickable { recordFor = index }
-                        .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            GlyphIcon(g.fn, 20.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                g.fn.label, color = Color.White, fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(codeText(g.code), color = ACCENT, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-                    GesturePathPreview(g.code, Modifier.padding(end = 6.dp).size(38.dp))
-                    Box(
-                        Modifier.size(44.dp).clickable {
-                            gestures.removeAt(index)
-                            persist()
-                        },
-                        contentAlignment = Alignment.Center
-                    ) { Text("✕", color = MUTED, fontSize = 16.sp) }
-                }
-            }
-            Text("Klepnutím na gesto ho přenahraješ novým kódem.", color = MUTED, fontSize = 12.sp)
-
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(ACCENT)
-                    .clickable { pickFunction = true },
-                contentAlignment = Alignment.Center
-            ) { Text("+ PŘIDAT GESTO", color = Color(0xFF06281D), fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(ROW)
-                    .clickable {
-                        Gestures.reset()
-                        gestures.clear()
-                        gestures.addAll(Gestures.load())
-                    },
-                contentAlignment = Alignment.Center
-            ) { Text("Obnovit výchozí gesta", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-            Spacer(Modifier.height(16.dp))
-        }
-    }
-
-    if (pickFunction) {
-        FunctionPickerDialog(
-            onPick = { fn ->
-                pickFunction = false
-                pendingFn = fn
-                recordFor = -1
-            },
-            onDismiss = { pickFunction = false }
-        )
-    }
-
-    // nahrani kodu primo na plose
-    recordFor?.let { idx ->
-        var error by remember(idx) { mutableStateOf("") }
-        Dialog(
-            onDismissRequest = { recordFor = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Column(
-                Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(PANEL)
-                    .padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                val target = if (idx >= 0) gestures[idx].fn else pendingFn
-                Text(
-                    "Nahraj gesto" + (if (target != null) ": " + target.label else ""),
-                    color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (error.isNotEmpty()) error else "Nakresli kód aspoň ze 2 kláves (start: " + Gestures.startText() + ").",
-                    color = if (error.isNotEmpty()) Color(0xFFFF6B6B) else MUTED, fontSize = 13.sp
-                )
-                Spacer(Modifier.height(12.dp))
-                GestureSurface(
-                    style = style,
-                    sizeDp = minOf(size, 280),
-                    modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(Color(0xFF151515)),
-                    onComplete = { c ->
-                        val clash = gestures.indexOfFirst { it.code == c }
-                        if (!Gestures.valid(c)) {
-                            error = "Kód musí mít aspoň 2 klávesy."
-                        } else if (clash >= 0 && clash != idx) {
-                            error = "Tento kód už používá: " + gestures[clash].fn.label
-                        } else {
-                            if (idx >= 0) gestures[idx] = gestures[idx].copy(code = c)
-                            else pendingFn?.let { gestures.add(GestureDef(c, it)) }
-                            persist()
-                            recordFor = null
-                        }
-                    }
-                )
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = { recordFor = null }) { Text("Zrušit") }
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------- KONFIGURACNI MOD GEST (plocha s prichytkami + panel shora)
 
 /** Poloha a velikost plochy gest: tisiciny sirky / vysky okna (aby sedela i po otoceni). */
@@ -1293,9 +1077,7 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
         val def = Gestures.defaults().firstOrNull { it.fn == ButtonFunction.BACK }
         if (!hapticOn && !soundOn && g.fn == ButtonFunction.BACK && def != null && g.code == def.code &&
             !(squareOwned && starOwned && colorsOwned)) {
-            AppSettings.squareStyleOwned.set(true)
-            AppSettings.starStyleOwned.set(true)
-            AppSettings.gestureColorsOwned.set(true)
+            com.example.actimelteambrowser.core.settings.RewardGuard.unlock(square = true, star = true, colors = true)
             squareOwned = true; starOwned = true; colorsOwned = true
             // gesto Zpet se hned vrati na sve misto (smazani bylo jen soucasti kodu)
             gestures.add(index.coerceAtMost(gestures.size), g)
@@ -1405,8 +1187,8 @@ fun GesturePanel(onChanged: () -> Unit, onResetArea: () -> Unit, onClose: () -> 
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(if (canBuy) Color(0xFFFFD600) else ROW)
                                     .clickable(enabled = canBuy) {
-                                        if (style == 2) { AppSettings.squareStyleOwned.set(true); squareOwned = true }
-                                        else { AppSettings.starStyleOwned.set(true); starOwned = true }
+                                        if (style == 2) { com.example.actimelteambrowser.core.settings.RewardGuard.unlock(square = true); squareOwned = true }
+                                        else { com.example.actimelteambrowser.core.settings.RewardGuard.unlock(star = true); starOwned = true }
                                         AppSettings.gestureStyle.set(style)
                                         onPreviewStyle(null)
                                         onChanged()

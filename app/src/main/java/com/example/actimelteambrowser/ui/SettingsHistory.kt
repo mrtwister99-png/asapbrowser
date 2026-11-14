@@ -121,7 +121,6 @@ import java.util.Date
 import java.util.Locale
 
 // Barvy ve stejném duchu jako lišty v appce (kopie ze SettingsScreens.kt, v každém souboru soukromé)
-// Barvy ve stejném duchu jako lišty v appce
 private val BG = Color(0xFF0A0A0A)
 private val PANEL = Color(0xFF1E1E1E)
 private val ROW = Color(0xFF2A2A2A)

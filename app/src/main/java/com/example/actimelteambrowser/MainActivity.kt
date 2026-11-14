@@ -1065,7 +1065,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        AppSettings.totalBlocked.set(totalBlocked.get())
+        com.example.actimelteambrowser.core.settings.RewardGuard.setBlocked(totalBlocked.get())
         saveTabs()
     }
 

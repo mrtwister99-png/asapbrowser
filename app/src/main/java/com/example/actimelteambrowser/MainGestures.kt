@@ -25,7 +25,7 @@ internal fun MainActivity.enterGestureConfig() {
     if (gestureConfigMode) return
     if (configMode) exitConfigMode()
     gestureConfigMode = true
-    AppSettings.totalBlocked.set(totalBlocked.get())   // aktualni pocet zablokovanych reklam (cena Ctverecku v panelu)
+    com.example.actimelteambrowser.core.settings.RewardGuard.setBlocked(totalBlocked.get())   // aktualni pocet zablokovanych reklam (cena Ctverecku v panelu)
     setChromeHidden(false)
     hideKeyboard()
     etSearchMain.clearFocus()

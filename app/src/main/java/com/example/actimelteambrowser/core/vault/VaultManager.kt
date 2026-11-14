@@ -189,14 +189,6 @@ object VaultManager {
         if (entries.removeAll { it.id == id }) persist(context)
     }
 
-    /** Nejnovejsi zaznam pro web (presna domena nebo jeji poddomena); jen v odemcenem stavu. */
-    fun findForHost(host: String): VaultEntry? = synchronized(mutex) {
-        if (dek == null) null else {
-            val h = host.lowercase().removePrefix("www.")
-            entries.filter { h == it.domain || h.endsWith("." + it.domain) }.maxByOrNull { it.createdAt }
-        }
-    }
-
     /** Vsechny zaznamy pro web (nejnovejsi prvni), kdyz je trezor odemceny. */
     fun findAllForHost(host: String): List<VaultEntry> = synchronized(mutex) {
         if (dek == null) emptyList() else {
@@ -366,8 +358,6 @@ object VaultManager {
     // Kdyz se v telefonu prida novy otisk, klic se zneplatni a je potreba PIN / 12 slov.
 
     private const val BIO_ALIAS = "atb_vault_bio"
-
-    fun bioSupported(): Boolean = Build.VERSION.SDK_INT >= 28
 
     fun hasBio(context: Context): Boolean = isCreated(context) && AppSettings.vaultBioBlob.get().isNotEmpty()
 

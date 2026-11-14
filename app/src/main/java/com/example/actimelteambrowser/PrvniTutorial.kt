@@ -303,15 +303,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
         dim.visibility = View.VISIBLE
         dim.invalidate()
     }
-    // totez pro obdelnik na obrazovce (prvky Compose obrazovek)
-    fun focusScreen(r: RectF) {
-        val rl = IntArray(2); root.getLocationOnScreen(rl)
-        dim.circle = false
-        dim.holes.clear()
-        dim.holes.add(RectF(r.left - rl[0], r.top - rl[1], r.right - rl[0], r.bottom - rl[1]).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) })
-        dim.visibility = View.VISIBLE
-        dim.invalidate()
-    }
     // zlute probliknuti (ve vrstve nad vsim, i nad modaly)
     fun blinkScreen(r: RectF) {
         val b = IntArray(2); ov.getLocationOnScreen(b)

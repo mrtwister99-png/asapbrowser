@@ -106,7 +106,7 @@ internal fun MainActivity.guessResourceType(request: WebResourceRequest): String
 internal fun MainActivity.onRequestBlocked(tab: BrowserTab) {
     tab.blocked.incrementAndGet()
     val total = totalBlocked.incrementAndGet()
-    if (total % 20 == 0) AppSettings.totalBlocked.set(total)
+    if (total % 20 == 0) com.example.actimelteambrowser.core.settings.RewardGuard.setBlocked(total)
     if (badgeUpdatePending.compareAndSet(0, 1)) {
         webContainer.postDelayed({
             badgeUpdatePending.set(0)
