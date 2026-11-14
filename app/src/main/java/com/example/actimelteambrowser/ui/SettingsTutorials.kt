@@ -267,6 +267,9 @@ private val TUTORIALS get() = listOf(
     )
 )
 
+/** Cislo "ukazky", ktere misto demo videa spusti znovu prvotni nastaveni. */
+internal const val SETUP_AGAIN_ID = 900
+
 @Composable
 internal fun TutorialsScreen(onBack: () -> Unit, onRunDemo: (Int) -> Unit = {}) {
     var selected by remember { mutableStateOf<Int?>(null) }
@@ -295,6 +298,20 @@ internal fun TutorialsScreen(onBack: () -> Unit, onRunDemo: (Int) -> Unit = {}) 
                     Column(Modifier.weight(1f)) {
                         Text("Demo videa", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Text("Ukázky všech tlačítek přímo v prohlížeči", color = MUTED, fontSize = 13.sp)
+                    }
+                }
+                // pod demo videi: znovu projit prvotni nastaveni (spusti se na hlavni plose)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF2A2610))
+                        .border(1.5.dp, Color(0xFFFFD600), RoundedCornerShape(16.dp)).clickable { onRunDemo(SETUP_AGAIN_ID) }
+                        .padding(start = 16.dp, end = 18.dp, top = 16.dp, bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("⚙", color = Color(0xFFFFD600), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Prvotní nastavení", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Projdi znovu úvodní nastavení prohlížeče (5 kroků)", color = MUTED, fontSize = 13.sp)
                     }
                 }
                 Text("Vyber funkci a uvidíš ukázku i postup.", color = MUTED, fontSize = 13.sp)

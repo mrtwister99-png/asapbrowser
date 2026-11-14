@@ -357,6 +357,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.urlContainer).setOnClickListener { liveTutorialDone(101); toggleTopBar() }
         findViewById<View>(R.id.ivUrlLock).setOnClickListener { if (!liveTutorialDone(104)) showPageInfo() }
         findViewById<View>(R.id.ivUrlShare).setOnClickListener { if (!liveTutorialDone(103)) showShareDialog() }
+        // podrzeni Sdilet: rovnou sdileni telefonu (bez okna)
+        findViewById<View>(R.id.ivUrlShare).setOnLongClickListener {
+            val u = webView.url
+            if (u != null && isWebUrl(u)) shareText(u, "Sdílet odkaz") else AppToast.show(this, "Není co sdílet")
+            true
+        }
 
         // Enter v hornim poli: stejne jako dole (adresa nebo hledani)
         etTopUrl.setOnEditorActionListener { _, _, _ ->
@@ -665,7 +671,7 @@ class MainActivity : AppCompatActivity() {
         val half = resources.displayMetrics.widthPixels / 2f
         for (p in tutorialPlusViews()) {
             val leftSide = p.left + p.width / 2f < half
-            p.animate().translationX(if (hidden) (if (leftSide) -off else off) else 0f).setDuration(d).start()
+            p.animate().translationX(if (hidden) (if (leftSide) -off else off) else tutorialPlusBaseX(p)).setDuration(d).start()
         }
     }
 
@@ -1005,7 +1011,7 @@ class MainActivity : AppCompatActivity() {
 
     // Text v poli s adresou nahore (puvodni chovani)
     internal fun topUrlText(url: String?): String =
-        url?.removePrefix("https://")?.removeSuffix("/") ?: ""   // cesta (/a/b) zustava, http:// zustava videt
+        fieldTitleTop ?: url?.removePrefix("https://")?.removeSuffix("/") ?: ""   // nadpis (nastaveni / ukazka) ma prednost   // cesta (/a/b) zustava, http:// zustava videt
 
     // ---------------- SLOZKY A PORADI KARET V PREHLEDU ----------------
 

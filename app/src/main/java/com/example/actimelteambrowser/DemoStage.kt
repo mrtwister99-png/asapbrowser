@@ -45,6 +45,13 @@ internal fun demoCaptionBg(ctx: Context): GradientDrawable = GradientDrawable().
     setStroke(ctx.px(2), DEMO_YELLOW.toColorInt())
 }
 
+/** "Prst" demo ukazek: zluta tecka s tenkym tmavym okrajem (je videt i na zlutem a bilem). */
+internal fun demoDotDrawable(ctx: Context): GradientDrawable = GradientDrawable().apply {
+    shape = GradientDrawable.OVAL
+    setColor(DEMO_YELLOW.toColorInt())
+    setStroke(ctx.px(2), "#99000000".toColorInt())
+}
+
 /** Pozadi tlacitka Preskocit: tmava karta s cervenym obrysem. */
 internal fun demoSkipBg(ctx: Context): GradientDrawable = GradientDrawable().apply {
     setColor("#242424".toColorInt())
@@ -140,7 +147,7 @@ internal class DemoStage(private val act: Activity, private val onSkip: () -> Un
     private val dim = DemoDim(act)
     private val caption = TextView(act)
     private val finger = View(act)
-    private val fs = act.px(44)
+    private val fs = act.px(20)
     private var t = 0L
 
     init {
@@ -173,11 +180,7 @@ internal class DemoStage(private val act: Activity, private val onSkip: () -> Un
         slp.bottomMargin = navBottom + act.px(16)
         ov.addView(skip, slp)
 
-        val fg = GradientDrawable()
-        fg.shape = GradientDrawable.OVAL
-        fg.setColor("#CCFFFFFF".toColorInt())
-        fg.setStroke(act.px(2), DEMO_YELLOW.toColorInt())
-        finger.background = fg
+        finger.background = demoDotDrawable(act)
         finger.alpha = 0f
         ov.addView(finger, FrameLayout.LayoutParams(fs, fs))
         finger.translationX = act.resources.displayMetrics.widthPixels / 2f - fs / 2
@@ -221,16 +224,7 @@ internal class DemoStage(private val act: Activity, private val onSkip: () -> Un
     }
 
     fun tap() {
-        finger.animate().scaleX(0.7f).scaleY(0.7f).setDuration(110).withEndAction { finger.animate().scaleX(1f).scaleY(1f).setDuration(110).start() }.start()
-        val ring = View(act)
-        val rg = GradientDrawable()
-        rg.shape = GradientDrawable.OVAL
-        rg.setColor(Color.TRANSPARENT)
-        rg.setStroke(act.px(3), DEMO_YELLOW.toColorInt())
-        ring.background = rg
-        ov.addView(ring, FrameLayout.LayoutParams(fs, fs))
-        ring.translationX = finger.translationX; ring.translationY = finger.translationY
-        ring.animate().scaleX(2.2f).scaleY(2.2f).alpha(0f).setDuration(450).withEndAction { ov.removeView(ring) }.start()
+        finger.animate().scaleX(0.55f).scaleY(0.55f).setDuration(110).withEndAction { finger.animate().scaleX(1f).scaleY(1f).setDuration(130).start() }.start()
     }
 
     /** Zlute probliknuti bez ztmaveni (vse zustava videt). */

@@ -38,6 +38,8 @@ internal fun MainActivity.styledButton(text: String, primary: Boolean): TextView
 @SuppressLint("StaticFieldLeak")   // drzi se jen po dobu zobrazeni dialogu
 internal var lastDialogCard: View? = null
 internal var lastDialogDismiss: (() -> Unit)? = null
+@SuppressLint("StaticFieldLeak")
+internal var lastDialogPositive: View? = null   // zelene tlacitko posledniho okna (ukazka Sdilet na nej ukaze)
 
 internal fun MainActivity.showStyledDialog(
     title: String,
@@ -58,6 +60,7 @@ internal fun MainActivity.showStyledDialog(
     val card = LinearLayout(this)
     lastDialogCard = card
     lastDialogDismiss = dismiss
+    lastDialogPositive = null
     card.orientation = LinearLayout.VERTICAL
     card.setPadding(dp(22), dp(20), dp(22), dp(16))
     val cardBg = GradientDrawable()
@@ -95,6 +98,7 @@ internal fun MainActivity.showStyledDialog(
     }
     if (positiveText != null) {
         val pos = styledButton(positiveText, true)
+        lastDialogPositive = pos
         pos.setOnClickListener { if (onPositive == null || onPositive()) dismiss() }
         val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.marginStart = dp(10)

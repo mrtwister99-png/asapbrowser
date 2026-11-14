@@ -150,6 +150,7 @@ private fun MainActivity.endDemo() {
         demoNewTabId = -1L; demoPrevTabId = -1L
     }
     demoResume = null
+    topDemoRestore?.let { topDemoRestore = null; it() }   // ukazka horni listy: vrati listy, tlacitka a pole
     updateDeskBtn()   // tlacitko Verze pro pocitac zpet podle skutecneho stavu
     if (demoDialogOpen) { runCatching { lastDialogDismiss?.invoke() }; demoDialogOpen = false }
     runCatching { layerDialog?.dismiss() }
@@ -176,7 +177,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     // 11-14 = ukazka tlacitek 1-4 (klepnuti + drzeni), 300 = tlacitko s funkci Gesta
     val id = if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) 10 + n else if (n in 1..12 && n != 7 && n != 8) 300 else n
     if ((n == 7 || n == 8) && buttonFunction(n, false) != ButtonDefaults.tap(n)) return false   // tlacitko ma jinou funkci
-    if (n == 8) { showVpnSoon(); return true }
+    if (n == 7 || n == 8 || n == 103 || n == 104) return startTopDemo(n)   // horni lista: vlastni prubeh (nadpis, tip, OK, animace)
 
     demoRunning = true
     if (id == 300 && quickSetupStage == 2) { quickSetupStage = 21; quickSpotOff?.invoke() }   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
@@ -202,8 +203,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             201, 202, 203 -> (sideBarLeft as? ViewGroup)?.getChildAt(id - 201)?.let { dim.holes.add(rectOf(it).apply { inset(pad, pad) }) }
             in 11..14 -> buttonView(n)?.let { dim.holes.add(rectOf(it).apply { inset(pad, pad) }) }
             300 -> (orbView?.takeIf { it.isVisible } ?: buttonView(n))?.let { dim.holes.add(rectOf(it)); dim.circle = true }   // jen kulicka
-            103 -> dim.holes.add(rectOf(findViewById(R.id.ivUrlShare)).apply { inset(pad, pad) })
-            104 -> dim.holes.add(rectOf(findViewById(R.id.ivUrlLock)).apply { inset(pad, pad) })
             105 -> for (bid in listOf(R.id.btnNavBack, R.id.btnNavForward)) dim.holes.add(rectOf(findViewById(bid)).apply { inset(pad, pad) })
             else -> dim.holes.add(rectOf(adBtn).apply { inset(pad, pad) })
         }
@@ -244,14 +243,10 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     slp.bottomMargin = skipBottom
     ov.addView(skip, slp)
 
-    // prst + kruh pri klepnuti
-    val fs = dp(44)
+    // "prst" = zluta tecka (pohyb, klepnuti = zmackne se, drzeni = zvetsi se)
+    val fs = dp(20)
     val finger = View(this)
-    val fg = GradientDrawable()
-    fg.shape = GradientDrawable.OVAL
-    fg.setColor("#CCFFFFFF".toColorInt())
-    fg.setStroke(dp(2), "#FFD600".toColorInt())
-    finger.background = fg
+    finger.background = demoDotDrawable(this)
     finger.alpha = 0f
     ov.addView(finger, FrameLayout.LayoutParams(fs, fs))
     finger.translationX = resources.displayMetrics.widthPixels / 2f - fs / 2
@@ -273,16 +268,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
         finger.animate().alpha(1f).translationX(sx - b[0] - fs / 2).translationY(sy - b[1] - fs / 2).setDuration(ms).start()
     }
     fun tap() {
-        finger.animate().scaleX(0.7f).scaleY(0.7f).setDuration(110).withEndAction { finger.animate().scaleX(1f).scaleY(1f).setDuration(110).start() }.start()
-        val ring = View(this)
-        val rg = GradientDrawable()
-        rg.shape = GradientDrawable.OVAL
-        rg.setColor(Color.TRANSPARENT)
-        rg.setStroke(dp(3), "#FFD600".toColorInt())
-        ring.background = rg
-        ov.addView(ring, FrameLayout.LayoutParams(fs, fs))
-        ring.translationX = finger.translationX; ring.translationY = finger.translationY
-        ring.animate().scaleX(2.2f).scaleY(2.2f).alpha(0f).setDuration(450).withEndAction { ov.removeView(ring) }.start()
+        finger.animate().scaleX(0.55f).scaleY(0.55f).setDuration(110).withEndAction { finger.animate().scaleX(1f).scaleY(1f).setDuration(130).start() }.start()
     }
     // klepne na skutecne tlacitko v modalu (jeho "demo" listener udela jen vizualni zmenu + toast)
     fun press(key: String) {
@@ -314,7 +300,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     }
     fun blinkView(v: View) { if (v.isAttachedToWindow) blinkScreen(screenRect(v)) }
     fun moveToRect(r: RectF, ms: Long) = moveXY(r.centerX(), r.centerY(), ms)
-    fun holdFinger() { finger.animate().scaleX(1.35f).scaleY(1.35f).setDuration(500).start() }   // prst zustane tlacit
+    fun holdFinger() { finger.animate().scaleX(1.7f).scaleY(1.7f).setDuration(500).start() }   // drzeni: tecka se zvetsi
     fun releaseFinger() { finger.animate().scaleX(1f).scaleY(1f).setDuration(200).start() }
 
     // casovy plan: kazdy krok ma svoje zpozdeni od zacatku
@@ -322,172 +308,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     fun at(delay: Long, block: () -> Unit) { t += delay; demoHandler.postDelayed({ if (demoRunning) block() }, t) }
 
     when (id) {
-        7 -> {
-            // Ukazka AdBlocku ve dvou castech (dve kolecka pod Preskocit se plni zelene):
-            //  1) klepnuti = vypnout / zapnout,  2) drzeni = pridat web k blokovani.
-            // Kazda cast: tip 3x problikne, tlacitko AdBlock 3x problikne, zelene "OK, pokračuj" 3x problikne a ceka na uzivatele.
-            val orig = isAdBlockOn
-            demoAdOrig = orig
-            // ukazka zacina vzdy ze zapnuteho stavu: vypne a zase zapne (skutecny stav se po ukazce vrati)
-            if (!isAdBlockOn) { isAdBlockOn = true; applyAdBlockUi() }
-            fun flip() { isAdBlockOn = !isAdBlockOn; applyAdBlockUi(); AppToast.show(this, if (isAdBlockOn) "AdBlock zapnut" else "AdBlock vypnut") }
-            fun after(ms: Long, block: () -> Unit) { demoHandler.postDelayed({ if (demoRunning) block() }, ms) }
-
-            // tip a hned pod nim: vlevo cervene Preskocit (klikaci celou dobu), vpravo zelene "OK, pokračuj"; pod tim dve kolecka
-            ov.removeView(skip)
-            ov.removeView(caption)
-            val box = LinearLayout(this)
-            box.orientation = LinearLayout.VERTICAL
-            box.addView(caption, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            val row = LinearLayout(this)
-            row.orientation = LinearLayout.HORIZONTAL
-            val slp2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            row.addView(skip, slp2)
-            val ok = TextView(this)
-            ok.text = "OK, pokračuj"
-            ok.setTextColor("#06281D".toColorInt())
-            ok.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            ok.setTypeface(ok.typeface, android.graphics.Typeface.BOLD)
-            ok.gravity = Gravity.CENTER
-            ok.setPadding(dp(12), dp(12), dp(12), dp(12))
-            val okBg = GradientDrawable()
-            okBg.setColor("#00B055".toColorInt())
-            okBg.cornerRadius = dp(22).toFloat()
-            ok.background = okBg
-            ok.visibility = View.INVISIBLE   // misto vpravo je drzene, Preskocit zustava vlevo
-            val olp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            olp.marginStart = dp(12)
-            row.addView(ok, olp)
-            val rowLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            rowLp.topMargin = dp(12)
-            box.addView(row, rowLp)
-            val blp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
-            blp.marginStart = dp(24); blp.marginEnd = dp(24)
-            blp.bottomMargin = skipBottom + dp(18)
-            ov.addView(box, blp)
-            val dots = LinearLayout(this)
-            dots.orientation = LinearLayout.HORIZONTAL
-            val dot1 = DemoDot(this)
-            val dot2 = DemoDot(this)
-            for ((k, d) in listOf(dot1, dot2).withIndex()) {
-                val dl = LinearLayout.LayoutParams(dp(14), dp(14))
-                if (k == 1) dl.marginStart = dp(10)
-                dots.addView(d, dl)
-            }
-            val dlp2 = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
-            dlp2.bottomMargin = skipBottom - dp(4)
-            ov.addView(dots, dlp2)
-
-            var gen = 0             // kazda faze ma sve cislo: staré problikavani se samo zastavi
-            var okAction: (() -> Unit)? = null
-            fun setOk(text: String, enabled: Boolean, action: (() -> Unit)?) {
-                ok.text = text
-                ok.visibility = View.VISIBLE
-                ok.alpha = if (enabled) 1f else 0.4f
-                okAction = if (enabled) action else null
-            }
-            ok.setOnClickListener { okAction?.let { a -> okAction = null; gen++; ok.animate().cancel(); ok.alpha = 0.4f; caption.animate().cancel(); caption.alpha = 1f; a() } }
-
-            // 3x probliknout: 0,25 s zmizi, 0,25 s se objevi, 1 s drzi
-            fun pulse(v: View, g: Int, n: Int, done: () -> Unit) {
-                if (!demoRunning || g != gen) return
-                if (n == 0) { done(); return }
-                v.animate().alpha(0f).setDuration(250).withEndAction {
-                    v.animate().alpha(1f).setDuration(250).withEndAction { after(1000) { pulse(v, g, n - 1, done) } }.start()
-                }.start()
-            }
-            // zluty ramecek pres tlacitko AdBlock (problikne stejne jako tip)
-            fun pulseButton(g: Int, done: () -> Unit) {
-                val r = screenRect(adBtn)
-                val b = IntArray(2); ov.getLocationOnScreen(b)
-                val frame = View(this)
-                val fgd = GradientDrawable()
-                fgd.setColor("#33FFD600".toColorInt())
-                fgd.cornerRadius = dp(18).toFloat()
-                fgd.setStroke(dp(3), "#FFD600".toColorInt())
-                frame.background = fgd
-                val pad = dp(4)
-                ov.addView(frame, FrameLayout.LayoutParams(r.width().toInt() + 2 * pad, r.height().toInt() + 2 * pad))
-                frame.translationX = r.left - b[0] - pad
-                frame.translationY = r.top - b[1] - pad
-                pulse(frame, g, 3) { ov.removeView(frame); done() }
-                // kdyz se faze prerusi, ramecek zmizi
-                after(6000) { if (g != gen) ov.removeView(frame) }
-            }
-            // uvod faze: tip -> tlacitko -> OK (kazde 3x), pak ceka na OK
-            fun intro(tip: String, okText: String, action: () -> Unit) {
-                val g = ++gen
-                caption.animate().cancel(); caption.alpha = 1f
-                say(tip)
-                after(700) {
-                    pulse(caption, g, 3) {
-                        pulseButton(g) {
-                            setOk(okText, true, action)
-                            pulse(ok, g, 3) { }
-                        }
-                    }
-                }
-            }
-            fun fill(d: DemoDot, ms: Long) {
-                val a = android.animation.ValueAnimator.ofFloat(0f, 1f)
-                a.duration = ms
-                a.addUpdateListener { d.p = it.animatedValue as Float; d.invalidate() }
-                a.start()
-            }
-            // prst se objevi uprostred obrazovky
-            fun fingerFromCenter() {
-                finger.animate().cancel()
-                finger.scaleX = 1f; finger.scaleY = 1f
-                finger.translationX = ov.width / 2f - fs / 2
-                finger.translationY = ov.height / 2f - fs / 2
-                finger.alpha = 0f
-                finger.animate().alpha(1f).setDuration(200).start()
-            }
-            fun fingerHide() { finger.animate().alpha(0f).setDuration(200).start() }
-
-            // cast 2: drzeni = okno pridani webu -> aktualni stranka -> OK -> vysvetleni
-            fun partTwo() {
-                setOk("OK, pokračuj", false, null)
-                fill(dot2, 7600)
-                fingerFromCenter()
-                after(250) { moveTo(adBtn, 650) }
-                after(1000) { holdFinger() }
-                after(1900) { releaseFinger(); fingerHide() }
-                after(2200) { openModal { showAdBlockSitesDialog(demo = true) } }
-                after(3100) { fingerFromCenter() }
-                after(3350) { demoTargets["site_current"]?.let { moveTo(it, 600) } }
-                after(4150) { press("site_current") }
-                after(5000) { demoTargets["site_ok"]?.let { moveTo(it, 550) } }
-                after(5800) { press("site_ok") }
-                after(6000) { raiseLayer() }   // vrstva s tlacitky nad okno s vysvetlenim
-                after(6300) { fingerHide() }
-                after(7700) {
-                    say("Hotovo – web se přidá k pravidlům (v ukázce se nic neuloží)")
-                    setOk("Hotovo", true) { endDemo() }
-                    val g = ++gen
-                    pulse(ok, g, 3) { }
-                }
-            }
-            // cast 1: klepnuti = vypnout (toast), pauza, znovu klepnuti = zapnout (toast)
-            fun partOne() {
-                setOk("OK, pokračuj", false, null)
-                fill(dot1, 5200)
-                fingerFromCenter()
-                after(250) { moveTo(adBtn, 650) }
-                after(1050) { tap() }
-                after(1200) { flip() }
-                after(1500) { fingerHide() }
-                after(3500) { fingerFromCenter() }
-                after(3750) { moveTo(adBtn, 650) }
-                after(4550) { tap() }
-                after(4700) { flip() }
-                after(5000) { fingerHide() }
-                after(5400) {
-                    intro("Podržením AdBlocku přidáš web, na kterém reklamy pořád prolézají", "OK, pokračuj") { partTwo() }
-                }
-            }
-            intro("AdBlock: klepnutím zapneš nebo vypneš blokování reklam", "OK, pokračuj") { partOne() }
-        }
         105 -> {
             // sipky ve spodnim poli: zpet a vpred mezi strankami; seda = neni kam jit
             val back = findViewById<View>(R.id.btnNavBack)
@@ -498,31 +318,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             at(900) { tap(); blinkView(fwd) }
             at(1700) { say("Když není kam jít, šipka je šedá – po klepnutí zčervená a napíše „Není kam jít“") }
             at(3200) { endDemo() }
-        }
-        103 -> {
-            at(0) { say("Sdílet: pošli nebo zkopíruj adresu stránky"); moveTo(findViewById(R.id.ivUrlShare), 600) }
-            at(800) { tap() }
-            at(250) { openModal { showShareDialog(demo = true) } }
-            at(900) { demoTargets["copy"]?.let { moveTo(it, 550) } }
-            at(800) { press("copy") }
-            at(2600) { endDemo() }
-        }
-        104 -> {
-            at(0) { say("Zámek: informace o stránce a nastavení pro tento web"); moveTo(findViewById(R.id.ivUrlLock), 600) }
-            at(800) { tap() }
-            at(250) { openModal { showPageInfo(demo = true) } }
-            at(900) { say("AdBlock jen pro tento web"); demoTargets["adblock"]?.let { moveTo(it, 550) } }
-            at(800) { press("adblock") }   // vypne + cervena tecka u zamku + toast
-            at(2300) { press("adblock") }  // zapne + toast
-            at(2300) {
-                say("Smazat cookies: web zapomene přihlášení a nastavení")
-                demoTargets["cookies"]?.let { c ->
-                    c.requestRectangleOnScreen(android.graphics.Rect(0, 0, c.width, c.height))   // dojede v posuvnem okne
-                    demoHandler.postDelayed({ if (demoRunning) moveTo(c, 550) }, 350)
-                }
-            }
-            at(1300) { press("cookies") }
-            at(2600) { endDemo() }
         }
         201 -> {
             // Screenshot: nabidka -> Cela obrazovka (probliknuti) -> nabidka -> Vyber casti (ramecek). Nic se neuklada.
@@ -814,54 +609,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     return true
 }
 
-// VPN: jednoduche okno se zlutym obrysem
-private fun MainActivity.showVpnSoon() {
-    demoRunning = true
-    val parent = root as ConstraintLayout
-    val ov = FrameLayout(this)
-    ov.setBackgroundColor("#B3000000".toColorInt())
-    ov.isClickable = true
-    val lp = ConstraintLayout.LayoutParams(0, 0)
-    lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-    lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-    lp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-    lp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-    parent.addView(ov, lp)
-    demoOverlay = ov
-    val box = LinearLayout(this)
-    box.orientation = LinearLayout.VERTICAL
-    box.gravity = Gravity.CENTER_HORIZONTAL
-    val g = GradientDrawable()
-    g.setColor("#1E1E1E".toColorInt())
-    g.cornerRadius = dp(24).toFloat()
-    g.setStroke(dp(3), "#FFD600".toColorInt())
-    box.background = g
-    box.setPadding(dp(28), dp(26), dp(28), dp(22))
-    val tv = TextView(this)
-    tv.text = "VPN se připravuje"
-    tv.setTextColor(Color.WHITE)
-    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-    tv.setTypeface(tv.typeface, android.graphics.Typeface.BOLD)
-    box.addView(tv)
-    val ok = TextView(this)
-    ok.text = "Okay"
-    ok.setTextColor("#06281D".toColorInt())
-    ok.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-    ok.setTypeface(ok.typeface, android.graphics.Typeface.BOLD)
-    ok.gravity = Gravity.CENTER
-    val og = GradientDrawable()
-    og.setColor("#00B055".toColorInt())
-    og.cornerRadius = dp(16).toFloat()
-    ok.background = og
-    ok.setOnClickListener { endDemo() }
-    val olp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46))
-    olp.topMargin = dp(20)
-    box.addView(ok, olp)
-    val blp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
-    blp.marginStart = dp(40); blp.marginEnd = dp(40)
-    ov.addView(box, blp)
-}
-
 // Vysledek okna Nastaveni otevreneho ukazkou: done = pokracovat, jinak (preskoceno) ukazka konci
 internal fun MainActivity.onDemoSettingsResult(result: String?) {
     val r = demoResume ?: return
@@ -899,6 +646,7 @@ internal fun MainActivity.runDemoFromSettings(n: Int) {
     window.decorView.postDelayed({
         if (demoRunning) return@postDelayed
         when (n) {
+            com.example.actimelteambrowser.ui.SETUP_AGAIN_ID -> startQuickSetupAgain()   // Tutorialy -> Prvotni nastaveni
             in 201..204 -> {
                 // ukazky z bocni listy: nejdriv se lista otevre
                 if (!leftBarOpen) toggleBarFrom(defaultBarOrigin())
@@ -916,4 +664,351 @@ internal fun MainActivity.runDemoFromSettings(n: Int) {
             else -> startFirstDemo(n)
         }
     }, 700)
+}
+
+// ======================= DEMO VIDEA HORNI LISTY (AdBlock, VPN, Sdilet, zamek) =======================
+// Prubeh: nadpis v hornim poli + uvodni tip + "OK, pokračuj" -> animace -> zaverecny tip (+ dalsi cast / Hotovo).
+// Videt je cela horni lista; spodni lista, bocni tlacitka a kulicka jsou schovane. Misto spodni listy je Preskocit
+// (jen tento tutorial / vsechny tutorialy). Vic casti (klepnuti, drzeni) = kolecka nad Preskocit, jdou libovolne preklikat.
+
+private var topDemoRestore: (() -> Unit)? = null
+
+/** Cast ukazky: uvodni tip, zaverecny tip, delka animace a animace (at = krok v ms od zacatku animace). */
+private class TopPart(val intro: String, val outro: String, val ms: Long, val run: ((Long, () -> Unit) -> Unit) -> Unit)
+
+/** Preskocit vsechny tutorialy: nic uz nesviti ani neblika zlute. */
+internal fun MainActivity.skipAllTutorials() {
+    com.example.actimelteambrowser.core.settings.AppSettings.liveTutorial.set("")
+    applyLiveTutorial()
+}
+
+internal fun MainActivity.demoButton(text: String, primary: Boolean): TextView {
+    val b = TextView(this)
+    b.text = text
+    b.setTextColor(if (primary) "#06281D".toColorInt() else Color.WHITE)
+    b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+    b.setTypeface(b.typeface, android.graphics.Typeface.BOLD)
+    b.gravity = Gravity.CENTER
+    b.setPadding(dp(12), dp(12), dp(12), dp(12))
+    if (primary) {
+        val g = GradientDrawable()
+        g.setColor("#00B055".toColorInt())
+        g.cornerRadius = dp(22).toFloat()
+        b.background = g
+    } else b.background = demoSkipBg(this)
+    return b
+}
+
+private fun MainActivity.startTopDemo(id: Int): Boolean {
+    demoRunning = true
+    val parent = root as ConstraintLayout
+    val adBtn = findViewById<View>(R.id.btnAdBlock)
+    val shareBtn = findViewById<View>(R.id.ivUrlShare)
+    val lockBtn = findViewById<View>(R.id.ivUrlLock)
+    val vpnBtn = findViewById<View>(R.id.btnVpn)
+    setChromeHidden(false)
+    if (leftBarOpen) closeLeftBarAndHide()
+
+    // vse krome horni listy zmizi (vrati se v endDemo)
+    val hidden = ArrayList<Pair<View, Int>>()
+    fun hide(v: View?) { if (v != null && v.visibility == View.VISIBLE) { hidden.add(v to v.visibility); v.visibility = View.INVISIBLE } }
+    hide(bottomBar)
+    for (k in listOf(5, 6) + extraViews.keys) hide(buttonView(k))
+    hide(orbView)
+    stripViews().forEach { hide(it.first) }
+    tutorialPlus.forEach { hide(it) }
+    val title = when (id) { 7 -> "TLAČÍTKO ADBLOCK"; 8 -> "TLAČÍTKO VPN"; 103 -> "TLAČÍTKO SDÍLET"; else -> "ZÁMEK" }
+    showFieldTitles(title, null)
+    var resetHook: (() -> Unit)? = null
+    topDemoRestore = { hidden.forEach { (v, vis) -> v.visibility = vis }; clearFieldTitles() }
+
+    // ztmaveni: jasna je cela horni lista
+    val dim = DemoDim(this)
+    val dlp = ConstraintLayout.LayoutParams(0, 0)
+    dlp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+    dlp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+    dlp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+    dlp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+    dim.elevation = dp(100).toFloat()
+    parent.addView(dim, dlp)
+    demoOverlay = dim
+    dim.post { dim.holes.clear(); dim.holes.add(rectOf(topBar)); dim.invalidate() }
+
+    // nejvyssi vrstva: tecka, tip + OK, kolecka, Preskocit
+    val ov = FrameLayout(this)
+    ov.isClickable = true
+    layerContent = ov
+    val skipBottom = lastSystemBottom + dp(20)
+
+    val skip = demoButton(getString(R.string.tutorial_skip), false)
+    skip.setPadding(dp(28), dp(12), dp(28), dp(12))
+    val slp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+    slp.bottomMargin = skipBottom
+    ov.addView(skip, slp)
+
+    val dotsRow = LinearLayout(this)
+    dotsRow.orientation = LinearLayout.HORIZONTAL
+    dotsRow.gravity = Gravity.CENTER
+    val dlp2 = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+    dlp2.bottomMargin = skipBottom + dp(54)
+    ov.addView(dotsRow, dlp2)
+
+    val box = LinearLayout(this)
+    box.orientation = LinearLayout.VERTICAL
+    val caption = TextView(this)
+    caption.setTextColor(Color.WHITE)
+    caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    caption.gravity = Gravity.CENTER
+    caption.setLineSpacing(0f, 1.12f)
+    caption.setPadding(dp(18), dp(14), dp(18), dp(14))
+    caption.background = demoCaptionBg(this)
+    box.addView(caption, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    val ok = demoButton("OK, pokračuj", true)
+    val olp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    olp.topMargin = dp(12)
+    box.addView(ok, olp)
+    val blp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+    blp.marginStart = dp(24); blp.marginEnd = dp(24)
+    blp.bottomMargin = skipBottom + dp(104)
+    ov.addView(box, blp)
+
+    // Preskocit: jen tento tutorial, nebo vsechny
+    val choice = LinearLayout(this)
+    choice.orientation = LinearLayout.VERTICAL
+    choice.background = demoCaptionBg(this)
+    choice.setPadding(dp(16), dp(14), dp(16), dp(14))
+    val chText = TextView(this)
+    chText.text = "Co chceš přeskočit?"
+    chText.setTextColor(Color.WHITE)
+    chText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    chText.gravity = Gravity.CENTER
+    choice.addView(chText)
+    val chOne = demoButton("Pouze tento tutoriál", true)
+    val chAll = demoButton("Přeskočit všechny tutoriály", false)
+    val chBack = demoButton("Zpět", false)
+    for (b in listOf(chOne, chAll, chBack)) {
+        val l = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        l.topMargin = dp(10)
+        choice.addView(b, l)
+    }
+    chBack.background = GradientDrawable().apply { setColor("#333333".toColorInt()); cornerRadius = dp(22).toFloat() }
+    choice.visibility = View.GONE
+    val chlp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+    chlp.marginStart = dp(24); chlp.marginEnd = dp(24)
+    chlp.bottomMargin = skipBottom + dp(60)
+    ov.addView(choice, chlp)
+    var boxWasVisible = true
+    skip.setOnClickListener {
+        if (choice.visibility == View.VISIBLE) return@setOnClickListener
+        boxWasVisible = box.visibility == View.VISIBLE
+        box.visibility = View.INVISIBLE
+        choice.visibility = View.VISIBLE
+    }
+    chBack.setOnClickListener { choice.visibility = View.GONE; if (boxWasVisible) box.visibility = View.VISIBLE }
+    chOne.setOnClickListener { endDemo() }
+    chAll.setOnClickListener { skipAllTutorials(); endDemo(); AppToast.show(this, "Tutoriály přeskočeny") }
+
+    // tecka
+    val fs = dp(20)
+    val finger = View(this)
+    finger.background = demoDotDrawable(this)
+    finger.alpha = 0f
+    ov.addView(finger, FrameLayout.LayoutParams(fs, fs))
+    raiseLayer()
+
+    fun screenRect(v: View): RectF {
+        val a = IntArray(2); v.getLocationOnScreen(a)
+        return RectF(a[0].toFloat(), a[1].toFloat(), (a[0] + v.width).toFloat(), (a[1] + v.height).toFloat())
+    }
+    fun local(r: RectF): RectF { val b = IntArray(2); ov.getLocationOnScreen(b); return RectF(r.left - b[0], r.top - b[1], r.right - b[0], r.bottom - b[1]) }
+    fun moveTo(v: View, ms: Long) {
+        if (!v.isAttachedToWindow) return
+        val r = local(screenRect(v))
+        finger.animate().alpha(1f).translationX(r.centerX() - fs / 2f).translationY(r.centerY() - fs / 2f).setDuration(ms).start()
+    }
+    fun fingerFromCenter() {
+        finger.animate().cancel()
+        finger.scaleX = 1f; finger.scaleY = 1f
+        finger.translationX = ov.width / 2f - fs / 2f
+        finger.translationY = ov.height / 2f - fs / 2f
+        finger.alpha = 0f
+        finger.animate().alpha(1f).setDuration(200).start()
+    }
+    fun fingerHide() { finger.animate().alpha(0f).setDuration(200).start() }
+    fun tap() { finger.animate().scaleX(0.55f).scaleY(0.55f).setDuration(110).withEndAction { finger.animate().scaleX(1f).scaleY(1f).setDuration(130).start() }.start() }
+    fun holdFinger() { finger.animate().scaleX(1.7f).scaleY(1.7f).setDuration(500).start() }
+    fun releaseFinger() { finger.animate().scaleX(1f).scaleY(1f).setDuration(200).start() }
+    fun blinkFast(v: View?) { if (v != null && v.isAttachedToWindow) blinkOutline(ov, local(screenRect(v)), times = 3, stepMs = 120) }
+    fun blink(v: View?) { if (v != null && v.isAttachedToWindow) blinkOutline(ov, local(screenRect(v))) }
+    fun press(key: String) { demoTargets[key]?.let { tap(); it.performClick() } }
+    fun openModal(open: () -> Unit) {
+        open(); demoDialogOpen = true
+        demoHandler.postDelayed({ if (demoRunning) raiseLayer() }, 120)
+    }
+    fun closeModal() { if (demoDialogOpen) { runCatching { lastDialogDismiss?.invoke() }; demoDialogOpen = false } }
+
+    // ---------------- casti ukazky ----------------
+    val parts = ArrayList<TopPart>()
+    val target: View = when (id) { 7 -> adBtn; 8 -> vpnBtn; 103 -> shareBtn; else -> lockBtn }
+    when (id) {
+        7 -> {
+            demoAdOrig = isAdBlockOn
+            resetHook = { if (!isAdBlockOn) { isAdBlockOn = true; applyAdBlockUi() } }   // kazda cast zacina se zapnutym AdBlockem
+            fun flip() { isAdBlockOn = !isAdBlockOn; applyAdBlockUi(); AppToast.show(this, if (isAdBlockOn) "AdBlock zapnut" else "AdBlock vypnut") }
+            parts += TopPart(
+                "Klepnutím na AdBlock zapneš nebo vypneš blokování reklam.",
+                "Číslo na tlačítku ukazuje, kolik reklam se na stránce zablokovalo.", 5200
+            ) { at ->
+                at(0) { fingerFromCenter() }
+                at(250) { moveTo(adBtn, 650) }
+                at(1050) { tap() }
+                at(1200) { flip() }
+                at(1500) { fingerHide() }
+                at(3000) { fingerFromCenter() }
+                at(3250) { moveTo(adBtn, 650) }
+                at(4050) { tap() }
+                at(4200) { flip() }
+                at(4500) { fingerHide() }
+            }
+            parts += TopPart(
+                "Podržením AdBlocku přidáš web, na kterém reklamy pořád prolézají – bude se na něm blokovat přísněji.",
+                "Hotovo – web se přidá k přísnějšímu blokování (v ukázce se nic neuloží).", 7600
+            ) { at ->
+                at(0) { fingerFromCenter() }
+                at(250) { moveTo(adBtn, 650) }
+                at(1000) { holdFinger() }
+                at(1900) { releaseFinger(); fingerHide() }
+                at(2200) { openModal { showAdBlockSitesDialog(demo = true) } }
+                at(3100) { fingerFromCenter() }
+                at(3350) { demoTargets["site_current"]?.let { moveTo(it, 600) } }
+                at(4150) { press("site_current") }
+                at(5000) { demoTargets["site_ok"]?.let { moveTo(it, 550) } }
+                at(5800) { press("site_ok") }
+                at(6000) { raiseLayer() }
+                at(6300) { fingerHide() }
+                at(7400) { closeModal() }
+            }
+        }
+        103 -> {
+            parts += TopPart(
+                "Klepnutím na Sdílet otevřeš okno, kde adresu stránky zkopíruješ nebo pošleš.",
+                "Kopírovat = adresa do schránky. Sdílet = pošleš ji třeba do zprávy. Přepínačem QR kód sdílíš místo adresy QR kód.", 5000
+            ) { at ->
+                at(0) { fingerFromCenter() }
+                at(250) { moveTo(shareBtn, 650) }
+                at(1000) { tap() }
+                at(1200) { openModal { showShareDialog(demo = true) } }
+                at(1700) { fingerHide() }
+                at(2000) { blinkFast(demoTargets["copy"]) }        // Kopirovat 3x rychle
+                at(2900) { blinkFast(lastDialogPositive) }         // pak Sdilet 3x rychle
+                at(4700) { closeModal() }
+            }
+            parts += TopPart(
+                "Podržením Sdílet rovnou otevřeš sdílení telefonu – bez okna.",
+                "Tak adresu pošleš nejrychleji.", 3000
+            ) { at ->
+                at(0) { fingerFromCenter() }
+                at(250) { moveTo(shareBtn, 650) }
+                at(1000) { holdFinger() }
+                at(1900) { releaseFinger(); blinkFast(shareBtn); AppToast.show(this, "Otevře se sdílení telefonu (v ukázce ne)") }
+                at(2400) { fingerHide() }
+            }
+        }
+        104 -> {
+            parts += TopPart(
+                "Zámek ukazuje, jestli je spojení se stránkou šifrované. Klepnutím otevřeš informace o stránce a nastavení jen pro tento web.",
+                "Zelený zámek = šifrované spojení (https), červený = nešifrované (http). Tady si taky vypneš AdBlock jen pro tento web nebo smažeš jeho cookies.", 7800
+            ) { at ->
+                at(0) { fingerFromCenter() }
+                at(250) { moveTo(lockBtn, 650) }
+                at(1000) { tap() }
+                at(1200) { openModal { showPageInfo(demo = true) } }
+                at(2000) { demoTargets["adblock"]?.let { moveTo(it, 550) } }
+                at(2700) { press("adblock") }   // vypne + cervena tecka u zamku + toast
+                at(4000) { press("adblock") }   // zapne + toast
+                at(4800) {
+                    demoTargets["cookies"]?.let { c ->
+                        c.requestRectangleOnScreen(android.graphics.Rect(0, 0, c.width, c.height))
+                        demoHandler.postDelayed({ if (demoRunning) moveTo(c, 550) }, 350)
+                    }
+                }
+                at(6000) { press("cookies") }
+                at(6600) { fingerHide() }
+                at(7500) { closeModal() }
+            }
+        }
+        else -> {
+            parts += TopPart(
+                "VPN skryje, odkud se připojuješ – provoz půjde šifrovaně přes jiný server.",
+                "VPN se ještě připravuje. Až bude hotová, zapneš ji tady jedním klepnutím.", 2600
+            ) { at ->
+                at(0) { fingerFromCenter() }
+                at(250) { moveTo(vpnBtn, 650) }
+                at(1000) { tap(); blinkFast(vpnBtn) }
+                at(1200) { AppToast.show(this, "VPN se připravuje") }
+                at(1800) { fingerHide() }
+            }
+        }
+    }
+
+    // ---------------- prubeh ----------------
+    var gen = 0
+    var okAction: (() -> Unit)? = null
+    val done = HashSet<Int>()
+    val dots = ArrayList<DemoDot>()
+    fun after(ms: Long, g: Int, block: () -> Unit) { demoHandler.postDelayed({ if (demoRunning && g == gen) block() }, ms) }
+    fun setOk(text: String, action: () -> Unit) { ok.text = text; okAction = action; box.visibility = View.VISIBLE }
+    ok.setOnClickListener { okAction?.let { a -> okAction = null; a() } }
+    fun paintDots(current: Int) { for ((i, d) in dots.withIndex()) { d.p = if (i in done && i != current) 1f else 0f; d.invalidate() } }
+    fun resetStage() {
+        closeModal()
+        finger.animate().cancel(); finger.alpha = 0f; finger.scaleX = 1f; finger.scaleY = 1f
+        resetHook?.invoke()
+        choice.visibility = View.GONE
+    }
+
+    fun runAnim(k: Int) {
+        val g = ++gen
+        resetStage()
+        paintDots(k)
+        box.visibility = View.INVISIBLE   // behem animace tip nezakryva okna
+        val part = parts[k]
+        dots.getOrNull(k)?.let { d ->
+            val a = ValueAnimator.ofFloat(0f, 1f)
+            a.duration = part.ms
+            a.addUpdateListener { an -> if (g == gen) { d.p = an.animatedValue as Float; d.invalidate() } }
+            a.start()
+        }
+        part.run { ms, block -> after(ms, g, block) }
+        after(part.ms + 250, g) {
+            done.add(k)
+            val next = k + 1
+            if (next < parts.size) {
+                caption.text = part.outro + "\n\n" + parts[next].intro
+                setOk("OK, pokračuj") { runAnim(next) }
+                blink(target)
+            } else {
+                caption.text = part.outro
+                setOk("Hotovo") { endDemo() }
+            }
+        }
+    }
+    fun showIntro(k: Int) {
+        ++gen
+        resetStage()
+        paintDots(k)
+        caption.text = parts[k].intro
+        setOk("OK, pokračuj") { runAnim(k) }
+        ov.post { blink(target) }   // ukazovane tlacitko 3x zlute problikne
+    }
+    if (parts.size > 1) for (k in parts.indices) {
+        val hit = FrameLayout(this)
+        val d = DemoDot(this)
+        hit.addView(d, FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER))
+        hit.setOnClickListener { if (choice.visibility != View.VISIBLE) showIntro(k) }   // libovolne preklikani mezi castmi
+        dotsRow.addView(hit, LinearLayout.LayoutParams(dp(40), dp(40)))
+        dots.add(d)
+    }
+    showIntro(0)
+    return true
 }

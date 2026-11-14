@@ -664,11 +664,14 @@ internal fun MainActivity.ensureSettingsReachable() {
 @SuppressLint("StaticFieldLeak")
 private val liveOutlines = HashMap<Int, Pair<View, GradientDrawable>>()
 @SuppressLint("StaticFieldLeak")
-private val tutorialPlus = ArrayList<View>()
+internal val tutorialPlus = ArrayList<View>()
 
 /** Zlute "+" zive napovedy (pri schovani list pri posouvani zajedou za okraj spolu s bocnimi tlacitky). */
 @Suppress("UnusedReceiverParameter")
 internal fun MainActivity.tutorialPlusViews(): List<View> = tutorialPlus
+
+/** Zakladni poloha zluteho "+": polovina (28 dp z 56) za okrajem obrazovky. */
+internal fun MainActivity.tutorialPlusBaseX(p: View): Float = if (p.tag == "plusL") -dp(28).toFloat() else dp(28).toFloat()
 private var liveAnim: ValueAnimator? = null
 @SuppressLint("StaticFieldLeak")
 private val liveIcons = ArrayList<View>()   // ikony Sdilet / zamek, ktere ted blikaji zlute
@@ -789,6 +792,8 @@ private fun MainActivity.rebuildTutorialPlus(show: Boolean) {
         plus.background = bg
         plus.elevation = dp(5).toFloat()   // pod listou (6): otevrena lista "+" prekryje
         plus.translationY = lastImeShift
+        plus.tag = if (left) "plusL" else "plusR"
+        plus.translationX = tutorialPlusBaseX(plus)   // napul schovane za okrajem (jako bocni tlacitka)
         plus.setOnClickListener { showTutorialPlusDialog() }
         val lp = ConstraintLayout.LayoutParams(dp(56), dp(56))
         lp.bottomToTop = anchor
@@ -814,7 +819,25 @@ internal fun MainActivity.showTutorialPlusDialog() {
         text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         body.addView(text)
         val add = styledButton("Přidat tlačítko nyní", true)
-        add.setOnClickListener { dismiss(); finishPlusTutorial(); enterConfigMode() }
+        add.setOnClickListener {
+            dismiss(); finishPlusTutorial()
+            // dalsi tip: kde se tlacitka pridavaji (drive se rovnou prepinalo do rezimu tlacitek a delalo to chybu)
+            showStyledDialog(title = "Super!", negativeText = null, strokeColor = "#FFD600".toColorInt()) { d2 ->
+                val b2 = LinearLayout(this)
+                b2.orientation = LinearLayout.VERTICAL
+                val t2 = TextView(this)
+                t2.text = "Jdi do NASTAVENÍ → TLAČÍTKA. Tady si přidáš až 4 tlačítka!"
+                t2.setTextColor(Color.WHITE)
+                t2.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                b2.addView(t2)
+                val okBtn = styledButton("OK, pokračuj", true)
+                okBtn.setOnClickListener { d2() }
+                val okLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                okLp.topMargin = dp(18)
+                b2.addView(okBtn, okLp)
+                b2
+            }
+        }
         // text tlacitka blika: 1 s zlute, 1 s vychozi barva, dokola (dokud je okno otevrene)
         val addDefault = add.currentTextColor
         val addYellow = "#FFD600".toColorInt()

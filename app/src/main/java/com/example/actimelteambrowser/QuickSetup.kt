@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -7,6 +8,7 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +48,7 @@ private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle
     dim.elevation = dp(100).toFloat()
     parent.addView(dim, lp)
     val cap = TextView(this)
+    if (tip.isBlank()) cap.visibility = View.GONE
     cap.text = tip
     cap.setTextColor(Color.WHITE)
     cap.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
@@ -84,6 +87,8 @@ private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle
     dim.post {
         dim.holes.clear()
         // holeScale > 1: dira je vetsi (pulzujici UFO se do ni vejde i na 200 %)
+        // horni a dolni pole (se zlutym nadpisem) jsou videt po cele nastaveni
+        for (f in listOf(findViewById<View>(R.id.urlContainer), etSearchMain)) if (f.isShown) dim.holes.add(rectOf(f))
         for (t in targets) if (t.isShown) dim.holes.add(rectOf(t).apply {
             val gx = width() * (holeScale - 1f) / 2f
             val gy = height() * (holeScale - 1f) / 2f
@@ -109,48 +114,12 @@ private fun MainActivity.bodyText(t: String): TextView {
     return tv
 }
 
-// Rychle nastaveni uz jednou doslo na konec (5/5): kulicky jdou klepnout a v oknech je tlacitko Zpet
-private var quickSeenEnd = false
-
-// Krok rychleho nastaveni podle cisla (1-5)
-private fun MainActivity.quickGo(n: Int) {
-    quickSpotOff?.invoke()
-    when (n) { 1 -> quickStage1(); 2 -> quickStage2(); 3 -> quickStage3(); 4 -> quickStage4(); else -> quickStage5() }
-}
-
-// 5 kulicek nahore misto "1/5": aktualni zluta, prosle bile, dalsi jen obrys; po dojeti na konec jdou klepnout
-private fun MainActivity.stageDots(stage: Int, dismiss: () -> Unit): View {
-    val row = LinearLayout(this)
-    row.orientation = LinearLayout.HORIZONTAL
-    row.gravity = Gravity.CENTER
-    for (k in 1..5) {
-        val dot = View(this)
-        val g = GradientDrawable()
-        g.shape = GradientDrawable.OVAL
-        when {
-            k == stage -> g.setColor("#FFD600".toColorInt())
-            k < stage || quickSeenEnd -> g.setColor(Color.WHITE)
-            else -> { g.setColor(Color.TRANSPARENT); g.setStroke(dp(2), "#777777".toColorInt()) }
-        }
-        dot.background = g
-        val sz = if (k == stage) dp(14) else dp(11)
-        // vetsi plocha pro klepnuti kolem tecky
-        val hit = android.widget.FrameLayout(this)
-        hit.addView(dot, android.widget.FrameLayout.LayoutParams(sz, sz, Gravity.CENTER))
-        if (quickSeenEnd && k != stage) hit.setOnClickListener { dismiss(); quickGo(k) }
-        row.addView(hit, LinearLayout.LayoutParams(dp(30), dp(30)))
-    }
-    return row
-}
-
 // Okno s textem a tlacitky pod sebou (prvni = hlavni zelene); kazde tlacitko okno zavre a spusti svou akci.
-// Uvodni prvni nastaveni: plocha za oknem hodne ztmavena, zluty obrys; stage 1-5 = kulicky nahore (+ Zpet po dojeti na konec)
-private fun MainActivity.choiceDialog(title: String, text: String, extra: View? = null, vararg buttons0: Pair<String, () -> Unit>, stage: Int = 0) {
-    val buttons = if (stage > 1 && quickSeenEnd) arrayOf(*buttons0, "← Zpět" to { quickGo(stage - 1) }) else arrayOf(*buttons0)
+// Jen pred prvotnim nastavenim (vychozi prohlizec, chces nastaveni?); samotne kroky nastaveni uz okna nemaji.
+private fun MainActivity.choiceDialog(title: String, text: String, extra: View? = null, vararg buttons: Pair<String, () -> Unit>) {
     showStyledDialog(
         // s pozadim s UFO staci mensi ztmaveni (jinak by UFO nebyla videt)
         title = title, negativeText = null, dimAmount = if (firstBackdrop != null) 0.45f else 0.8f, strokeColor = "#FFD600".toColorInt(),
-        topView = if (stage > 0) ({ d -> stageDots(stage, d) }) else null,
         onCancel = { quickSpotOff?.invoke(); hideFirstBackdrop() }
     ) { dismiss ->
         val body = LinearLayout(this)
@@ -211,84 +180,207 @@ private fun MainActivity.askQuickSetup() {
         "Rychlé nastavení",
         "Chceš si v pár krocích projít hlavní možnosti prohlížeče? Nebo to přeskoč – všechno zůstane ve výchozí podobě a nové věci ti ukážou žluté obrysy.",
         null,
-        "Projdu si rychlé nastavení možností prohlížeče" to { quickStage1() },
+        "Projdu si rychlé nastavení možností prohlížeče" to { quickGo(1) },
         "Přeskočit rychlé nastavení" to { hideFirstBackdrop(); startLiveTutorial() }
     )
 }
 
-// 1) domovska stranka + jak otevrit karty pri startu
+
+// ======================= PRVOTNI NASTAVENI (5 kroku, bez oken) =======================
+// Pozadi s UFO je videt cele nastaveni. Nadpis kroku je zlute v hornim a dolnim poli, obsah kroku je karta mezi listami
+// a dole nad spodni listou je 5 kolecek (jako v Hodnoceni) - klepnutim se da prejit na kterykoli krok.
+
+@SuppressLint("StaticFieldLeak")
+private var setupLayer: FrameLayout? = null
+@SuppressLint("StaticFieldLeak")
+private var setupCard: View? = null
+private var setupStageNow = 0
+
+private fun MainActivity.setupBottomOffset(): Int = if (bottomBar.height > 0) bottomBar.height else lastSystemBottom + dp(80)
+
+// Vrstva nastaveni nad ztmavenim (100) a tipem (101); sama dotyky nepohlcuje (projdou na UFO / tlacitka pod ni)
+private fun MainActivity.ensureSetupLayer(): FrameLayout {
+    setupLayer?.let { return it }
+    val l = FrameLayout(this)
+    l.elevation = dp(102).toFloat()
+    val lp = ConstraintLayout.LayoutParams(0, 0)
+    lp.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+    lp.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+    (root as ConstraintLayout).addView(l, lp)
+    setupLayer = l
+    return l
+}
+
+// 5 kolecek dole: aktualni zlute a vetsi, ostatni polopruhledne bile; vsechna jdou klepnout
+private fun MainActivity.setupDots(stage: Int) {
+    val l = ensureSetupLayer()
+    l.findViewWithTag<View>("setup_dots")?.let { l.removeView(it) }
+    val row = LinearLayout(this)
+    row.tag = "setup_dots"
+    row.orientation = LinearLayout.HORIZONTAL
+    row.gravity = Gravity.CENTER
+    for (k in 1..5) {
+        val dot = View(this)
+        val g = GradientDrawable()
+        g.shape = GradientDrawable.OVAL
+        g.setColor(if (k == stage) "#FFD600".toColorInt() else "#66FFFFFF".toColorInt())
+        dot.background = g
+        val sz = if (k == stage) dp(14) else dp(10)
+        val hit = FrameLayout(this)
+        hit.addView(dot, FrameLayout.LayoutParams(sz, sz, Gravity.CENTER))
+        hit.setOnClickListener { if (k != setupStageNow && quickSetupStage != 21) quickGo(k) }
+        row.addView(hit, LinearLayout.LayoutParams(dp(36), dp(36)))
+    }
+    val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+    lp.bottomMargin = setupBottomOffset() + dp(6)
+    l.addView(row, lp)
+}
+
+private fun removeSetupCard() {
+    setupCard?.let { (it.parent as? ViewGroup)?.removeView(it) }
+    setupCard = null
+}
+
+// Karta kroku (tmava, zluty obrys) mezi horni listou a koleckami; top = u horni listy (napr. kdyz jsou dole tlacitka)
+private fun MainActivity.showSetupCard(top: Boolean = false, build: (LinearLayout) -> Unit) {
+    removeSetupCard()
+    val card = LinearLayout(this)
+    card.orientation = LinearLayout.VERTICAL
+    card.isClickable = true   // klepnuti do karty neprojde na pozadi
+    val bg = GradientDrawable()
+    bg.setColor("#E61E1E1E".toColorInt())
+    bg.cornerRadius = dp(24).toFloat()
+    bg.setStroke(dp(2), "#FFD600".toColorInt())
+    card.background = bg
+    card.setPadding(dp(20), dp(18), dp(20), dp(16))
+    build(card)
+    val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, if (top) Gravity.TOP else Gravity.CENTER)
+    lp.marginStart = dp(20); lp.marginEnd = dp(20)
+    lp.topMargin = topBar.bottom + dp(14)
+    lp.bottomMargin = setupBottomOffset() + dp(56)
+    ensureSetupLayer().addView(card, lp)
+    card.alpha = 0f
+    card.translationY = dp(12).toFloat()
+    card.animate().alpha(1f).translationY(0f).setDuration(240).start()
+    setupCard = card
+}
+
+private fun MainActivity.cardText(card: LinearLayout, text: String) {
+    val tv = bodyText(text)
+    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    card.addView(tv)
+}
+
+private fun MainActivity.cardButton(card: LinearLayout, label: String, primary: Boolean, first: Boolean, action: () -> Unit) {
+    val b = styledButton(label, primary)
+    b.setOnClickListener { action() }
+    val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    lp.topMargin = dp(if (first) 18 else 10)
+    card.addView(b, lp)
+}
+
+// Prechod na krok n (1-5): uklidi predchozi krok (ztmaveni, karta, lista) a ukaze novy
+private fun MainActivity.quickGo(n: Int) {
+    quickSpotOff?.invoke()
+    removeSetupCard()
+    quickSetupStage = 0
+    if (leftBarOpen) closeLeftBarAndHide()
+    setupStageNow = n
+    if (firstBackdrop == null) showFirstBackdrop()
+    setupDots(n)
+    when (n) { 1 -> quickStage1(); 2 -> quickStage2(); 3 -> quickStage3(); 4 -> quickStage4(); else -> quickStage5() }
+}
+
+private fun MainActivity.endQuickSetup() {
+    quickSpotOff?.invoke()
+    removeSetupCard()
+    setupLayer?.let { (it.parent as? ViewGroup)?.removeView(it) }
+    setupLayer = null
+    quickSetupStage = 0
+    setupStageNow = 0
+    if (leftBarOpen) closeLeftBarAndHide()
+    clearFieldTitles()
+    hideFirstBackdrop()
+}
+
+/** Nastaveni -> Tutorialy -> Prvotni nastaveni: projit vsech 5 kroku znovu. */
+internal fun MainActivity.startQuickSetupAgain() {
+    if (setupStageNow != 0) return
+    quickGo(1)
+}
+
+// 1) domovska stranka + co otevrit pri startu
 private fun MainActivity.quickStage1() {
-    val box = LinearLayout(this)
-    box.orientation = LinearLayout.VERTICAL
-    box.addView(dialogLabel("Domovská stránka"))
-    val url = EditText(this)
-    url.setText(AppSettings.homeUrl.get())
-    url.setTextColor(Color.WHITE)
-    url.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-    url.isSingleLine = true
-    url.inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI or android.text.InputType.TYPE_CLASS_TEXT
-    val ubg = GradientDrawable()
-    ubg.setColor("#2A2A2A".toColorInt()); ubg.cornerRadius = dp(12).toFloat()
-    url.background = ubg
-    url.setPadding(dp(12), dp(10), dp(12), dp(10))
-    val ulp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-    ulp.topMargin = dp(6); ulp.bottomMargin = dp(14)
-    box.addView(url, ulp)
-    box.addView(dialogLabel("Při startu prohlížeče"))
-    var restore = AppSettings.startupRestoreTabs.get()
-    val opts = listOf(true to "Obnovit poslední karty", false to "Jedna nová karta s domovskou stránkou")
-    val views = ArrayList<TextView>()
-    fun paint() {
-        for ((i, v) in views.withIndex()) {
-            val on = opts[i].first == restore
-            val g = GradientDrawable()
-            g.setColor((if (on) "#14382A" else "#2A2A2A").toColorInt()); g.cornerRadius = dp(12).toFloat()
-            if (on) g.setStroke(dp(2), "#00B055".toColorInt())
-            v.background = g
+    showFieldTitles("DOMOVSKÁ STRÁNKA", "NASTAV SI SÁM")
+    showSetupCard { card ->
+        cardText(card, "Kam se má prohlížeč vracet tlačítkem Domů a co otevřít po spuštění.")
+        val l1 = dialogLabel("Domovská stránka")
+        val l1p = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        l1p.topMargin = dp(14)
+        card.addView(l1, l1p)
+        val url = EditText(this)
+        url.setText(AppSettings.homeUrl.get())
+        url.setTextColor(Color.WHITE)
+        url.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        url.isSingleLine = true
+        url.inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI or android.text.InputType.TYPE_CLASS_TEXT
+        val ubg = GradientDrawable()
+        ubg.setColor("#2A2A2A".toColorInt()); ubg.cornerRadius = dp(12).toFloat()
+        url.background = ubg
+        url.setPadding(dp(12), dp(10), dp(12), dp(10))
+        val ulp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        ulp.topMargin = dp(6); ulp.bottomMargin = dp(14)
+        card.addView(url, ulp)
+        card.addView(dialogLabel("Při startu prohlížeče"))
+        var restore = AppSettings.startupRestoreTabs.get()
+        val opts = listOf(true to "Obnovit poslední karty", false to "Jedna nová karta s domovskou stránkou")
+        val views = ArrayList<TextView>()
+        fun paint() {
+            for ((i, v) in views.withIndex()) {
+                val on = opts[i].first == restore
+                val g = GradientDrawable()
+                g.setColor((if (on) "#14382A" else "#2A2A2A").toColorInt()); g.cornerRadius = dp(12).toFloat()
+                if (on) g.setStroke(dp(2), "#00B055".toColorInt())
+                v.background = g
+            }
         }
-    }
-    for ((value, label) in opts) {
-        val v = TextView(this)
-        v.text = label
-        v.setTextColor(Color.WHITE)
-        v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-        v.setPadding(dp(14), dp(12), dp(14), dp(12))
-        v.setOnClickListener { restore = value; paint() }
-        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.topMargin = dp(6)
-        box.addView(v, lp)
-        views.add(v)
-    }
-    paint()
-    choiceDialog(
-        "Domovská stránka a karty",
-        "Kam se má prohlížeč vracet tlačítkem Domů a co otevřít po spuštění.",
-        box,
-        "OK" to {
+        for ((value, label) in opts) {
+            val v = TextView(this)
+            v.text = label
+            v.setTextColor(Color.WHITE)
+            v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            v.setPadding(dp(14), dp(12), dp(14), dp(12))
+            v.setOnClickListener { restore = value; paint() }
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.topMargin = dp(6)
+            card.addView(v, lp)
+            views.add(v)
+        }
+        paint()
+        cardButton(card, "OK, pokračuj", true, true) {
             var u = url.text.toString().trim()
             if (u.isNotEmpty() && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://$u"
             if (u.isNotEmpty() && runCatching { u.toUri().host }.getOrNull()?.contains('.') == true) AppSettings.homeUrl.set(u)
             AppSettings.startupRestoreTabs.set(restore)
-            quickStage2()
-        },
-        stage = 1
-    )
+            hideKeyboard()
+            quickGo(2)
+        }
+    }
 }
 
-// 2) gesta: cela plocha zlute (zivy tutorial), tlacitko gest ceka na klepnuti -> ukazka -> nechat tlacitko?
+// 2) gesta: vse ztmavene krome UFO (kulicky) -> klepnuti spusti ukazku gest -> nechat tlacitko?
 private fun MainActivity.quickStage2() {
+    showFieldTitles("GESTA UKÁZKA", "DEMO VIDEO")
     startLiveTutorial()
-    if (gestureButtonN() == 0) { quickStage3(); return }
+    if (gestureButtonN() == 0) { quickGo(3); return }
     quickSetupStage = 2
-    // vse ztmavene, videt je jen kulicka gest (na ni jde klepnout) a tip nahore
     window.decorView.postDelayed({
-        if (quickSetupStage == 2) gestureTarget()?.let {
+        if (quickSetupStage == 2 && setupStageNow == 2) gestureTarget()?.let {
             // vychozi vzhled ma na kulicce UFO
             val tip = if (AppSettings.gestureStyleChanged.get()) "Klikni na kuličku 👆" else "Klikni na UFO 👆"
-            quickSpotlight(listOf(it), tip, circle = it === orbView, onSkip = {
-                quickSetupStage = 0
-                quickStage3()
-            }, holeScale = if (it === orbView) 2.1f else 1f)
+            quickSpotlight(listOf(it), tip, circle = it === orbView, onSkip = { quickGo(3) }, holeScale = if (it === orbView) 2.1f else 1f)
             if (it === orbView) {
                 val orb = it
                 val pulse = android.animation.ValueAnimator.ofFloat(1f, 2f)
@@ -305,32 +397,31 @@ private fun MainActivity.quickStage2() {
     }, 350)
 }
 
-/** Volano z endDemo: skoncila ukazka gest v rychlem nastaveni. */
+/** Volano z endDemo: skoncila ukazka gest v prvotnim nastaveni. */
 internal fun MainActivity.onQuickSetupDemoEnded() {
     if (quickSetupStage != 21) return
     quickSetupStage = 0
     window.decorView.postDelayed({
-        choiceDialog(
-            "Tlačítko gest",
-            "Chceš tlačítko pro gesta nechat?",
-            null,
-            "Ano – tlačítko gest zkusím" to { quickStage3() },
-            "✕ – Kdyžtak si ho pak zapnu" to {
+        if (setupStageNow != 2) return@postDelayed
+        showFieldTitles("GESTA UKÁZKA", "DEMO VIDEO")
+        showSetupCard { card ->
+            cardText(card, "Chceš tlačítko pro gesta nechat?")
+            cardButton(card, "Ano – tlačítko gest zkusím", true, true) { quickGo(3) }
+            cardButton(card, "✕ – Kdyžtak si ho pak zapnu", false, false) {
                 val n = gestureButtonN()
                 if (n in 5..8) AppSettings.buttonEnabled[n - 1].set(false)
                 else if (n != 0) AppSettings.buttonTap[n - 1].set(ButtonFunction.NONE.key)
                 updateButtonVisuals()
-                quickStage3()
-            },
-            stage = 2
-        )
+                quickGo(3)
+            }
+        }
     }, 400)
 }
 
-// 3) pridatelna tlacitka: 2 + 2, kazde umi klepnuti i drzeni
+// 3) pridatelna tlacitka: nad bocnimi tlacitky vyjedou 2 + 2 zluta "+" a pak vysvetleni
 private fun MainActivity.quickStage3() {
-    // vse ztmavene, videt je tlacitko listy a gest; nad bocnimi tlacitky vyjedou 2 + 2 ukazkova tlacitka
-    quickSpotlight(listOfNotNull(buttonView(defaultBarOrigin()), gestureTarget()), "Na každou stranu přidáš 2 tlačítka")
+    showFieldTitles("PŘIDEJ TLAČÍTKA", "DEMO VIDEO")
+    quickSpotlight(listOfNotNull(buttonView(defaultBarOrigin()), gestureTarget()), "")
     val parent = root as ConstraintLayout
     val ghosts = ArrayList<View>()
     var delay = 500L
@@ -364,42 +455,48 @@ private fun MainActivity.quickStage3() {
     val off = quickSpotOff
     quickSpotOff = { ghosts.forEach { parent.removeView(it) }; off?.invoke() }
     window.decorView.postDelayed({
-        choiceDialog(
-            "Tlačítka",
-            "Na každou stranu můžeš přidat až 2 další tlačítka – žluté „+“ nad bočními tlačítky.\n\nKaždé tlačítko umí dvě věci: klepnutí a podržení. Obojí si nastavíš v Nastavení → Tlačítka.",
-            null,
-            "Dále" to { quickSpotOff?.invoke(); quickStage4() },
-            stage = 3
-        )
-    }, delay + 900)
+        if (setupStageNow != 3) return@postDelayed
+        showSetupCard(top = true) { card ->
+            cardText(card, "Na každou stranu můžeš přidat až 2 další tlačítka – žluté „+“ nad bočními tlačítky.\n\nKaždé tlačítko umí dvě věci: klepnutí a podržení. Obojí si nastavíš v Nastavení → Tlačítka.")
+            cardButton(card, "OK, pokračuj", true, true) { quickGo(4) }
+        }
+    }, delay + 600)
 }
 
-// 4) bocni lista + pravidlo lista / gesta (ukazka listy)
+// 4) bocni lista: tlacitko listy 3x problikne + tip -> lista vyjede + pravidlo lista / gesta
 private fun MainActivity.quickStage4() {
-    choiceDialog(
-        "Boční lišta",
-        "Lišta vyjíždí z tlačítka a může být jen na spodních pozicích vlevo nebo vpravo (tlačítko 5 nebo 6).\n\nTlačítko gest může být kdekoli jinde. Lišta a gesta nemůžou být na jednom tlačítku.",
-        null,
-        "Ukázat lištu" to {
-            toggleBarFrom(defaultBarOrigin())
-            window.decorView.postDelayed({
-                if (leftBarOpen) closeLeftBarAndHide()
-                window.decorView.postDelayed({ quickStage5() }, 700)
-            }, 3000)
-        },
-        "Dále" to { quickStage5() },
-        stage = 4
-    )
+    showFieldTitles("BOČNÍ LIŠTA", "MŮŽE SE HODIT")
+    val barBtn = buttonView(defaultBarOrigin())
+    quickSpotlight(listOfNotNull(barBtn), "")
+    window.decorView.postDelayed({
+        if (setupStageNow != 4) return@postDelayed
+        barBtn?.takeIf { it.isShown }?.let { blinkOutline(ensureSetupLayer(), rectOf(it).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) }) }
+        showSetupCard(top = true) { card ->
+            cardText(card, "V liště se nachází další užitečné věci.")
+            cardButton(card, "OK, pokračuj", true, true) {
+                quickSpotOff?.invoke()
+                removeSetupCard()
+                toggleBarFrom(defaultBarOrigin())
+                window.decorView.postDelayed({
+                    if (setupStageNow != 4) return@postDelayed
+                    showSetupCard(top = true) { c2 ->
+                        cardText(c2, "Pozor: tlačítko lišty a tlačítko gest nemůžou být jedno a to samé tlačítko.\n\nLišta vyjíždí jen ze spodního bočního tlačítka vlevo nebo vpravo, gesta si můžeš dát na kterékoli jiné.")
+                        cardButton(c2, "OK, pokračuj", true, true) { quickGo(5) }
+                    }
+                }, 450)
+            }
+        }
+    }, 300)
 }
 
 // 5) export a import
 private fun MainActivity.quickStage5() {
-    quickSeenEnd = true   // od ted jdou kulicky klepnout a je tu Zpet
-    choiceDialog(
-        "Záloha nastavení",
-        "Veškeré nastavení si uložíš a můžeš zálohovat – nebo ho jednoduše pošleš na e-mail. Pak si ho stáhneš do telefonu a kdyžtak nahraješ zpět.\n\nNajdeš to v Nastavení → Export a Import.",
-        null,
-        "Hotovo" to { quickSeenEnd = false; hideFirstBackdrop(); AppToast.show(this, "Rychlé nastavení hotové") },
-        stage = 5
-    )
+    showFieldTitles("VŠE SI ULOŽ!", "NENÍ PROBLÉM")
+    showSetupCard { card ->
+        cardText(card, "Veškeré nastavení si uložíš a můžeš zálohovat – nebo ho jednoduše pošleš na e-mail. Pak si ho stáhneš do telefonu a kdyžtak nahraješ zpět.\n\nNajdeš to v Nastavení → Export a Import.")
+        cardButton(card, "Hotovo", true, true) {
+            endQuickSetup()
+            AppToast.show(this, "Prvotní nastavení hotové")
+        }
+    }
 }

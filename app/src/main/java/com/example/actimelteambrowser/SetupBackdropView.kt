@@ -24,6 +24,7 @@ import kotlin.math.sin
  * a konvoj tri UFO - vpredu dve zelena, kousek za nimi cervene. Konvoj leti na nahodne misto (rovne nebo klikate,
  * 3-15 s, nejdal tesne pred okraj obrazovky), zastavi, 15 s stoji a pak leti znovu. Vsechny rozmery jsou v dp.
  * Vypnute animace (Nastaveni -> Animace): tri UFO stoji kazde na jinem nahodnem miste a nic se neprekresluje.
+ * Kdyz konvoj stoji (15 s), je uplne v klidu (neblika, nehoupe se, nenaklani) a nic se neprekresluje - setri telefon.
  */
 class SetupBackdropView(context: Context) : View(context) {
 
@@ -55,8 +56,9 @@ class SetupBackdropView(context: Context) : View(context) {
     private var dur = 5f
     private var prog = 0f
     private var moving = false
-    private var wait = 0f
 
+    private var frozenT = 0f                         // cas animace v okamziku zastaveni (v klidu se nemeni)
+    private val resume = Runnable { lastNs = System.nanoTime(); startFlight(); invalidate() }
     private var lastNs = System.nanoTime()
     private val startNs = lastNs
     private val bgPaint = Paint()
@@ -95,6 +97,11 @@ class SetupBackdropView(context: Context) : View(context) {
         super.onAttachedToWindow()
         lastNs = System.nanoTime()
         invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(resume)
+        super.onDetachedFromWindow()
     }
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
@@ -137,11 +144,7 @@ class SetupBackdropView(context: Context) : View(context) {
     }
 
     private fun step(dt: Float) {
-        if (!moving) {
-            wait -= dt
-            if (wait <= 0f) startFlight()
-            return
-        }
+        if (!moving) return
         prog = min(1f, prog + dt / dur)
         val e = prog * prog * (3f - 2f * prog)   // plynuly rozjezd a dojezd
         val off = amp * sin(2f * PI.toFloat() * waves * e) * sin(PI.toFloat() * e)
@@ -152,7 +155,12 @@ class SetupBackdropView(context: Context) : View(context) {
             trail.add(floatArrayOf(lx, ly))
             while (trail.size > 320) trail.removeAt(0)
         }
-        if (prog >= 1f) { moving = false; wait = waitSec }
+        if (prog >= 1f) {
+            moving = false
+            // dalsi let az za 15 s; do te doby se vubec neprekresluje
+            removeCallbacks(resume)
+            postDelayed(resume, (waitSec * 1000).toLong())
+        }
     }
 
     // Misto na stope [dist] dp za vedouci lodi
@@ -179,7 +187,8 @@ class SetupBackdropView(context: Context) : View(context) {
         val now = System.nanoTime()
         val dt = min(0.05f, (now - lastNs) / 1e9f)
         lastNs = now
-        val t = (now - startNs) / 1e9f
+        if (moving) frozenT = (now - startNs) / 1e9f
+        val t = frozenT
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         if (still) {
             if (w > 0f && h > 0f) canvas.withScale(density, density) {
@@ -197,12 +206,13 @@ class SetupBackdropView(context: Context) : View(context) {
                 }
             }
         }
-        if (isAttachedToWindow && isShown) postInvalidateOnAnimation()   // schovane pozadi nekresli (setri baterku)
+        // jen za letu; schovane pozadi nekresli (setri baterku)
+        if (moving && isAttachedToWindow && isShown) postInvalidateOnAnimation()
     }
 
     private fun drawUfo(c: Canvas, x: Float, y: Float, look: Look, t: Float, index: Int) {
         val s = size
-        val bob = sin(t * 2f + index * 1.7f) * (if (moving) 0.8f else 1.6f)
+        val bob = sin(t * 2f + index * 1.7f) * 0.8f   // v klidu je t zmrazeny = UFO stoji
         val heading = if (moving) ((toX - fromX) / 220f).coerceIn(-1f, 1f) * 0.1f else 0f
         val tilt = sin(t * 1.4f + index * 2.1f) * 0.06f + heading
         c.save()

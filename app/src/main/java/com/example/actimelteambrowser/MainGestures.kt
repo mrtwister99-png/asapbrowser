@@ -232,7 +232,8 @@ internal fun MainActivity.showGestures(test: Boolean = false, demoBounds: ((Floa
     val bottomDp = ((bottomBar.height - lastSystemBottom) / density).toInt() + 16
     // napoveda gest zacina pod hornim polem (a listou karet); schovane listy = hned nahore
     val topDp = if (topBar.translationY < 0f) 8 else ((topBar.height - lastSystemTopPx + stripTopPx) / density).toInt() + 6
-    val theme = GestureLook.theme()
+    // anonymni karta: cara za tahem i efekt pri pruchodu klavesou jsou modre (barva anonymniho rezimu)
+    val theme = GestureLook.theme().let { if (tabs.active()?.incognito == true) it.copy(trail = androidx.compose.ui.graphics.Color(0xFF006AFF)) else it }
     gestureView.setContent {
         GestureOverlay(
             style = style,
