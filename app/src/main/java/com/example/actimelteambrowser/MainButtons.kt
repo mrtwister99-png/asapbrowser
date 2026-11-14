@@ -76,6 +76,7 @@ internal fun MainActivity.wireGestureTouch(v: View, n: Int) {
             if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) swallow = false
             return@setOnTouchListener true
         }
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN && quickSetupStage == 2) { swallow = true; startFirstDemo(n); return@setOnTouchListener true }   // prvotni nastaveni: ukazka gest
         if (ev.actionMasked == MotionEvent.ACTION_DOWN && liveTutorialDone(n)) { swallow = true; return@setOnTouchListener true }
         val wl = IntArray(2)
         window.decorView.getLocationOnScreen(wl)

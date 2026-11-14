@@ -62,6 +62,7 @@ internal fun demoSkipBg(ctx: Context): GradientDrawable = GradientDrawable().app
 /** Ztmaveni s "dirami" (jasna mista); zachytava dotyky, aby se pod ni nedalo klepat. */
 internal class DemoDim(ctx: Context) : View(ctx) {
     val holes = ArrayList<RectF>()
+    val holeRadius = HashMap<RectF, Float>()   // vlastni zaobleni diry (px), napr. podle textoveho pole
     var circle = false   // diry jsou kulate (kulicka gest)
     private val clear = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
     init { setLayerType(LAYER_TYPE_HARDWARE, null) }
@@ -69,7 +70,7 @@ internal class DemoDim(ctx: Context) : View(ctx) {
         c.drawColor("#E6000000".toColorInt())
         val r = 22f * resources.displayMetrics.density
         for (h in holes) {
-            val rr = if (circle) minOf(h.width(), h.height()) / 2f else r
+            val rr = holeRadius[h] ?: if (circle) minOf(h.width(), h.height()) / 2f else r
             c.drawRoundRect(h, rr, rr, clear)
         }
     }

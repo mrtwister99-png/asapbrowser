@@ -115,3 +115,33 @@ internal fun MainActivity.revealAllFirstLook() {
 
 /** Obdelnik sede listy karet (pro zlute probliknuti), null = neni. */
 internal fun MainActivity.stripPlaceholderView(top: Boolean): View? = stripPlaceholders[top]
+
+/**
+ * Seda lista karet odjede: dlazdice (u [keepFirst] od 2. dal) postupne odjedou doprava za okraj,
+ * prvni dlazdice pak pomalu zmizi a ukaze se pod ni skutecna karta c. 1.
+ */
+internal fun MainActivity.slideStripPlaceholder(top: Boolean, keepFirst: Boolean, onDone: (() -> Unit)? = null) {
+    val row = stripPlaceholders[top] as? android.view.ViewGroup ?: run { onDone?.invoke(); return }
+    val w = resources.displayMetrics.widthPixels.toFloat()
+    val from = if (keepFirst) 1 else 0
+    var last = 0L
+    for (i in from until row.childCount) {
+        val t = row.getChildAt(i)
+        val delay = (i - from) * 120L
+        last = delay + 520L
+        t.animate().translationX(w).setStartDelay(delay).setDuration(520).setInterpolator(android.view.animation.AccelerateInterpolator()).start()
+    }
+    row.postDelayed({
+        stripPlaceholders.remove(top)
+        row.animate().alpha(0f).setDuration(if (keepFirst) 700 else 150).withEndAction {
+            (row.parent as? android.view.ViewGroup)?.removeView(row)
+            if (covers.isEmpty() && stripPlaceholders.isEmpty()) firstLookOn = false
+            onDone?.invoke()
+        }.start()
+    }, last + 80)
+}
+
+/** Pomalu odkryje prvky (alpha 0 -> 1), ktere setup na chvili schoval (sipky, zamek, Sdilet). */
+internal fun fadeInViews(views: List<View>, ms: Long = 1400) {
+    for (v in views) { v.alpha = 0f; v.animate().alpha(1f).setDuration(ms).start() }
+}

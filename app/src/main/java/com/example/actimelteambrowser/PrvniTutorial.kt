@@ -177,6 +177,8 @@ private fun MainActivity.card(): GradientDrawable {
 /** Vrati true, kdyz se ukazka spustila (puvodni akce se tentokrat neprovede). */
 internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     if (demoRunning) return false
+    // prvotni nastaveni, krok Gesta: klepnuti na tlacitko gest = ukazka gest ve smycce
+    if (quickSetupStage == 2 && n in 1..12 && buttonFunction(n, false) == ButtonFunction.GESTURES) { quickSetupStage = 21; return startGestureLoopDemo() }
     // 11-14 = ukazka tlacitek 1-4 (klepnuti + drzeni), 300 = tlacitko s funkci Gesta
     val id = if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) 10 + n else if (n in 1..12 && n != 7 && n != 8) 300 else n
     if ((n == 7 || n == 8) && buttonFunction(n, false) != ButtonDefaults.tap(n)) return false   // tlacitko ma jinou funkci
@@ -1109,5 +1111,97 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
         dots.add(d)
     }
     showIntro(0)
+    return true
+}
+
+// ======================= PRVOTNI NASTAVENI: UKAZKA GEST VE SMYCCE =======================
+// Plocha gest se otevre a dokola se ukazuje: tah gesta -> uspech -> pauza -> naklikani klaves -> uspech -> pauza.
+// Nahore tip a "OK, pokračuj" (ukonci ukazku, nastaveni jde dal). Nic se neprovede.
+private fun MainActivity.startGestureLoopDemo(): Boolean {
+    demoRunning = true
+    onSetupGestureTapped()
+    val ov = FrameLayout(this)
+    ov.isClickable = true
+    layerContent = ov
+
+    val box = LinearLayout(this)
+    box.orientation = LinearLayout.VERTICAL
+    val caption = TextView(this)
+    caption.text = "Gesto aktivuješ buď tažením prstu přes klávesy, nebo ho postupně naklikáš – klávesu po klávese. Je to na tobě, co ti sedí víc."
+    caption.setTextColor(Color.WHITE)
+    caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    caption.gravity = Gravity.CENTER
+    caption.setLineSpacing(0f, 1.12f)
+    caption.setPadding(dp(18), dp(14), dp(18), dp(14))
+    caption.background = demoCaptionBg(this)
+    box.addView(caption, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    val ok = demoButton("OK, pokračuj", true)
+    ok.setOnClickListener { endDemo() }
+    val olp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    olp.topMargin = dp(12)
+    box.addView(ok, olp)
+    val blp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP)
+    blp.marginStart = dp(24); blp.marginEnd = dp(24)
+    blp.topMargin = topBar.bottom + dp(12)
+    ov.addView(box, blp)
+
+    val fs = dp(20)
+    val finger = View(this)
+    finger.background = demoDotDrawable(this)
+    finger.alpha = 0f
+    ov.addView(finger, FrameLayout.LayoutParams(fs, fs))
+    raiseLayer()
+
+    var sx = 0f; var sy = 0f; var sw = 0f; var sh = 0f   // poloha plochy v okne (hlasi ji sama plocha)
+    fun keyPt(k: Int): Pair<Float, Float> = Pair(sx + ((k - 1) % 3 + 0.5f) * sw / 3f, sy + ((k - 1) / 3 + 0.5f) * sh / 3f)
+    fun fingerTo(pt: Pair<Float, Float>, ms: Long) {
+        val wl = IntArray(2); window.decorView.getLocationOnScreen(wl)
+        val b = IntArray(2); ov.getLocationOnScreen(b)
+        finger.animate().alpha(1f).translationX(pt.first + wl[0] - b[0] - fs / 2f).translationY(pt.second + wl[1] - b[1] - fs / 2f).setDuration(ms).start()
+    }
+    fun touch(phase: Int, pt: Pair<Float, Float>) {
+        val e = ExternalTouch(pt.first, pt.second, phase, ++extSeq)
+        if (phase == 0) externalDown = e
+        externalTouch.value = e
+    }
+    fun tap() { finger.animate().scaleX(0.55f).scaleY(0.55f).setDuration(110).withEndAction { finger.animate().scaleX(1f).scaleY(1f).setDuration(130).start() }.start() }
+    val def = com.example.actimelteambrowser.core.settings.Gestures.load().firstOrNull { it.fn == ButtonFunction.NEW_TAB }
+    val keys = (def?.code ?: "9852").map { it - '0' }
+    val label = def?.fn?.label ?: "Nová karta"
+    fun success() {
+        val p = keyPt(keys.last())
+        showFirework(p.first, p.second)
+        AppToast.show(this, "Gesto rozpoznáno: $label", false, AppToast.Kind.OK)
+    }
+
+    externalTouch.value = null; externalDown = null
+    demoGestureOpen = true
+    showGestures { x, y, w, h -> sx = x; sy = y; sw = w; sh = h }
+
+    fun cycle() {
+        if (!demoRunning) return
+        if (sw <= 0f) { demoHandler.postDelayed({ cycle() }, 300); return }
+        var t = 0L
+        fun at(d: Long, block: () -> Unit) { t += d; demoHandler.postDelayed({ if (demoRunning) block() }, t) }
+        // 1) tah
+        at(0) { fingerTo(keyPt(keys[0]), 450) }
+        at(550) { touch(0, keyPt(keys[0])) }
+        for (k in keys.drop(1)) {
+            at(250) { fingerTo(keyPt(k), 380) }
+            at(420) { touch(1, keyPt(k)) }
+        }
+        at(350) { touch(2, keyPt(keys.last())) }
+        at(250) { success(); finger.animate().alpha(0f).setDuration(250).start() }
+        // 2) naklikani klaves postupne
+        at(1700) { fingerTo(keyPt(keys[0]), 400) }
+        for (k in keys) {
+            at(480) { fingerTo(keyPt(k), 300) }
+            at(340) { tap(); touch(0, keyPt(k)) }
+            at(110) { touch(2, keyPt(k)) }
+        }
+        at(450) { success(); finger.animate().alpha(0f).setDuration(250).start() }
+        at(1800) { cycle() }
+    }
+    demoHandler.postDelayed({ cycle() }, 700)
     return true
 }
