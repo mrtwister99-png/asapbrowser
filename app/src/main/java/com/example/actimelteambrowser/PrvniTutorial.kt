@@ -564,6 +564,7 @@ internal fun MainActivity.demoButton(text: String, primary: Boolean): TextView {
         val g = GradientDrawable()
         g.setColor("#00B055".toColorInt())
         g.cornerRadius = dp(22).toFloat()
+        g.setStroke(dp(1), Color.WHITE)   // OK, pokracuj ma vzdy tenky bily obrys
         b.background = g
     } else b.background = demoSkipBg(this)
     return b
@@ -896,7 +897,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
             resetHook = { rm.animate().cancel(); rm.visibility = View.INVISIBLE }
             parts += TopPart(
                 "Klepnutím na Domů se stránka obnoví a přejdeš na domovskou stránku.",
-                "Domovskou stránku si nastavíš podržením tlačítka.", 3000
+                "", 3000
             ) { c ->
                 c.at(0) { fingerFromCenter() }
                 c.at(250) { moveTo(btn, 650) }
@@ -912,7 +913,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
                 c.at(1400) { fingerHide() }
             }
             parts += TopPart(
-                "Podržením Domů nastavíš domovskou stránku.",
+                "Podržením tlačítka si nastavíš svou domovskou stránku a hlavní věci pro prohlížeč (vyhledávač, karty při zapnutí, …).",
                 "Sem napíšeš adresu, kam se má Domů vracet.", 0
             ) { c ->
                 c.at(0) { fingerFromCenter() }
@@ -1076,7 +1077,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
                 done.add(k)
                 val next = k + 1
                 if (next < parts.size) {
-                    caption.text = part.outro + "\n\n" + parts[next].intro
+                    caption.text = listOf(part.outro, parts[next].intro).filter { it.isNotBlank() }.joinToString("\n\n")
                     setOk("OK, pokračuj") { runAnim(next) }
                     blink(target)
                 } else {

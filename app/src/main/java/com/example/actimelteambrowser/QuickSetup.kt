@@ -299,10 +299,18 @@ private fun MainActivity.cardButton(card: LinearLayout, label: String, primary: 
     col.addView(b, lp)
 }
 
-private fun MainActivity.tipCard(text: String, okText: String? = null, onOk: (() -> Unit)? = null) {
+// outline = OK ma tenky bily obrys (aby bylo videt i vedle otevrene listy)
+private fun MainActivity.tipCard(text: String, okText: String? = null, outline: Boolean = false, onOk: (() -> Unit)? = null) {
     showSetupCard { card ->
         cardText(card, text)
-        if (okText != null && onOk != null) cardButton(card, okText, true, true, onOk)
+        if (okText != null && onOk != null) {
+            cardButton(card, okText, true, true, onOk)
+            if (outline) (card.tag as? LinearLayout)?.let { col ->
+                col.getChildAt(col.childCount - 1)?.background = GradientDrawable().apply {
+                    setColor("#00B055".toColorInt()); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Color.WHITE)
+                }
+            }
+        }
     }
 }
 
@@ -331,6 +339,7 @@ private fun MainActivity.quickGo(n: Int) {
     quickSetupStage = 0
     if (leftBarOpen) closeLeftBarAndHide()
     setupStageNow = n
+    clearSetupFills(false)
     if (firstBackdrop == null) showFirstBackdrop()
     setupDots(n)
     // sipky, lupa, zamek a Sdilet mohly zustat schovane (preskoceni kroku uprostred animace)
@@ -354,6 +363,7 @@ private fun MainActivity.endQuickSetup() {
     setupLayer = null
     quickSetupStage = 0
     setupStageNow = 0
+    clearSetupFills(false)
     if (leftBarOpen) closeLeftBarAndHide()
     clearFieldTitles()
     hideFirstBackdrop()
@@ -374,7 +384,7 @@ internal fun MainActivity.startQuickSetupAgain() {
 // 1) domovska stranka + co otevrit pri startu
 private fun MainActivity.quickStage1() {
     showFieldTitles("DOMOVSKÁ STRÁNKA", "NASTAV SI SÁM")
-    showSetupCard(top = true) { card ->
+    showSetupCard { card ->
         cardText(card, "Kam se má prohlížeč vracet tlačítkem Domů a co otevřít po spuštění.")
         val l1 = dialogLabel("Domovská stránka")
         val l1p = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -393,6 +403,10 @@ private fun MainActivity.quickStage1() {
         val ulp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         ulp.topMargin = dp(6); ulp.bottomMargin = dp(14)
         card.addView(url, ulp)
+        // tip je dole: pri psani adresy vyjede nad klavesnici (a pak se vrati)
+        url.setOnFocusChangeListener { _, has ->
+            url.postDelayed({ setupCard?.animate()?.translationY(if (has) lastImeShift else 0f)?.setDuration(180)?.start() }, if (has) 350 else 0)
+        }
         card.addView(dialogLabel("Při startu prohlížeče"))
         var restore = AppSettings.startupRestoreTabs.get()
         val opts = listOf(true to "Obnovit poslední karty", false to "Jedna nová karta s domovskou stránkou")
@@ -435,14 +449,26 @@ private fun MainActivity.quickStage1() {
 //    b) textove pole a lista zalozek 4x probliknou, objevi se sipky a lupa a dlazdice 2-5 odjedou doprava za okraj
 private fun MainActivity.quickStageBottom() {
     showFieldTitles("SPODNÍ LIŠTA", "TLAČÍTKA")
+    greyFieldOutline(etSearchMain)
     setupDim(listOf(bottomBar, stripPlaceholderView(false)))
     tipCard("Spodní lišta – tlačítka")
     setupAfter(400) {
         bottomButtonViews().forEach { setupBlink(it) }
         setupAfter(1900) {
-            revealFirstLook(bottomButtonViews()) {
-                if (setupStageNow != 2) return@revealFirstLook
-                tipCard("Spodní lišta – tlačítka\n\nDomů, karty, Oblíbené a Nastavení. Každé tlačítko umí klepnutí i podržení.", "OK, pokračuj") { quickStageBottomField() }
+            // po probliknuti: nazev v poli a ikona se postupne vyplni barvou (Domu modre, Karty oranzove, Oblibene cervene, Nastaveni bile)
+            val (home, tabs, fav, set) = bottomButtonViews()
+            fillButtons(etSearchMain, listOf(
+                ButtonFill("DOMŮ", "#2F7BFF".toColorInt(), home),
+                ButtonFill("KARTY", "#FF9800".toColorInt(), tabs),
+                ButtonFill("OBLÍBENÉ", "#FF3B30".toColorInt(), fav),
+                ButtonFill("NASTAVENÍ", Color.WHITE, set, whole = true),
+            )) {
+                if (setupStageNow != 2) return@fillButtons
+                tipCard("Spodní lišta – tlačítka\n\nDomů, Karty, Oblíbené a Nastavení. Každé tlačítko umí klepnutí i podržení.", "OK, pokračuj") {
+                    revealFirstLook(bottomButtonViews(), ms = 900)
+                    clearSetupFills(true)
+                    quickStageBottomField()
+                }
             }
         }
     }
@@ -477,15 +503,23 @@ private fun MainActivity.quickStageBottomField() {
 //    b) textove pole a lista zalozek 4x probliknou, ukaze se zamek a Sdilet a vsechny dlazdice odjedou doprava
 private fun MainActivity.quickStageTop() {
     showFieldTitles("HORNÍ LIŠTA", null)
+    greyFieldOutline(findViewById(R.id.urlContainer))
     setupDim(listOf(topBar, stripPlaceholderView(true)))
     val btns = listOf(findViewById<View>(R.id.btnAdBlock), findViewById<View>(R.id.btnVpn))
     tipCard("Horní lišta – tlačítka")
     setupAfter(400) {
         btns.forEach { setupBlink(it) }
         setupAfter(1900) {
-            revealFirstLook(btns) {
-                if (setupStageNow != 3) return@revealFirstLook
-                tipCard("Horní lišta – tlačítka\n\nAdBlock blokuje reklamy, VPN se připravuje.", "OK, pokračuj") { quickStageTopField() }
+            fillButtons(etTopUrl, listOf(
+                ButtonFill("ADBLOCK", "#00B055".toColorInt(), btns[0]),
+                ButtonFill("VPN", "#A259FF".toColorInt(), btns[1]),
+            )) {
+                if (setupStageNow != 3) return@fillButtons
+                tipCard("Horní lišta – tlačítka\n\nAdBlock blokuje reklamy, VPN se připravuje.", "OK, pokračuj") {
+                    revealFirstLook(btns, ms = 900)
+                    clearSetupFills(true)
+                    quickStageTopField()
+                }
             }
         }
     }
@@ -599,9 +633,9 @@ private fun MainActivity.quickStageBarOpen() {
     val n = minOf(4, bar?.childCount ?: 0)
     for (i in 0 until n) setupAfter(500L + i * 1000L) { setupBlink(bar?.getChildAt(i), times = 2) }
     setupAfter(500L + n * 1000L) {
-        tipCard("Tady jsou schované další pomocné věci: Screenshot, PC verze, Vyhledej na stránce a Trezor.", "OK, pokračuj") {
+        tipCard("Tady jsou schované další pomocné věci: Screenshot, PC verze, Vyhledej na stránce a Trezor.", "OK, pokračuj", outline = true) {
             setupGen++
-            tipCard("Co a jak použít, zjistíš po rozkliknutí dané ikonky.", "OK, pokračuj") { quickGo(6) }
+            tipCard("Co a jak použít, zjistíš po rozkliknutí dané ikonky.", "OK, pokračuj", outline = true) { quickGo(6) }
         }
     }
 }
@@ -661,4 +695,108 @@ private fun MainActivity.quickStageBackup() {
         endQuickSetup()
         AppToast.show(this, "Prvotní nastavení hotové")
     }
+}
+
+// --- Vyplnovani tlacitek barvou (kroky Spodni / Horni lista - tlacitka) ---
+// Nazev tlacitka se v poli zleva doprava vyplni barvou a ikona tlacitka se stejnou barvou vyplni zespoda nahoru
+// (whole = cele tlacitko se vyplni shora dolu). Pak dalsi tlacitko; nakonec onDone.
+private class ButtonFill(val name: String, val color: Int, val view: View, val whole: Boolean = false)
+
+private val setupFills = ArrayList<Pair<View, android.graphics.drawable.Drawable>>()
+
+private class FillDrawable(val bmp: android.graphics.Bitmap?, color: Int, val radius: Float, val topDown: Boolean) : android.graphics.drawable.Drawable() {
+    var k = 0f
+    private val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+        this.color = color
+        if (bmp != null) colorFilter = android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN)
+    }
+    override fun draw(canvas: android.graphics.Canvas) {
+        val b = bounds
+        val h = b.height()
+        canvas.save()
+        if (topDown) canvas.clipRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.top + h * k)
+        else canvas.clipRect(b.left.toFloat(), b.bottom - h * k, b.right.toFloat(), b.bottom.toFloat())
+        if (bmp != null) canvas.drawBitmap(bmp, b.left.toFloat(), b.top.toFloat(), p)
+        else canvas.drawRoundRect(android.graphics.RectF(b), radius, radius, p)
+        canvas.restore()
+    }
+    override fun setAlpha(alpha: Int) { p.alpha = alpha; invalidateSelf() }
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+}
+
+// Ikony tlacitka (jeho viditelne deti) jako obrazek - pod sedym zakrytim nejsou videt
+private fun snapshotIcons(v: View): android.graphics.Bitmap? {
+    val g = v as? ViewGroup ?: return null
+    if (v.width <= 0 || v.height <= 0) return null
+    val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+    val c = android.graphics.Canvas(bmp)
+    for (i in 0 until g.childCount) {
+        val ch = g.getChildAt(i)
+        if (ch.visibility != View.VISIBLE || ch.alpha <= 0f) continue
+        c.save(); c.translate(ch.left.toFloat(), ch.top.toFloat()); ch.draw(c); c.restore()
+    }
+    return bmp
+}
+
+private fun MainActivity.fillButtons(et: EditText, items: List<ButtonFill>, onDone: () -> Unit) {
+    val g = setupGen
+    val grey = "#4A4A4A".toColorInt()
+    fun step(i: Int) {
+        if (g != setupGen) return
+        if (i >= items.size) { onDone(); return }
+        val item = items[i]
+        val v = item.view
+        if (et === etTopUrl) fieldTitleTop = item.name
+        et.setText(item.name)
+        et.setTextColor(item.color)
+        val d = FillDrawable(if (item.whole) null else snapshotIcons(v), item.color, dp(18).toFloat(), item.whole)
+        d.setBounds(0, 0, v.width, v.height)
+        v.overlay.add(d)
+        setupFills.add(v to d)
+        val a = android.animation.ValueAnimator.ofFloat(0f, 1f)
+        a.duration = 1300
+        a.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+        a.addUpdateListener { an ->
+            if (g != setupGen) { an.cancel(); return@addUpdateListener }
+            val k = an.animatedValue as Float
+            d.k = k; v.invalidate()
+            et.layout?.let { l ->
+                val x0 = l.getLineLeft(0); val x1 = l.getLineRight(0)
+                et.paint.shader = android.graphics.LinearGradient(x0, 0f, x1.coerceAtLeast(x0 + 1f), 0f,
+                    intArrayOf(item.color, item.color, grey, grey), floatArrayOf(0f, k, k, 1f), android.graphics.Shader.TileMode.CLAMP)
+                et.invalidate()
+            }
+        }
+        a.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                et.paint.shader = null; et.invalidate()
+                if (g == setupGen) et.postDelayed({ step(i + 1) }, 350)
+            }
+        })
+        a.start()
+    }
+    step(0)
+}
+
+// Barevne vyplne pomalu zmizi (pod nimi se odkryje skutecne tlacitko); fade = false -> hned pryc
+private fun MainActivity.clearSetupFills(fade: Boolean) {
+    etTopUrl.paint.shader = null; etSearchMain.paint.shader = null
+    val list = ArrayList(setupFills)
+    setupFills.clear()
+    if (list.isEmpty()) return
+    if (!fade) { for ((v, d) in list) v.overlay.remove(d); return }
+    val a = android.animation.ValueAnimator.ofFloat(1f, 0f)
+    a.duration = 900
+    a.addUpdateListener { an -> val k = an.animatedValue as Float; for ((v, d) in list) { d.alpha = (255 * k).toInt(); v.invalidate() } }
+    a.addListener(object : android.animation.AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: android.animation.Animator) { for ((v, d) in list) v.overlay.remove(d) }
+    })
+    a.start()
+}
+
+// Obrys pole zesedne (pozornost je na tlacitkach)
+private fun MainActivity.greyFieldOutline(container: View) {
+    (container.background as? GradientDrawable)?.setStroke(dp(2), "#5A5A5A".toColorInt())
 }

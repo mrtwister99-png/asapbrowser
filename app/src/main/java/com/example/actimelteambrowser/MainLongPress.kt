@@ -95,7 +95,8 @@ internal fun MainActivity.showIconMenu(title: String, rows: List<MainActivity.Me
             row.gravity = Gravity.CENTER_VERTICAL
             row.setPadding(dp(14), dp(11), dp(14), dp(11))
             val bg = GradientDrawable()
-            bg.setColor((if (r.highlight) "#00B055" else "#2A2A2A").toColorInt())   // zvyraznena nejcastejsi akce
+            // zvyraznena nejcastejsi akce: barva plochy (zelena, v anonymni karte modra)
+            bg.setColor(if (r.highlight) accentState.value else "#2A2A2A".toColorInt())
             bg.cornerRadius = dp(14).toFloat()
             row.background = bg
             val iv = ImageView(this)
@@ -112,7 +113,7 @@ internal fun MainActivity.showIconMenu(title: String, rows: List<MainActivity.Me
             if (r.sub.isNotBlank()) {
                 val sub = TextView(this)
                 sub.text = r.sub
-                sub.setTextColor((if (r.highlight) "#D7FFE8" else "#888888").toColorInt())
+                sub.setTextColor((if (!r.highlight) "#888888" else if (tabs.active()?.incognito == true) "#D7E6FF" else "#D7FFE8").toColorInt())
                 sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 sub.maxLines = 1
                 sub.ellipsize = TextUtils.TruncateAt.MIDDLE

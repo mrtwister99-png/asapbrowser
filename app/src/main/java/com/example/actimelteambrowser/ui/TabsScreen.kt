@@ -914,7 +914,7 @@ private fun TabTileCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.75f)
+                .aspectRatio(1.5f)   // nahled o 50 % nizsi (bezne karty, skupiny i anonymni)
                 .background(ROW),
             contentAlignment = Alignment.Center
         ) {
@@ -934,6 +934,7 @@ private fun TabTileCard(
                         bitmap = p.asImageBitmap(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,   // nizsi nahled = horni cast stranky
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {

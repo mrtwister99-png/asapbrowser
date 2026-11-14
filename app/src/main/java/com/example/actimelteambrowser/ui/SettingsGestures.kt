@@ -103,6 +103,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.actimelteambrowser.core.settings.AppSettings
@@ -252,9 +253,11 @@ fun GestureSurface(
     }
 
     // efekty: snimek po snimku, dokud nejaky bezi
-    val fxRunning = fx.isNotEmpty()
-    LaunchedEffect(fxRunning) {
-        while (fx.isNotEmpty()) {
+    // Jedna smycka po celou dobu plochy: kdyz je prazdno, ceka na dalsi efekt. Drive se smycka mohla ukoncit
+    // tesne pred pridanim noveho efektu a ten pak zustal na klavese "zaseknuty" (hlavne v rychle ukazce gest).
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (fx.isEmpty()) androidx.compose.runtime.snapshotFlow { fx.size }.first { it > 0 }
             androidx.compose.runtime.withFrameMillis { }
             now = android.os.SystemClock.uptimeMillis()
             fx.removeAll { now - it.t0 > FX_MS }
