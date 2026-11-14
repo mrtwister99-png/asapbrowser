@@ -125,7 +125,7 @@ object AdBlockRules {
       try { skip.click(); } catch (e) {}
     }
 
-    if (!video) return;
+    if (!video) return false;
     if (adShowing) {
       if (!video.__atbPrev) video.__atbPrev = { muted: video.muted, rate: video.playbackRate };
       video.muted = true;
@@ -138,8 +138,17 @@ object AdBlockRules {
       video.playbackRate = video.__atbPrev.rate;
       video.__atbPrev = null;
     }
+    return adShowing || !!skip;
   }
-  setInterval(tick, 300);
+  // Kontrola se sama zpomali: reklama bezi = kazdych 250 ms, jinak 1 s, schovana stranka (jina karta, zhasnuto) = 3 s.
+  // Drive kazdych 300 ms porad dokola, i kdyz nebyla reklama ani video.
+  function loop() {
+    var busy = false;
+    try { busy = !document.hidden && tick(); } catch (e) {}
+    setTimeout(loop, document.hidden ? 3000 : (busy ? 250 : 1000));
+  }
+  loop();
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { try { tick(); } catch (e) {} } });
 })();
 """.trimIndent()
 }

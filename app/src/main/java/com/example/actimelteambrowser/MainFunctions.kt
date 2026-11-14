@@ -1,6 +1,5 @@
 package com.example.actimelteambrowser
 
-import android.util.Log
 import android.os.SystemClock
 import android.content.ClipboardManager
 import android.content.ClipData
@@ -72,6 +71,16 @@ internal fun MainActivity.applyDesktop(tab: BrowserTab, on: Boolean) {
         s.useWideViewPort = false
         s.loadWithOverviewMode = false
     }
+}
+
+/** Pred nactenim [url]: nastavi verzi pro pocitac podle ulozene volby webu. true = volba se zmenila. */
+internal fun MainActivity.prepareDesktopFor(tab: BrowserTab, url: String): Boolean {
+    if (tab.incognito || !isWebUrl(url)) return false
+    val want = SiteRules.desktopOn(runCatching { url.toUri().host }.getOrNull())
+    if (want == tab.desktop) return false
+    applyDesktop(tab, want)
+    if (tab.id == tabs.activeId) updateDeskBtn()
+    return true
 }
 
 // Prepnuti verze pro pocitac: pamatuje se podle webu (jen bezne karty), pri dalsi navsteve se pouzije samo
@@ -181,12 +190,12 @@ internal fun MainActivity.performFunction(fn: ButtonFunction) {
     }
 }
 
-/** Tichý try/catch na jednom místě: chyba se spolkne, nevznikají nepoužité parametry `e`. */
+/** Tichý try/catch na jednom místě: chyba se neukáže, ale zapíše se do logu v telefonu (ErrorLog, "Poslat log"). */
 internal inline fun quiet(block: () -> Unit) {
-    runCatching(block)
+    runCatching(block).onFailure { com.example.actimelteambrowser.core.ErrorLog.note(it, "quiet") }
 }
 
 /** Zalogování spolknuté chyby (používá se v catch blocích, kde chybu neřešíme). */
 internal fun noteError(t: Throwable) {
-    Log.d("quiet", t.toString())
+    com.example.actimelteambrowser.core.ErrorLog.note(t)
 }

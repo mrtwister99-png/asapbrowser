@@ -472,7 +472,7 @@ private var closingAnim = false
 
 // Zavreni karty: aktivni karta se "vtahne" dolu do stredu obrazovky (zmensi se k dolnimu okraji a zmizi)
 internal fun MainActivity.closeTab(id: Long) {
-    if (AppSettings.animationsOn.get() && !closingAnim && id == tabs.activeId && tabsView.visibility != View.VISIBLE && webContainer.height > 0) {
+    if (AppSettings.tabAnimOn.get() && !closingAnim && id == tabs.activeId && tabsView.visibility != View.VISIBLE && webContainer.height > 0) {
         closingAnim = true
         webContainer.pivotX = webContainer.width / 2f
         webContainer.pivotY = webContainer.height.toFloat()
@@ -1335,7 +1335,7 @@ internal fun MainActivity.swipeTab(dir: Int) {
         return
     }
     switchTo(next)
-    if (AppSettings.animationsOn.get()) {
+    if (AppSettings.tabAnimOn.get()) {
         // nova karta prijede ze strany, kam se tahlo
         webContainer.translationX = dir * dp(70).toFloat()
         webContainer.alpha = 0.4f

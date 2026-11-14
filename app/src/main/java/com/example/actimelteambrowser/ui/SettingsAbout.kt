@@ -190,9 +190,54 @@ internal fun AboutScreen(onBack: () -> Unit) {
                     "Vlastní jádro v Rustu pro rychlé filtrování požadavků"
                 )
             )
+            ErrorLogCard()
             Spacer(Modifier.height(16.dp))
         }
     }
+    }
+}
+
+// Log chyb: jen v telefonu; uzivatel ho posle sam (e-mail, zprava...), nikam se neposila automaticky
+@Composable
+private fun ErrorLogCard() {
+    val ctx = LocalContext.current
+    var hasLog by remember { mutableStateOf(com.example.actimelteambrowser.core.ErrorLog.text(ctx) != null) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xD91E1E1E))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text("Log chyb", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (hasLog) "Chyby se zapisují jen do telefonu. Pokud něco nefunguje, můžeš log sám poslat – nikam se neposílá automaticky."
+            else "Zatím se nezapsala žádná chyba.",
+            color = Color(0xFFCCCCCC), fontSize = 13.sp, lineHeight = 19.sp
+        )
+        if (hasLog) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { sendErrorLog(ctx) }) { Text("Poslat log", color = Color(0xFF00E676), fontWeight = FontWeight.Bold) }
+            TextButton(onClick = { com.example.actimelteambrowser.core.ErrorLog.clear(); hasLog = false }) { Text("Smazat log", color = MUTED) }
+        }
+    }
+}
+
+private fun sendErrorLog(ctx: android.content.Context) {
+    val text = com.example.actimelteambrowser.core.ErrorLog.text(ctx) ?: return
+    runCatching {
+        val dir = java.io.File(ctx.cacheDir, com.example.actimelteambrowser.ExportFileProvider.DIR)
+        dir.mkdirs()
+        val f = java.io.File(dir, "asap-browser-log.txt")
+        f.writeText(text)
+        val uri = com.example.actimelteambrowser.ExportFileProvider.uriFor(ctx, f.name)
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+        send.type = "text/plain"
+        send.putExtra(android.content.Intent.EXTRA_SUBJECT, "ASAP Browser – log chyb")
+        send.putExtra(android.content.Intent.EXTRA_STREAM, uri)
+        send.clipData = android.content.ClipData.newRawUri("", uri)
+        send.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        ctx.startActivity(android.content.Intent.createChooser(send, "Poslat log chyb"))
     }
 }
 

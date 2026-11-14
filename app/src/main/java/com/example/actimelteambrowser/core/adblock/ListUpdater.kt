@@ -10,6 +10,7 @@ import java.net.URL
 // (Rust engine se da nacist jen jednou za beh).
 object ListUpdater {
 
+    private const val MAX_LIST_BYTES = 20 * 1024 * 1024
     private const val MAX_AGE_MS = 4L * 24 * 60 * 60 * 1000   // seznamy se obnovuji cca po 4 dnech
 
     private val lists = mapOf(
@@ -40,7 +41,8 @@ object ListUpdater {
                 conn.readTimeout = 30_000
                 val text = try {
                     if (conn.responseCode != 200) throw IllegalStateException("HTTP " + conn.responseCode)
-                    conn.inputStream.bufferedReader().use { it.readText() }
+                    // nejvys 20 MB (EasyList ma ~2 MB): podvrzeny obri soubor nezahlti pamet
+                    String(conn.inputStream.use { com.example.actimelteambrowser.core.readLimited(it, MAX_LIST_BYTES) }, Charsets.UTF_8)
                 } finally {
                     conn.disconnect()
                 }

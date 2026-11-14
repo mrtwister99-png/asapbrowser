@@ -129,6 +129,8 @@ import java.util.Locale
 internal fun OtherSettingsScreen(section: String, isDefaultBrowser: Boolean, onDefaultBrowser: () -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var animations by remember { mutableStateOf(AppSettings.animationsOn.get()) }
+    var tabAnim by remember { mutableStateOf(AppSettings.tabAnimOn.get()) }
+    var gestureFx by remember { mutableStateOf(AppSettings.gestureFxOn.get()) }
     var infoToasts by remember { mutableStateOf(AppSettings.infoToasts.get()) }
     var stripBottom by remember { mutableStateOf(AppSettings.tabStripBottom.get()) }
     var stripTop by remember { mutableStateOf(AppSettings.tabStripTop.get()) }
@@ -200,6 +202,12 @@ internal fun OtherSettingsScreen(section: String, isDefaultBrowser: Boolean, onD
             if (section == "anim") {
             SwitchRow("Animace tlačítek", "Probliknutí, otočení, hvězdička, kolečko → logo", animations) {
                 animations = it; AppSettings.animationsOn.set(it)
+            }
+            SwitchRow("Animace karet", "Nová karta (+), zavření karty (−, vtažení dolů), přejetí na vedlejší kartu", tabAnim) {
+                tabAnim = it; AppSettings.tabAnimOn.set(it)
+            }
+            SwitchRow("Efekt gest", "Efekt při průchodu klávesou a ohňostroj po úspěšném gestu", gestureFx) {
+                gestureFx = it; AppSettings.gestureFxOn.set(it)
             }
             SwitchRow("Úvodní animace při spuštění", "Logo s hudbou při startu aplikace", intro) {
                 intro = it; AppSettings.introOn.set(it)

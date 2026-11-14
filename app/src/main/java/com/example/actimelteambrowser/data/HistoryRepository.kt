@@ -10,6 +10,10 @@ class HistoryRepository(context: Context) {
     fun recordVisit(url: String, title: String) {
         if (url.isBlank()) return
         db.insertVisit(url, title)
+        // promazani: pri prvni navsteve po spusteni a pak kazdych 200 navstev (ne pri kazde, je to zbytecna prace)
+        if (visitsSincePrune++ % 200 == 0) runCatching {
+            db.pruneHistory(System.currentTimeMillis() - KEEP_DAYS * ONE_DAY_MILLIS, MAX_ROWS)
+        }.onFailure { com.example.actimelteambrowser.core.ErrorLog.note(it, "historie") }
     }
 
     fun deleteEntry(id: Long) = db.deleteVisitById(id)
@@ -44,5 +48,8 @@ class HistoryRepository(context: Context) {
 
     companion object {
         private const val ONE_DAY_MILLIS = 24 * 60 * 60 * 1000L
+        private const val KEEP_DAYS = 90L          // historie se drzi 90 dni (jako Chrome)
+        private const val MAX_ROWS = 20_000         // a nejvys 20 000 navstev
+        @Volatile private var visitsSincePrune = 0
     }
 }

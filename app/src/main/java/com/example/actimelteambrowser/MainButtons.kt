@@ -1104,6 +1104,8 @@ internal fun MainActivity.holdIconFlip(n: Int) {
     val tapFn = buttonFunction(n, false)
     val longFn = buttonFunction(n, true)
     if (longFn == ButtonFunction.NONE || longFn == tapFn) return
+    // Domu s vychozim drzenim: jen puvodni domecek, ktery se zespoda zelene vyplni (animateHome) - zadna druha ikona
+    if (n == 1 && longFn == ButtonDefaults.long(1) && isDefaultVisual(1)) return
     if (longFn == ButtonFunction.GESTURES || tapFn == ButtonFunction.GESTURES || n == 2 || n == 6) return   // kulicka / cislo karet maji vlastni vzhled
     val iv: ImageView = when (n) {
         1 -> findViewById(R.id.ivHome)

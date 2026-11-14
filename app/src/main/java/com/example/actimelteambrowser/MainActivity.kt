@@ -810,6 +810,17 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
+            // Odkaz na web s jinou volbou "verze pro pocitac": prepnout UA UZ PRED nactenim (jedno nacteni).
+            // Drive se to zjistilo az v onPageStarted, stranka se zastavila a nacitala podruhe.
+            override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                val r = request ?: return false
+                if (view == null || !r.isForMainFrame || r.method != "GET" || tab.incognito) return false
+                val url = r.url.toString()
+                if (!isWebUrl(url)) return false
+                if (!prepareDesktopFor(tab, url)) return false
+                view.loadUrl(url)
+                return true
+            }
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 // jiny web = stara ikona uz neplati (nova prijde pres onReceivedIcon)

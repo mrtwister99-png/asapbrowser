@@ -186,7 +186,7 @@ fun GestureSurface(
     val cell = minOf(cw, ch)
     val th = theme ?: GestureTheme(areaBg = Color.Transparent)
     // efekt pri projeti klavesou: podle vzhledu (cisla = mini UFO, kolecka = kruh, ctverecky = ctverecek, hvezdicky = hvezdicky)
-    val effectType = if (theme == null) 0 else if (th.effect < 0) when (style) { 1 -> 2; 2 -> 3; 3 -> 4; else -> 1 } else th.effect
+    val effectType = if (theme == null || !AppSettings.gestureFxOn.get()) 0 else if (th.effect < 0) when (style) { 1 -> 2; 2 -> 3; 3 -> 4; else -> 1 } else th.effect
     var code by remember { mutableStateOf("") }
     var strokes by remember { mutableStateOf<List<List<Offset>>>(emptyList()) }
     var finger by remember { mutableStateOf<Offset?>(null) }

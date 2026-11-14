@@ -22,7 +22,7 @@ import kotlin.concurrent.thread
 
 private const val CHUNK = 512 * 1024
 
-private class BlobJob(val name: String, val mime: String, val issued: Long) {
+private class BlobJob(val name: String, val mime: String, val issued: Long, val incognito: Boolean) {
     var writer: DownloadsStore.Writer? = null
 }
 
@@ -37,7 +37,7 @@ class BlobDownloadBridge(private val act: MainActivity) {
         val j = job(token) ?: return false
         if (j.writer != null || System.currentTimeMillis() - j.issued > 120_000) return false
         val mime = type.ifBlank { j.mime }.ifBlank { "application/octet-stream" }
-        j.writer = DownloadsStore.begin(act, fixName(j.name, mime), mime, size.toLong())
+        j.writer = DownloadsStore.begin(act, fixName(j.name, mime), mime, size.toLong(), temp = j.incognito)
         if (j.writer == null) { synchronized(blobJobs) { blobJobs.remove(token) }; act.runOnUiThread { AppToast.show(act, "Soubor se nepodařilo uložit") } }
         else act.runOnUiThread { act.startDownloadPoll() }
         return j.writer != null
@@ -85,13 +85,14 @@ internal fun MainActivity.startSpecialDownload(url: String, contentDisposition: 
             val mime = head.removePrefix("data:").substringBefore(';').ifBlank { mimeType ?: "application/octet-stream" }
             val name = fileNameFor(url, contentDisposition, mime)
             AppToast.show(this, "Stahuji: $name")
+            val incognito = tabs.active()?.incognito == true
             thread(name = "dl-data") {
                 val payload = url.substringAfter(',', "")
                 val bytes = runCatching {
                     if (head.contains(";base64", true)) Base64.decode(payload, Base64.DEFAULT)
                     else java.net.URLDecoder.decode(payload, "UTF-8").toByteArray()
                 }.getOrNull()
-                val w = if (bytes != null) DownloadsStore.begin(this, name, mime, bytes.size.toLong()) else null
+                val w = if (bytes != null) DownloadsStore.begin(this, name, mime, bytes.size.toLong(), temp = incognito) else null
                 val ok = w != null && runCatching { w.write(bytes!!) }.isSuccess
                 val done = if (w != null) DownloadsStore.end(this, w, ok) else null
                 runOnUiThread {
@@ -105,7 +106,7 @@ internal fun MainActivity.startSpecialDownload(url: String, contentDisposition: 
             if (wv == null) { AppToast.show(this, "Soubor se nepodařilo stáhnout"); return true }
             val token = UUID.randomUUID().toString()
             val name = fileNameFor(url, contentDisposition, mimeType)
-            synchronized(blobJobs) { blobJobs[token] = BlobJob(name, mimeType ?: "", System.currentTimeMillis()) }
+            synchronized(blobJobs) { blobJobs[token] = BlobJob(name, mimeType ?: "", System.currentTimeMillis(), tabs.active()?.incognito == true) }
             val t = JSONObject.quote(token)
             // soubor se cte po 512 kB: v pameti je vzdy jen jeden kousek, velikost neni omezena
             val js = """

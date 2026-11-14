@@ -360,9 +360,9 @@ class SettingsActivity : ComponentActivity() {
     private fun doImport(uri: Uri) {
         thread(name = "import") {
             val msg: String? = try {
-                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                // cte se nejvys MAX + 1 bajt: obri soubor se do pameti vubec nenacte (drive az po precteni celeho)
+                val bytes = contentResolver.openInputStream(uri)?.use { com.example.actimelteambrowser.core.readLimited(it, MAX_IMPORT_BYTES) }
                     ?: throw IllegalStateException("Nelze číst soubor")
-                if (bytes.size > MAX_IMPORT_BYTES) throw IllegalArgumentException("Soubor je příliš velký")
                 val t = String(bytes, Charsets.UTF_8)
                 if (SettingsCodes.looksLikeCodes(t)) {
                     val avail = SettingsCodes.sections(t)
@@ -416,6 +416,7 @@ class SettingsActivity : ComponentActivity() {
         const val EXTRA_PAGE_URL = "page_url"
         const val EXTRA_PAGE_TITLE = "page_title"
         private const val MAX_IMPORT_BYTES = 50 * 1024 * 1024
+
         const val EXPORT_FILE = "asap-browser-nastaveni.txt"
     }
 }
@@ -434,7 +435,10 @@ class ExportFileProvider : ContentProvider() {
         return if (f.isFile) f else null
     }
 
-    override fun onCreate(): Boolean = true
+    override fun onCreate(): Boolean {
+        context?.let { com.example.actimelteambrowser.core.ErrorLog.init(it) }   // bezi pri startu appky pred aktivitami
+        return true
+    }
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         if (mode != "r") throw SecurityException("Jen ke čtení")

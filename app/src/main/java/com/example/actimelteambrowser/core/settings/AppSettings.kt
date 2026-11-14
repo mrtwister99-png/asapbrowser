@@ -83,6 +83,8 @@ object AppSettings {
     val tabStripTop = BoolSetting("tab_strip_top", true)               // horni lista karet (dalsi); vychozi zapnuto
     val infoToasts = BoolSetting("info_toasts", true)                  // informacni toasty (chyby se ukazuji vzdy)
     val animationsOn = BoolSetting("animations_on", true)              // animace tlacitek a prechodu
+    val tabAnimOn = BoolSetting("tab_anim_on", true)                   // animace nove / zavrene karty (+ / -, vtazeni, prejezd)
+    val gestureFxOn = BoolSetting("gesture_fx_on", true)               // efekt projeti klavesou gest + ohnostroj po uspesnem gestu
     // Zivy tutorial: cisla tlacitek, na ktera uzivatel jeste neklepl (maji zluty obrys); prazdne = hotovo. Neexportuje se.
     val liveTutorial = StringSetting("live_tutorial", "")
     val vaultDemoSeen = BoolSetting("vault_demo_seen", false)          // pruvodce trezorem uz byl ukazan (pak jen otaznikem); neexportuje se
@@ -227,7 +229,7 @@ object AppSettings {
         homeUrl, startupRestoreTabs
     ) + buttonTap + buttonLong + buttonSlide + buttonRetract + buttonEnabled + listOf(extraLeft, extraRight) +
         listOf<Setting<*>>(gestureStyle, gestureSize, gestureList, gestureStart, gestureHaptic, gestureSound, gestureRect, gestureOpacity, adBlockExceptions, adBlockStrictSites, sitePermissions, totalBlocked, startShowFavorites,
-        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, gestureGlyphColor, gestureTrailColor, gestureTrail, gestureEffect, gestureStyleChanged, thumbsOn, animationsOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
+        squareStyleOwned, starStyleOwned, gestureColorsOwned, gestureKeysOpacity, gestureKeyColors, gestureAreaColor, gestureGlyphColor, gestureTrailColor, gestureTrail, gestureEffect, gestureStyleChanged, thumbsOn, animationsOn, tabAnimOn, gestureFxOn, infoToasts, tabStripBottom, tabStripTop, introOn, soundsOn, screenshotSound, vibrationOn, hideBarsOnScroll, pullRefreshOn, pullRefreshDistance, searchEngine, desktopSites)
 
     // Vsechna nastaveni pro kodovy export (SettingsCodes)
     val allSettings: List<Setting<*>> get() = all

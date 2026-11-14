@@ -373,7 +373,7 @@ private fun SettingsRoot(
             SearchItem("Gesta", "Nastavení", "plocha gest kódy vzhled velikost čtverečky kolečka číslice tah", onGestures),
             SearchItem("Tlačítka", "Nastavení", "funkce klepnutí podržení držení přidat boční tlačítko zasunutí lišta", onButtons),
             SearchItem("Trezor hesel", "Nastavení", "hesla přihlášení pin otisk 12 slov password", onVault),
-            SearchItem("Animace", "Nastavení", "animace tlačítek přechody úvodní intro logo toasty zprávy oznámení", { onSection("anim") }),
+            SearchItem("Animace", "Nastavení", "animace tlačítek karet záložek gest efekt ohňostroj přechody úvodní intro logo toasty zprávy oznámení", { onSection("anim") }),
             SearchItem("Zvuky", "Nastavení", "zvuk hudba ztlumit gesta screenshot snímek úvodní", { onSection("sounds") }),
             SearchItem("Vibrace", "Nastavení", "vibrovat brnění haptika", { onSection("vibra") }),
             SearchItem("Export", "Nastavení", "uložit záloha zálohovat e-mail poslat soubor", onExport),
@@ -452,7 +452,7 @@ private fun SettingsRoot(
             SettingsRow("Tlačítka", "Funkce tlačítek (klepnutí a držení), přidání bočních tlačítek", onButtons)
             SettingsRow("Trezor hesel", "Hesla zašifrovaná jen v tomto telefonu, odemyká se PINem nebo 12 slovy", onVault)
             GroupLabel("Odezva")
-            SettingsRow("Animace", "Animace tlačítek, úvodní animace, toasty", { onSection("anim") })
+            SettingsRow("Animace", "Animace tlačítek, karet a gest, úvodní animace, toasty", { onSection("anim") })
             SettingsRow("Zvuky", "Gesta, screenshot, úvodní hudba", { onSection("sounds") })
             SettingsRow("Vibrace", "Odezva při držení tlačítek a po gestu", { onSection("vibra") })
             GroupLabel("Aplikace")

@@ -137,6 +137,7 @@ internal fun MainActivity.submitInput(raw: String) {
     val url = if (q.contains(".") && !q.contains(" ")) {
         if (q.startsWith("http")) q else "https://$q"
     } else SearchEngines.searchUrl(q)
+    tabs.active()?.let { prepareDesktopFor(it, url) }   // spravna verze uz pri prvnim nacteni (C15)
     webView.loadUrl(url)
     releaseInputFocus()
     hideKeyboard()
@@ -184,7 +185,7 @@ internal fun MainActivity.recordVisit(view: WebView?, url: String?) {
     if (view == null || u == "about:blank" || u == lastRecordedUrl || !isWebUrl(u)) return
     lastRecordedUrl = u
     val title = view.title.orEmpty()
-    thread(name = "history-write") {
+    com.example.actimelteambrowser.core.bg {
         quiet {
             historyRepo.recordVisit(u, title)
         }
@@ -209,7 +210,7 @@ internal fun MainActivity.updateSuggestions(query: String) {
     val token = ++suggestionToken
     suggestRunnable?.let { suggestHandler.removeCallbacks(it) }
     val run = Runnable {
-        thread(name = "suggestions") {
+        com.example.actimelteambrowser.core.bg {
             val result = try {
                 // historie, zalozky a nejnavstevovanejsi se ctou z DB jen jednou za 15 s (a pri prazdnem poli)
                 val now = SystemClock.uptimeMillis()

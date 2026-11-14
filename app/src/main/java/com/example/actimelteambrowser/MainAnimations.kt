@@ -503,7 +503,7 @@ internal fun MainActivity.animateHome(onDone: () -> Unit) {
 // Symboly "+" / "-", ktere pri otevreni / zavreni karty vyletí z leveho a praveho okraje: 3 z kazde strany
 // v nahodne vysce, vletí smerem do stredu, pak padaji dolu a zapadnou kousek od okraje.
 internal fun MainActivity.flyBurst(symbol: String, colorHex: String) {
-    if (!AppSettings.animationsOn.get()) return
+    if (!AppSettings.tabAnimOn.get()) return
     val parent = root as? ViewGroup ?: return
     val w = parent.width.toFloat()
     val h = parent.height.toFloat()

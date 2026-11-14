@@ -39,8 +39,8 @@ internal fun MainActivity.injectYoutubeAdBlock(view: WebView?, url: String?) {
 internal fun MainActivity.injectCosmetic(view: WebView?, url: String?) {
     if (!adBlockFor(url) || !adblockReady || view == null || url == null || !isWebUrl(url)) return
     if (AdBlockRules.isYoutube(url)) return   // YouTube ma vlastni skript
-    thread(name = "cosmetic") {
-        val css = try { RustBridge.cosmeticCss(url) } catch (e: Throwable) { noteError(e); return@thread }
+    com.example.actimelteambrowser.core.bg {   // spolecna vlakna (B10)
+        val css = try { RustBridge.cosmeticCss(url) } catch (e: Throwable) { noteError(e); return@bg }
         runOnUiThread {
             // mezitim se mohla stranka zmenit
             val now = view.url ?: return@runOnUiThread
@@ -151,12 +151,10 @@ internal fun MainActivity.updateAdBlockBadge() {
     }
 }
 
-// Auto-odmitnuti cookie listy - vice pokusu, lista se casto objevi az po nacteni
+// Auto-odmitnuti cookie listy - opakovane pokusy dela skript sam ve strance (zadne zpozdene posilani na uz jinou stranku)
 internal fun MainActivity.rejectCookies(view: WebView?) {
     if (!adBlockFor(view?.url) || !AppSettings.adBlockCookies.get() || view == null) return
-    for (d in CookieReject.delaysMs) {
-        view.postDelayed({ view.evaluateJavascript(CookieReject.script, null) }, d)
-    }
+    view.evaluateJavascript(CookieReject.script, null)
 }
 
 

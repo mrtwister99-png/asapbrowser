@@ -37,8 +37,11 @@ object DownloadsStore {
         var mime: String? = null,
         var size: Long = 0,
         var status: Int = 0,           // jen u souboru appky
-        var moveTo: String? = null     // DownloadManager: po dokonceni presunout do teto slozky
+        var moveTo: String? = null,    // DownloadManager: po dokonceni presunout do teto slozky
+        val temp: Boolean = false      // z anonymni karty: jen v pameti, do nastaveni se neuklada (po restartu appky zmizi)
     )
+
+    private var tempRecs: List<Rec> = emptyList()   // zaznamy anonymnich stahovani (meni se jen uvnitr edit)
 
     private val progress = ConcurrentHashMap<Long, Long>()   // soubory appky, ktere se prave zapisuji: bajty
     private val moving = HashSet<Long>()
@@ -55,12 +58,14 @@ object DownloadsStore {
                     o.optLong("size"), o.optInt("st"), o.optString("mv").ifBlank { null }))
             }
         }
+        out.addAll(tempRecs)
         return out
     }
 
     private fun save(list: List<Rec>) {
+        tempRecs = list.filter { it.temp }
         val arr = JSONArray()
-        for (r in list.takeLast(200)) {
+        for (r in list.filter { !it.temp }.takeLast(200)) {
             val o = JSONObject().put("id", r.id).put("name", r.name)
             r.uri?.let { o.put("uri", it) }
             r.mime?.let { o.put("mime", it) }
@@ -81,8 +86,8 @@ object DownloadsStore {
     }
 
     /** Stahovani pres DownloadManager; [moveTo] = po dokonceni presunout do vybrane slozky. */
-    fun track(context: Context, id: Long, name: String, moveTo: String? = null) {
-        edit(context) { it.add(Rec(id, name, moveTo = moveTo)) }
+    fun track(context: Context, id: Long, name: String, moveTo: String? = null, temp: Boolean = false) {
+        edit(context) { it.add(Rec(id, name, moveTo = moveTo, temp = temp)) }
     }
 
     fun forget(context: Context, id: Long) {
@@ -149,11 +154,11 @@ object DownloadsStore {
     }
 
     /** Zacne ukladat soubor appky; zaznam se hned objevi v seznamu (stahuji…). */
-    fun begin(context: Context, name: String, mime: String, total: Long): Writer? {
+    fun begin(context: Context, name: String, mime: String, total: Long, temp: Boolean = false): Writer? {
         val (uri, out) = runCatching { createTarget(context, name, mime) }.getOrNull() ?: return null
         val id = synchronized(this) { nextLocal = minOf(nextLocal - 1, -System.currentTimeMillis()); nextLocal }
         progress[id] = 0L
-        edit(context) { it.add(Rec(id, name, uri.toString(), mime, total, DownloadManager.STATUS_RUNNING)) }
+        edit(context) { it.add(Rec(id, name, uri.toString(), mime, total, DownloadManager.STATUS_RUNNING, temp = temp)) }
         return Writer(id, uri, out)
     }
 
@@ -180,7 +185,7 @@ object DownloadsStore {
                 @Suppress("DEPRECATION")
                 val dmId = dm.addCompletedDownload(r.name, r.name, true, r.mime ?: "application/octet-stream", w.uri.path, w.written, false)
                 l.remove(r)
-                l.add(Rec(dmId, r.name))
+                l.add(Rec(dmId, r.name, temp = r.temp))
             }
             r.name
         }

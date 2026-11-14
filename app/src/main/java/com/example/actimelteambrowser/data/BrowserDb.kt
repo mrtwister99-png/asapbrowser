@@ -56,6 +56,16 @@ class BrowserDb private constructor(context: Context) :
         writableDatabase.insert("history_visits", null, v)
     }
 
+    /** Promazani: smaze navstevy starsi nez [olderThanMillis] a nad [maxRows] nejnovejsich. */
+    fun pruneHistory(olderThanMillis: Long, maxRows: Int) {
+        val db = writableDatabase
+        db.delete("history_visits", "visitedAt < ?", arrayOf(olderThanMillis.toString()))
+        db.execSQL(
+            "DELETE FROM history_visits WHERE id NOT IN (SELECT id FROM history_visits ORDER BY visitedAt DESC LIMIT ?)",
+            arrayOf<Any>(maxRows)
+        )
+    }
+
     fun deleteVisitById(id: Long) {
         writableDatabase.delete("history_visits", "id = ?", arrayOf(id.toString()))
     }

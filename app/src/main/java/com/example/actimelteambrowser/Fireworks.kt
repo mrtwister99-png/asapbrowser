@@ -52,9 +52,9 @@ private class FireworkView(ctx: Context, private val cx: Float, private val cy: 
     }
 }
 
-/** Ohnostroj v bode okna (px); vypnute animace = nic. */
+/** Ohnostroj v bode okna (px); vypnuty efekt gest = nic. */
 internal fun MainActivity.showFirework(xWin: Float, yWin: Float) {
-    if (!AppSettings.animationsOn.get()) return
+    if (!AppSettings.gestureFxOn.get()) return   // Nastaveni -> Animace -> Efekt gest
     val parent = root as? ConstraintLayout ?: return
     val loc = IntArray(2)
     parent.getLocationInWindow(loc)

@@ -42,7 +42,8 @@ internal fun MainActivity.startDownload(url: String, userAgent: String?, content
             req.setDestinationInExternalFilesDir(this, android.os.Environment.DIRECTORY_DOWNLOADS, name)
         }
         val id = (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-        com.example.actimelteambrowser.data.DownloadsStore.track(this, id, name, folder?.toString())
+        // anonymni karta: soubor se stahne, ale zaznam v Stazenych se neulozi (zmizi po restartu appky); cookies jdou dal jen na stahovany server
+        com.example.actimelteambrowser.data.DownloadsStore.track(this, id, name, folder?.toString(), temp = tabs.active()?.incognito == true)
         startDownloadPoll()
         AppToast.show(this, "Stahuji: $name")
     }.onFailure {
@@ -96,7 +97,7 @@ internal fun MainActivity.updateStartPage() {
 
 // Nejnavstevovanejsi weby z historie (po domenach); kdyz jich je malo, doplni se obvyklymi
 internal fun MainActivity.loadStartSites() {
-    thread(name = "start-sites") {
+    com.example.actimelteambrowser.core.bg {
         val result = ArrayList<StartSite>()
         try {
             val perHost = LinkedHashMap<String, Int>()
@@ -139,7 +140,7 @@ internal fun MainActivity.loadStartSites() {
 internal fun MainActivity.saveSiteIcon(host: String, icon: Bitmap) {
     if (!AppSettings.thumbsOn.get()) return   // ukladani nahledu a ikon je vypnute v Konfiguraci
     val copy = runCatching { icon.copy(Bitmap.Config.ARGB_8888, false) }.getOrNull() ?: return
-    thread(name = "site-icon") {
+    com.example.actimelteambrowser.core.bg {
         quiet {
             val f = siteIconFile(host)
             f.parentFile?.mkdirs()
@@ -160,7 +161,7 @@ internal fun MainActivity.saveSiteThumb(tab: BrowserTab) {
     val bmp = tab.preview ?: return
     val host = runCatching { (tab.liveUrl().ifBlank { tab.url }).toUri().host }.getOrNull()?.removePrefix("www.") ?: return
     if (host.isBlank() || !thumbStale(host)) return   // cerstvy nahled uz mame
-    thread(name = "site-thumb") {
+    com.example.actimelteambrowser.core.bg {
         val file = siteThumbFile(host)
         file.parentFile?.mkdirs()
         savePreview(bmp, file)
