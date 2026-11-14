@@ -276,18 +276,35 @@ private val TUTORIALS get() = listOf(
 )
 
 @Composable
-internal fun TutorialsScreen(onBack: () -> Unit) {
+internal fun TutorialsScreen(onBack: () -> Unit, onRunDemo: (Int) -> Unit = {}) {
     var selected by remember { mutableStateOf<Int?>(null) }
+    var demos by remember { mutableStateOf(false) }
     val sel = selected
     // zpet v detailu = zpet na seznam tutorialu (ma prednost pred zpetem z Nastaveni)
-    BackHandler(enabled = sel != null) { selected = null }
+    BackHandler(enabled = sel != null || demos) { selected = null; demos = false }
 
-    if (sel == null) {
+    if (demos) {
+        DemoVideosScreen(onBack = { demos = false }, onRunDemo = onRunDemo)
+    } else if (sel == null) {
         ScreenScaffold(title = "Tutoriály", onBack = onBack) {
             Column(
                 Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // nahore: skutecne ukazky (prehraji se primo v prohlizeci)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF14382A))
+                        .border(1.5.dp, ACCENT, RoundedCornerShape(16.dp)).clickable { demos = true }
+                        .padding(start = 16.dp, end = 18.dp, top = 16.dp, bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("▶", color = ACCENT, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Demo videa", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Ukázky všech tlačítek přímo v prohlížeči", color = MUTED, fontSize = 13.sp)
+                    }
+                }
                 Text("Vyber funkci a uvidíš ukázku i postup.", color = MUTED, fontSize = 13.sp)
                 TUTORIALS.forEachIndexed { i, t -> SettingsRow(t.title, t.subtitle) { selected = i } }
                 Spacer(Modifier.height(16.dp))
@@ -556,5 +573,60 @@ private fun IconDemo(fn: ButtonFunction) {
             drawCircle(ACCENT, r, c, style = Stroke(2.dp.toPx()))
         }
         Image(painterResource(fn.iconRes), contentDescription = null, modifier = Modifier.size(30.dp))
+    }
+}
+
+
+/** Jedna ukazka: nazev, popis a cislo ukazky prvniho tutorialu (spousti se v prohlizeci). */
+private class DemoVideo(val title: String, val subtitle: String, val id: Int)
+
+private val DEMOS_TOP = listOf(
+    DemoVideo("AdBlock", "Zapnutí, vypnutí a přidání webu", 7),
+    DemoVideo("VPN", "Tlačítko VPN vpravo nahoře", 8),
+    DemoVideo("Sdílet", "Odkaz nebo QR kód stránky", 103),
+    DemoVideo("Zámek – informace o stránce", "Bezpečnost, cookies a AdBlock pro web", 104)
+)
+private val DEMOS_BOTTOM = listOf(
+    DemoVideo("Domů", "Klepnutí a podržení", 1),
+    DemoVideo("Šipky zpět a vpřed", "Pohyb mezi stránkami ve spodním poli", 105),
+    DemoVideo("Záložky", "Přehled karet, skupiny a anonymní", 2),
+    DemoVideo("Oblíbené", "Uložené stránky a složky", 3),
+    DemoVideo("Nastavení", "Nastavení a hodnocení", 4)
+)
+private val DEMOS_OTHER = listOf(
+    DemoVideo("Gesta", "Kreslení gesta na ploše", 300),
+    DemoVideo("Screenshot", "Celá obrazovka nebo výběr části", 201),
+    DemoVideo("Verze pro počítač", "Web jako na počítači", 202),
+    DemoVideo("Najít na stránce", "Hledání textu na webu", 203),
+    DemoVideo("Trezor hesel", "Hesla pod zámkem", 204)
+)
+
+/** Demo videa: vsechny ukazky podle mista na obrazovce (horni, dolni, ostatni). */
+@Composable
+private fun DemoVideosScreen(onBack: () -> Unit, onRunDemo: (Int) -> Unit) {
+    ScreenScaffold(title = "Demo videa", onBack = onBack) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Klepni na ukázku – Nastavení se zavře a ukázka se přehraje přímo v prohlížeči.", color = MUTED, fontSize = 13.sp)
+            for ((head, list) in listOf("HORNÍ ČÁST" to DEMOS_TOP, "DOLNÍ ČÁST" to DEMOS_BOTTOM, "OSTATNÍ" to DEMOS_OTHER)) {
+                Text(head, color = MUTED, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+                for (d in list) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PANEL).clickable { onRunDemo(d.id) }
+                            .padding(start = 16.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(d.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(d.subtitle, color = MUTED, fontSize = 12.sp)
+                        }
+                        Text("▶", color = ACCENT, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
     }
 }

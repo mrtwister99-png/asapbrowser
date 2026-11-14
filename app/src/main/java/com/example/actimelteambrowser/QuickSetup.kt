@@ -32,7 +32,7 @@ internal var quickSetupStage = 0
 // Ztmaveni rychleho nastaveni (vse tmave krome [targets], tip nahore); zavola se pro odstraneni
 internal var quickSpotOff: (() -> Unit)? = null
 
-private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle: Boolean = false) {
+private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle: Boolean = false, onSkip: (() -> Unit)? = null) {
     quickSpotOff?.invoke()
     val parent = root as ConstraintLayout
     val dim = DemoDim(this)
@@ -60,12 +60,33 @@ private fun MainActivity.quickSpotlight(targets: List<View>, tip: String, circle
     clp.topMargin = lastSystemTopPx + dp(80)
     clp.marginStart = dp(28); clp.marginEnd = dp(28)
     parent.addView(cap, clp)
+    // Preskocit: dole nad spodni listou, je tam po celou dobu kroku
+    var skip: TextView? = null
+    if (onSkip != null) {
+        val sk = TextView(this)
+        sk.text = getString(R.string.tutorial_skip)
+        sk.setTextColor(Color.WHITE)
+        sk.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        sk.setTypeface(sk.typeface, Typeface.BOLD)
+        sk.gravity = Gravity.CENTER
+        sk.setPadding(dp(28), dp(12), dp(28), dp(12))
+        sk.background = demoSkipBg(this)
+        sk.elevation = dp(101).toFloat()
+        sk.setOnClickListener { quickSpotOff?.invoke(); onSkip() }
+        val sl = ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        sl.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+        sl.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+        sl.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+        sl.bottomMargin = (if (bottomBar.height > 0) bottomBar.height else lastSystemBottom + dp(80)) + dp(90)
+        parent.addView(sk, sl)
+        skip = sk
+    }
     dim.post {
         dim.holes.clear()
         for (t in targets) if (t.isShown) dim.holes.add(rectOf(t).apply { inset(-dp(4).toFloat(), -dp(4).toFloat()) })
         dim.invalidate()
     }
-    quickSpotOff = { parent.removeView(dim); parent.removeView(cap); quickSpotOff = null }
+    quickSpotOff = { parent.removeView(dim); parent.removeView(cap); skip?.let { parent.removeView(it) }; quickSpotOff = null }
 }
 
 private fun MainActivity.gestureTarget(): View? {
@@ -254,7 +275,14 @@ private fun MainActivity.quickStage2() {
     quickSetupStage = 2
     // vse ztmavene, videt je jen kulicka gest (na ni jde klepnout) a tip nahore
     window.decorView.postDelayed({
-        if (quickSetupStage == 2) gestureTarget()?.let { quickSpotlight(listOf(it), "Klikni na kuličku 👆", circle = it === orbView) }
+        if (quickSetupStage == 2) gestureTarget()?.let {
+            // vychozi vzhled ma na kulicce UFO
+            val tip = if (AppSettings.gestureStyleChanged.get()) "Klikni na kuličku 👆" else "Klikni na UFO 👆"
+            quickSpotlight(listOf(it), tip, circle = it === orbView, onSkip = {
+                quickSetupStage = 0
+                quickStage3()
+            })
+        }
     }, 350)
 }
 

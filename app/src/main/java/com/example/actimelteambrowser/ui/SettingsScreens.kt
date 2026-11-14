@@ -164,7 +164,8 @@ fun SettingsApp(
     onGestureConfig: () -> Unit,
     isDefaultBrowser: Boolean,
     onDefaultBrowser: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onRunDemo: (Int) -> Unit = {}
 ) {
     var route by remember { mutableStateOf(startRoute) }
 
@@ -213,7 +214,7 @@ fun SettingsApp(
         is Route.Gestures -> GesturesScreen(onBack = { route = Route.Main })
         is Route.Downloads -> DownloadsScreen(onBack = { route = Route.Main })
         is Route.Section -> OtherSettingsScreen(section = r.key, isDefaultBrowser = isDefaultBrowser, onDefaultBrowser = onDefaultBrowser, onBack = { route = Route.Main })
-        is Route.Tutorials -> TutorialsScreen(onBack = { route = Route.Main })
+        is Route.Tutorials -> TutorialsScreen(onBack = { route = Route.Main }, onRunDemo = onRunDemo)
         is Route.About -> AboutScreen(onBack = { route = Route.Main })
         is Route.Vault -> VaultScreen(onBack = { if (startRoute == Route.Vault) onClose() else route = Route.Main })
         // otevreno drzenim tlacitka Nastaveni: zpet zavre Nastaveni a vrati do prohlizece

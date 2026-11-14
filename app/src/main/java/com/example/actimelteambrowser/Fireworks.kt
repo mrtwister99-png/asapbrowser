@@ -28,6 +28,7 @@ private class FireworkView(ctx: Context, private val cx: Float, private val cy: 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val t0 = SystemClock.uptimeMillis()
     private val dur = 800f
+    private var removing = false
 
     init {
         isClickable = false
@@ -46,7 +47,8 @@ private class FireworkView(ctx: Context, private val cx: Float, private val cy: 
             paint.alpha = alpha
             canvas.drawCircle(x, y, s.r * (1f - 0.4f * p), paint)
         }
-        if (p < 1f) postInvalidateOnAnimation() else (parent as? ViewGroup)?.removeView(this)
+        // odebrat se primo v onDraw nejde (rodic prave kresli potomky = pad aplikace): az po snimku
+        if (p < 1f) postInvalidateOnAnimation() else if (!removing) { removing = true; post { (parent as? ViewGroup)?.removeView(this) } }
     }
 }
 

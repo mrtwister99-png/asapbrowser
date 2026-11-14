@@ -153,6 +153,8 @@ class MainActivity : AppCompatActivity() {
             if (r.data?.getBooleanExtra(SettingsActivity.EXTRA_CONFIG_BUTTONS, false) == true) enterConfigMode()
             // Nastaveni -> Gesta: plocha gest + panel shora
             if (r.data?.getBooleanExtra(SettingsActivity.EXTRA_CONFIG_GESTURES, false) == true) enterGestureConfig()
+            // Tutorialy -> Demo videa: ukazka se prehraje na hlavni plose
+            r.data?.getIntExtra(SettingsActivity.EXTRA_RUN_DEMO, 0)?.takeIf { it != 0 }?.let { runDemoFromSettings(it) }
             val url = r.data?.getStringExtra(SettingsActivity.EXTRA_URL)
             if (r.resultCode == RESULT_OK && url != null && isWebUrl(url)) webView.loadUrl(url)
         }

@@ -98,6 +98,7 @@ internal fun MainActivity.enterGestureConfig() {
     for (n in listOf(5, 6) + extraViews.keys) buttonView(n)?.let { applySideMode(n, it) }   // bocni tlacitka celá
     updateOrbTarget()   // kulicka (start gesta) je v konfiguraci videt vzdy
     orbView?.alwaysShow = true              // editor schova vsechna tlacitka, kulicka (tlacitko gest) ale musi zustat videt
+    orbView?.forwardTouch = false           // v nastaveni gest kulicka plochu neotevira
     orbView?.elevation = dp(40).toFloat()   // nad editorem plochy (35), aby tlacitko gest bylo dobre videt a plochu sla zarovnat
     if (gestureButtonN() == 0) AppToast.show(this, "Tlačítko Gesta není přiřazené, kulička ukazuje výchozí místo (tlačítko 6)", true)
     applyGestureConfigUi()
@@ -138,6 +139,7 @@ internal fun MainActivity.exitGestureConfig() {
     orbView?.invalidate()
     orbView?.elevation = dp(20).toFloat()
     orbView?.alwaysShow = false
+    orbView?.forwardTouch = true
     for ((v, vis) in gestHidden) v.visibility = vis
     gestHidden.clear()
     hideGestures()   // zavre editor (ComposeView plochy)

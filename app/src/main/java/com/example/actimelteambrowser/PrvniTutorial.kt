@@ -204,6 +204,7 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             300 -> (orbView?.takeIf { it.isVisible } ?: buttonView(n))?.let { dim.holes.add(rectOf(it)); dim.circle = true }   // jen kulicka
             103 -> dim.holes.add(rectOf(findViewById(R.id.ivUrlShare)).apply { inset(pad, pad) })
             104 -> dim.holes.add(rectOf(findViewById(R.id.ivUrlLock)).apply { inset(pad, pad) })
+            105 -> for (bid in listOf(R.id.btnNavBack, R.id.btnNavForward)) dim.holes.add(rectOf(findViewById(bid)).apply { inset(pad, pad) })
             else -> dim.holes.add(rectOf(adBtn).apply { inset(pad, pad) })
         }
         dim.invalidate()
@@ -495,6 +496,17 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
                 }
             }
             intro("AdBlock: klepnutím zapneš nebo vypneš blokování reklam", "OK, pokračuj") { partOne() }
+        }
+        105 -> {
+            // sipky ve spodnim poli: zpet a vpred mezi strankami; seda = neni kam jit
+            val back = findViewById<View>(R.id.btnNavBack)
+            val fwd = findViewById<View>(R.id.btnNavForward)
+            at(0) { say("Šipka vlevo: o stránku zpět"); moveTo(back, 600) }
+            at(800) { tap(); blinkView(back) }
+            at(1600) { say("Šipka vpravo: o stránku vpřed"); moveTo(fwd, 700) }
+            at(900) { tap(); blinkView(fwd) }
+            at(1700) { say("Když není kam jít, šipka je šedá – po klepnutí zčervená a napíše „Není kam jít“") }
+            at(3200) { endDemo() }
         }
         103 -> {
             at(0) { say("Sdílet: pošli nebo zkopíruj adresu stránky"); moveTo(findViewById(R.id.ivUrlShare), 600) }
@@ -885,4 +897,29 @@ internal fun MainActivity.vaultButtonDemo(btn: View) {
         closeLeftBarAndHide()
         openSettingsAt(SettingsActivity.START_VAULT)
     }
+}
+
+
+/** Nastaveni -> Tutorialy -> Demo videa: po navratu na hlavni plochu se prehraje vybrana ukazka. */
+internal fun MainActivity.runDemoFromSettings(n: Int) {
+    window.decorView.postDelayed({
+        if (demoRunning) return@postDelayed
+        when (n) {
+            in 201..204 -> {
+                // ukazky z bocni listy: nejdriv se lista otevre
+                if (!leftBarOpen) toggleBarFrom(defaultBarOrigin())
+                window.decorView.postDelayed({
+                    if (n == 204) (sideBarLeft as? ViewGroup)?.getChildAt(3)?.let { vaultButtonDemo(it) }
+                    else startFirstDemo(n)
+                }, 500)
+            }
+            300 -> {
+                val g = gestureButtonN()
+                if (g == 0) AppToast.show(this, "Tlačítko Gesta není přiřazené – přidej ho v Nastavení → Tlačítka", true)
+                else startFirstDemo(g)
+            }
+            7 -> if (!startFirstDemo(7)) AppToast.show(this, "Tlačítko AdBlock má teď jinou funkci", true)
+            else -> startFirstDemo(n)
+        }
+    }, 700)
 }

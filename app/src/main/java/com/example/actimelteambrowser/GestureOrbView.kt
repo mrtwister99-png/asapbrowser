@@ -18,6 +18,9 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
     /** true = kulicka je videt, i kdyz je cilove tlacitko schovane (editor gest schova vsechna tlacitka) */
     var alwaysShow = false
 
+    /** false = dotyky na kulicku se tlacitku nepredavaji (nastaveni gest). */
+    var forwardTouch = true
+
     /** Vzhled, ktery se prave zkousi v nastaveni gest (zamceny vzor); null = ulozeny vzhled. */
     var styleOverride: Int? = null
 
@@ -33,7 +36,6 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
     private var running = false
 
     init {
-        isClickable = false
         isFocusable = false
         fill.color = "#FFFFFF".toColorInt()
         dot.color = "#00B055".toColorInt()
@@ -95,6 +97,18 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
         translationX = tx
         translationY = ty
         visibility = VISIBLE
+    }
+
+    // Kulicka muze byt posunuta proti tlacitku (tlacitko je napul za okrajem, kulicka cela videt):
+    // dotyk na kulicku jde tlacitku (jeho obsluha gest pouziva souradnice obrazovky, takze na posunu nezalezi)
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (!forwardTouch || !target.isShown || visibility != VISIBLE) return false
+        val e = android.view.MotionEvent.obtain(event)
+        e.setLocation((target.width / 2f), (target.height / 2f))
+        val r = target.dispatchTouchEvent(e)
+        e.recycle()
+        return r
     }
 
     override fun onDraw(canvas: Canvas) {

@@ -170,6 +170,7 @@ class SettingsActivity : ComponentActivity() {
                     onResetAll = { keepVault -> resetWithOptionalVaultBackup(keepVault) },
                     onButtonConfig = { openButtonConfig() },
                     onGestureConfig = { openGestureConfig() },
+                    onRunDemo = { id -> setResult(RESULT_OK, Intent().putExtra(EXTRA_RUN_DEMO, id)); finish() },
                     isDefaultBrowser = defaultBrowser,
                     onDefaultBrowser = { requestDefaultBrowser() },
                     onClose = { finish() }
@@ -412,6 +413,7 @@ class SettingsActivity : ComponentActivity() {
         const val DEMO_SKIP = "skip"
         const val EXTRA_CONFIG_BUTTONS = "config_buttons"
         const val EXTRA_CONFIG_GESTURES = "config_gestures"
+        const val EXTRA_RUN_DEMO = "run_demo"         // Tutorialy -> Demo videa: po zavreni Nastaveni spustit ukazku
         const val EXTRA_PAGE_URL = "page_url"
         const val EXTRA_PAGE_TITLE = "page_title"
         private const val MAX_IMPORT_BYTES = 50 * 1024 * 1024
