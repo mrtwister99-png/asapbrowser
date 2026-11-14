@@ -129,13 +129,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.actimelteambrowser.UfoFieldView
 
-// Barvy ve stejném duchu jako lišty v appce (kopie ze SettingsScreens.kt)
-private val BG = Color(0xFF0A0A0A)
-private val PANEL = Color(0xFF1E1E1E)
-private val ROW = Color(0xFF2A2A2A)
-private val ACCENT = Color(0xFF00B055)
-private val MUTED = Color(0xFF888888)
-private val DANGER = Color(0xFFB91C1C)
 private val ORANGE = Color(0xFFFF8A00)
 
 // Hodnoceni aplikace a hlaseni chyb (otevira se drzenim tlacitka Nastaveni) + sdilene pozadi UFO Field.

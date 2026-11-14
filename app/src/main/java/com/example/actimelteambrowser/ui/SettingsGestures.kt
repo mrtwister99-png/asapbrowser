@@ -121,13 +121,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-// Barvy ve stejném duchu jako lišty v appce (kopie ze SettingsScreens.kt, v každém souboru soukromé)
-private val BG = Color(0xFF0A0A0A)
-private val PANEL = Color(0xFF1E1E1E)
-private val ROW = Color(0xFF2A2A2A)
-private val ACCENT = Color(0xFF00B055)
-private val MUTED = Color(0xFF888888)
-private val DANGER = Color(0xFFB91C1C)
 
 // Gesta: plocha, překryv, seznam gest, editor plochy a panel (konfigurační mód gest).
 
@@ -143,7 +136,6 @@ internal val GESTURE_GREEN = Color(0xFF00B055)
 /** Dotyk, ktery zacal na tlacitku 6 a pokracuje na ploše (souřadnice v okně; phase 0 = dolů, 1 = pohyb, 2 = zvednuto). */
 class ExternalTouch(val x: Float, val y: Float, val phase: Int, val seq: Long)
 
-private val GESTURE_YELLOW = Color(0xFFFFD600)   // to, co uzivatel prave zadava
 
 /**
  * Vzhled plochy gest: barva plochy, barvy tlacitek (1-9), barva znaku, barva projeti, spoj (cara / znaky) a efekt.
@@ -629,11 +621,11 @@ fun GestureOverlay(
                 } else {
                     Text(
                         progress.toCharArray().joinToString(" › "),
-                        color = GESTURE_YELLOW, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                        color = YELLOW, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1
                     )
                     Text(
                         matched?.fn?.label ?: if (possible.isEmpty()) "Takové gesto není" else "…",
-                        color = if (possible.isEmpty() && matched == null) Color(0xFFFF6B6B) else GESTURE_YELLOW,
+                        color = if (possible.isEmpty() && matched == null) Color(0xFFFF6B6B) else YELLOW,
                         fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1
                     )
                 }
@@ -671,7 +663,7 @@ fun GestureOverlay(
                         Spacer(Modifier.width(12.dp))
                         Text(
                             androidx.compose.ui.text.buildAnnotatedString {
-                                pushStyle(androidx.compose.ui.text.SpanStyle(color = GESTURE_YELLOW))
+                                pushStyle(androidx.compose.ui.text.SpanStyle(color = YELLOW))
                                 append(codeText(g.code.take(progress.length)))
                                 pop()
                                 val rest = g.code.drop(progress.length)

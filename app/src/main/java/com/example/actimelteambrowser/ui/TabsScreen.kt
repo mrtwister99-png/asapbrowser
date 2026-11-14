@@ -99,15 +99,9 @@ data class TabTile(
 /** Titulek slozky: nazev (nebo "Složka") a pocet karet. */
 private fun folderTitle(t: TabTile) = "${t.folderName.ifBlank { "Složka" }} (${t.members.size})"
 
-private val BG = Color(0xFF0A0A0A)
-private val PANEL = Color(0xFF1E1E1E)
-private val ROW = Color(0xFF2A2A2A)
-private val GREEN = Color(0xFF00B055)
 private val BLUE = Color(0xFF006AFF)   // hlavni barva v anonymnim rezimu
 private val RED = Color(0xFFAC0001)
 private val CARAMEL = Color(0xFFCDA24D)
-private val YELLOW = Color(0xFFFFD600)
-private val MUTED = Color(0xFF888888)
 private val HEADER_H = 40.dp   // vyska hlavicky dlazdice (nazev + hvezda + krizek)
 
 /** Karty: 1 karta / 2-4 karty / 5 a vice karet (4. pad: "zavrit 1 kartu", "3 karty", "5 karet"). */
@@ -152,7 +146,7 @@ fun TabsScreen(
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val gridState = rememberLazyGridState()
-    val accent = if (incognito) BLUE else GREEN   // zelena, v anonymnim rezimu modra
+    val accent = if (incognito) BLUE else ACCENT   // zelena, v anonymnim rezimu modra
     val onAccent = if (incognito) Color.White else Color(0xFF06281D)
     val scope = rememberCoroutineScope()
     val headerPx = with(LocalDensity.current) { HEADER_H.toPx() }
@@ -861,7 +855,7 @@ private fun TabTileCard(
 ) {
     val shape = RoundedCornerShape(16.dp)
     val folderColor = Color(tile.folderColor)
-    val accent = if (tile.incognito) BLUE else GREEN
+    val accent = if (tile.incognito) BLUE else ACCENT
     val borderMod = when {
         mergeHit -> Modifier.border(3.dp, YELLOW, shape)
         selected -> Modifier.border(3.dp, accent, shape)
@@ -1012,7 +1006,7 @@ private fun ModeChip(text: String, selected: Boolean, modifier: Modifier, blue: 
     Box(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) (if (blue) BLUE else if (yellow) YELLOW else GREEN) else ROW)
+            .background(if (selected) (if (blue) BLUE else if (yellow) YELLOW else ACCENT) else ROW)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
@@ -1114,7 +1108,7 @@ fun StartPage(
                             .weight(1f)
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(if (on) GREEN else PANEL)
+                            .background(if (on) ACCENT else PANEL)
                             .clickable { onShowFavorites(fav) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -1171,7 +1165,7 @@ fun StartPage(
                             } else {
                                 Text(
                                     site.host.firstOrNull()?.uppercase() ?: "?",
-                                    color = GREEN, fontSize = 30.sp, fontWeight = FontWeight.Bold
+                                    color = ACCENT, fontSize = 30.sp, fontWeight = FontWeight.Bold
                                 )
                             }
                         }

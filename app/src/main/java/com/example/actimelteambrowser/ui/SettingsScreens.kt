@@ -126,13 +126,6 @@ import java.util.Locale
 
 // Kořen Nastavení: trasy, SettingsApp, hlavní seznam, společné prvky (dialog, záhlaví, řádky).
 
-// Barvy ve stejném duchu jako lišty v appce
-private val BG = Color(0xFF0A0A0A)
-private val PANEL = Color(0xFF1E1E1E)
-private val ROW = Color(0xFF2A2A2A)
-private val ACCENT = Color(0xFF00B055)
-private val MUTED = Color(0xFF888888)
-private val DANGER = Color(0xFFB91C1C)
 
 sealed class Route {
     object Main : Route()

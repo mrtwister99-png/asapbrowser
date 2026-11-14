@@ -84,14 +84,6 @@ import kotlinx.coroutines.withContext
 // Trezor hesel: zalozeni (12 slov + kontrola), odemknuti, seznam, detail, pridani / uprava, obnova ze zalohy.
 // Hesla jsou jen v zasifrovanem souboru; po odemceni jsou v pameti, po zamknuti zmizi.
 
-private val V_PANEL = Color(0xFF1E1E1E)
-private val V_ROW = Color(0xFF2A2A2A)
-private val V_ACCENT = Color(0xFF00B055)
-private val V_ON_ACCENT = Color(0xFF06281D)
-private val V_MUTED = Color(0xFF888888)
-private val V_DANGER = Color(0xFFB91C1C)
-private val V_BG = Color(0xFF0A0A0A)
-private val V_YELLOW = Color(0xFFFFD600)
 
 private enum class VaultStage { INTRO, WORDS, CHECK, LOCKED, LIST }
 
@@ -125,15 +117,15 @@ fun VaultScreen(onBack: () -> Unit) {
 
     // pruvodce "co je trezor": poprve sam, pak kdykoli otaznikem vpravo dole
     var help by remember { mutableStateOf(!AppSettings.vaultDemoSeen.get()) }
-    Column(Modifier.fillMaxSize().background(V_BG)) {
+    Column(Modifier.fillMaxSize().background(BG)) {
         Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) {
             VaultStages(stage, phrase, introError, onBack, onStage = { stage = it }, onPhrase = { phrase = it }, onIntroError = { introError = it })
         }
         Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(end = 16.dp, top = 4.dp, bottom = 10.dp), horizontalArrangement = Arrangement.End) {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(V_ROW).border(2.dp, V_YELLOW, CircleShape).clickable { help = true },
+                Modifier.size(40.dp).clip(CircleShape).background(ROW).border(2.dp, YELLOW, CircleShape).clickable { help = true },
                 contentAlignment = Alignment.Center
-            ) { Text("?", color = V_YELLOW, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("?", color = YELLOW, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
         }
     }
     if (help) VaultHelpOverlay(onClose = { help = false; AppSettings.vaultDemoSeen.set(true) })
@@ -203,14 +195,14 @@ private fun VaultHelpOverlay(onClose: () -> Unit) {
             Column(
                 Modifier.align(Alignment.Center).padding(horizontal = 28.dp).fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp)).background(Color(0xFF242424))
-                    .border(2.dp, V_YELLOW, RoundedCornerShape(18.dp)).padding(22.dp),
+                    .border(2.dp, YELLOW, RoundedCornerShape(18.dp)).padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(step.icon, fontSize = 36.sp)
                 Text(step.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Text(step.text, color = Color(0xFFDDDDDD), fontSize = 15.sp, textAlign = TextAlign.Center)
-                Text("${i + 1} / ${HELP_STEPS.size}", color = V_MUTED, fontSize = 12.sp)
+                Text("${i + 1} / ${HELP_STEPS.size}", color = MUTED, fontSize = 12.sp)
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 70.dp).fillMaxWidth(),
@@ -221,15 +213,15 @@ private fun VaultHelpOverlay(onClose: () -> Unit) {
                     @Composable
                     fun Arrow(right: Boolean, enabled: Boolean, onClick: () -> Unit) {
                         Box(
-                            Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(V_ROW)
-                                .border(1.dp, if (enabled) V_YELLOW else Color(0xFF3A3A3A), RoundedCornerShape(14.dp))
+                            Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(ROW)
+                                .border(1.dp, if (enabled) YELLOW else Color(0xFF3A3A3A), RoundedCornerShape(14.dp))
                                 .clickable(enabled = enabled, onClick = onClick),
                             contentAlignment = Alignment.Center
                         ) {
                             androidx.compose.foundation.Image(
                                 androidx.compose.ui.res.painterResource(com.example.actimelteambrowser.R.drawable.ic_nav_back), null,
                                 modifier = Modifier.size(22.dp).then(if (right) Modifier.graphicsLayer { rotationZ = 180f } else Modifier),
-                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (enabled) V_YELLOW else Color(0xFF555555))
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (enabled) YELLOW else Color(0xFF555555))
                             )
                         }
                     }
@@ -243,7 +235,7 @@ private fun VaultHelpOverlay(onClose: () -> Unit) {
                         contentAlignment = Alignment.Center
                     ) { Text("Přeskočit", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                     Box(
-                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).background(V_YELLOW).clickable { next() },
+                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(14.dp)).background(YELLOW).clickable { next() },
                         contentAlignment = Alignment.Center
                     ) { Text(if (i < last) "Další" else "Hotovo", color = Color(0xFF1A1A1A), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                 }
@@ -251,7 +243,7 @@ private fun VaultHelpOverlay(onClose: () -> Unit) {
             // posledni krok: zluty blikajici krouzek kolem otazniku vpravo dole
             if (i == last && blinkOn) Box(
                 Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = 6.dp).size(48.dp)
-                    .border(3.dp, V_YELLOW, CircleShape)
+                    .border(3.dp, YELLOW, CircleShape)
             )
         }
     }
@@ -270,7 +262,7 @@ private fun HoldButton(seconds: Int, onDone: () -> Unit) {
             .fillMaxWidth()
             .height(54.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(V_ACCENT)
+            .background(ACCENT)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown()
@@ -288,8 +280,8 @@ private fun HoldButton(seconds: Int, onDone: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         // zluta vypln zleva doprava podle casu drzeni
-        Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(prog.value).background(V_YELLOW))
-        Text("$shown s / $seconds s", color = V_ON_ACCENT, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(prog.value).background(YELLOW))
+        Text("$shown s / $seconds s", color = ON_ACCENT, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -303,7 +295,7 @@ private fun VaultIntro(error: String?, onBack: () -> Unit, onStart: () -> Unit) 
                 color = Color(0xFFCCCCCC), fontSize = 15.sp
             )
             if (error != null) Text(error, color = Color(0xFFEF5350), fontSize = 14.sp)
-            BigButton("Vytvořit trezor", V_ACCENT, V_ON_ACCENT, onClick = onStart)
+            BigButton("Vytvořit trezor", ACCENT, ON_ACCENT, onClick = onStart)
             // co kdyz slova ztratim
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF2A1414))
@@ -319,34 +311,34 @@ private fun VaultIntro(error: String?, onBack: () -> Unit, onStart: () -> Unit) 
             // rozklikavaci otazka: kde jsou hesla a kdo je vidi
             var faq by remember { mutableStateOf(false) }
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(V_PANEL)
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PANEL)
                     .clickable { faq = !faq }.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Kde jsou moje hesla a může je někdo vidět?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text(if (faq) "▲" else "▼", color = V_YELLOW, fontSize = 14.sp)
+                    Text(if (faq) "▲" else "▼", color = YELLOW, fontSize = 14.sp)
                 }
                 if (faq) {
-                    Text("📱  Jen v tomhle telefonu", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("📱  Jen v tomhle telefonu", color = YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Jméno a heslo, které si do trezoru uložíš, se zapíše jen do paměti tohoto telefonu – a to zašifrované. " +
                             "Klíč k šifře vzniká z tvých 12 slov. Bez nich jsou data jen nečitelná změť znaků.",
                         color = Color(0xFFDDDDDD), fontSize = 14.sp
                     )
-                    Text("💾  Export = zašifrovaná záloha", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("💾  Export = zašifrovaná záloha", color = YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Když dáš Nastavení → Export a zaškrtneš trezor, uloží se do souboru tvůj trezor zašifrovaný tvými 12 slovy. " +
                             "Samotná slova v souboru nejsou. Soubor si můžeš schovat kamkoli – kdo nezná slova, nic z něj nepřečte.",
                         color = Color(0xFFDDDDDD), fontSize = 14.sp
                     )
-                    Text("📲  Import = trezor zpátky", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("📲  Import = trezor zpátky", color = YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Na novém telefonu dáš Import, vybereš soubor a zadáš svých 12 slov. Trezor se rozšifruje a máš ho zpátky. " +
                             "Pokud budeš soubor uchovávat, budeš mít trezor vždycky uložený u sebe.",
                         color = Color(0xFFDDDDDD), fontSize = 14.sp
                     )
-                    Text("🚫  Žádný server", color = V_YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("🚫  Žádný server", color = YELLOW, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Tvoje údaje se nikdy – ani při exportu a importu – neposílají na žádný server. Nemám je, nevidím je, " +
                             "a proto je ani nemůžu zneužít já, ani nikdo jiný.",
@@ -366,14 +358,14 @@ private fun VaultWords(phrase: String, onBack: () -> Unit, onNext: () -> Unit) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 "Opiš si je na papír ve správném pořadí. Nikde se neukládají a nejdou obnovit. Bez nich o hesla přijdeš.",
-                color = V_MUTED, fontSize = 14.sp
+                color = MUTED, fontSize = 14.sp
             )
             for (i in words.indices step 2) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for (k in i..minOf(i + 1, words.size - 1)) {
                         Text(
                             "${k + 1}. ${words[k]}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(V_PANEL).padding(horizontal = 14.dp, vertical = 14.dp)
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 14.dp, vertical = 14.dp)
                         )
                     }
                 }
@@ -426,7 +418,7 @@ private fun VaultCheck(phrase: String, onBack: () -> Unit, onDone: () -> Unit) {
                 )
             }
             if (error != null) Text(error ?: "", color = Color(0xFFEF5350), fontSize = 14.sp)
-            BigButton(if (busy) "Vytvářím trezor…" else "Dokončit", V_ACCENT, V_ON_ACCENT) {
+            BigButton(if (busy) "Vytvářím trezor…" else "Dokončit", ACCENT, ON_ACCENT) {
                 if (!busy && !created) {
                     val wrong = picks.withIndex().filter { (k, n) -> VaultCrypto.normalize(answers[k]) != words[n - 1] }.map { it.value }
                     if (wrong.isNotEmpty()) {
@@ -449,7 +441,7 @@ private fun VaultCheck(phrase: String, onBack: () -> Unit, onDone: () -> Unit) {
     if (created) Dialog(onDismissRequest = { }) {
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color(0xFF242424))
-                .border(2.dp, V_ACCENT, RoundedCornerShape(20.dp)).padding(22.dp),
+                .border(2.dp, ACCENT, RoundedCornerShape(20.dp)).padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -461,9 +453,9 @@ private fun VaultCheck(phrase: String, onBack: () -> Unit, onDone: () -> Unit) {
                 color = Color(0xFFDDDDDD), fontSize = 15.sp, textAlign = TextAlign.Center
             )
             Box(
-                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(V_ACCENT).clickable { onDone() },
+                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(ACCENT).clickable { onDone() },
                 contentAlignment = Alignment.Center
-            ) { Text("Rozumím", color = V_ON_ACCENT, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("Rozumím", color = ON_ACCENT, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -514,7 +506,7 @@ private fun VaultLocked(onBack: () -> Unit, onUnlocked: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (error != null) Text(error ?: "", color = Color(0xFFEF5350), fontSize = 14.sp)
-                BigButton(if (busy) "Odemykám…" else "Odemknout PINem", V_ACCENT, V_ON_ACCENT) {
+                BigButton(if (busy) "Odemykám…" else "Odemknout PINem", ACCENT, ON_ACCENT) {
                     if (!busy && pin.length >= 4) {
                         busy = true
                         scope.launch {
@@ -529,8 +521,8 @@ private fun VaultLocked(onBack: () -> Unit, onUnlocked: () -> Unit) {
                         }
                     }
                 }
-                if (hasBio) BigButton("Odemknout otiskem prstu", V_ROW, Color.White) { startBio() }
-                BigButton("Zadat 12 slov místo PINu", V_ROW, Color.White) { usePin = false; error = null }
+                if (hasBio) BigButton("Odemknout otiskem prstu", ROW, Color.White) { startBio() }
+                BigButton("Zadat 12 slov místo PINu", ROW, Color.White) { usePin = false; error = null }
             }
         }
         return
@@ -538,7 +530,7 @@ private fun VaultLocked(onBack: () -> Unit, onUnlocked: () -> Unit) {
     ScreenScaffold(title = "Trezor hesel", onBack = onBack) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Trezor je zamčený. Zadej svých 12 slov (oddělená mezerou).", color = Color(0xFFCCCCCC), fontSize = 15.sp)
-            if (hasBio) BigButton("Odemknout otiskem prstu", V_ROW, Color.White) { startBio() }
+            if (hasBio) BigButton("Odemknout otiskem prstu", ROW, Color.White) { startBio() }
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it; error = null },
@@ -547,7 +539,7 @@ private fun VaultLocked(onBack: () -> Unit, onUnlocked: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp)
             )
             if (error != null) Text(error ?: "", color = Color(0xFFEF5350), fontSize = 14.sp)
-            BigButton(if (busy) "Odemykám…" else "Odemknout", V_ACCENT, V_ON_ACCENT) {
+            BigButton(if (busy) "Odemykám…" else "Odemknout", ACCENT, ON_ACCENT) {
                 if (!busy) {
                     val valid = runCatching { VaultCrypto.isValidPhrase(context, text) }.getOrDefault(false)
                     if (!valid) {
@@ -609,18 +601,18 @@ private fun VaultList(onBack: () -> Unit, onLock: () -> Unit) {
             LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(list, key = { it.id }) { e ->
                     Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(V_PANEL)
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PANEL)
                             .clickable { selected = e }.padding(horizontal = 18.dp, vertical = 14.dp)
                     ) {
                         Text(e.domain, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                        if (e.username.isNotEmpty()) Text(e.username, color = V_MUTED, fontSize = 13.sp)
+                        if (e.username.isNotEmpty()) Text(e.username, color = MUTED, fontSize = 13.sp)
                         audit[e.id]?.let { Text("⚠ $it heslo", color = Color(0xFFFFB74D), fontSize = 12.sp) }
                     }
                 }
             }
-            BigButton("+ Přidat přihlášení", V_ACCENT, V_ON_ACCENT) { adding = true }
-            BigButton("Rychlé odemykání (PIN, otisk)", V_ROW, Color.White) { pinDialog = true }
-            BigButton("Zamknout trezor", V_ROW, Color.White, onClick = onLock)
+            BigButton("+ Přidat přihlášení", ACCENT, ON_ACCENT) { adding = true }
+            BigButton("Rychlé odemykání (PIN, otisk)", ROW, Color.White) { pinDialog = true }
+            BigButton("Zamknout trezor", ROW, Color.White, onClick = onLock)
         }
     }
     if (pinDialog) VaultPinDialog(onDismiss = { pinDialog = false })
@@ -628,8 +620,8 @@ private fun VaultList(onBack: () -> Unit, onLock: () -> Unit) {
 
 @Composable
 private fun VaultField(label: String, value: String) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(V_PANEL).padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(label, color = V_MUTED, fontSize = 12.sp)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(label, color = MUTED, fontSize = 12.sp)
         Text(value, color = Color.White, fontSize = 16.sp)
     }
 }
@@ -638,11 +630,11 @@ private fun VaultField(label: String, value: String) {
 @Composable
 private fun VaultValueRow(label: String, value: String, actions: @Composable () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(V_PANEL).padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PANEL).padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, color = V_MUTED, fontSize = 12.sp)
+            Text(label, color = MUTED, fontSize = 12.sp)
             Text(value, color = Color.White, fontSize = 16.sp)
         }
         actions()
@@ -700,13 +692,13 @@ private fun VaultDetail(entry: VaultEntry, onBack: () -> Unit, onEdit: () -> Uni
         // dole: Upravit (prepsat a ulozit) + Zpet
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
-                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(16.dp)).background(V_ROW).clickable(onClick = onBack),
+                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(16.dp)).background(ROW).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) { Text("Zpět", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
             Box(
-                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(16.dp)).background(V_ACCENT).clickable(onClick = onEdit),
+                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(16.dp)).background(ACCENT).clickable(onClick = onEdit),
                 contentAlignment = Alignment.Center
-            ) { Text("Upravit", color = V_ON_ACCENT, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("Upravit", color = ON_ACCENT, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
     }
     if (confirm) {
@@ -775,7 +767,7 @@ private fun VaultEdit(entry: VaultEntry?, onBack: () -> Unit, onSaved: () -> Uni
                 modifier = Modifier.fillMaxWidth()
             )
             if (error != null) Text(error ?: "", color = Color(0xFFEF5350), fontSize = 14.sp)
-            BigButton("Uložit", V_ACCENT, V_ON_ACCENT) {
+            BigButton("Uložit", ACCENT, ON_ACCENT) {
                 val d = cleanDomain(domain)
                 if (d.isEmpty() || password.isEmpty()) {
                     error = "Vyplň web a heslo."
@@ -791,7 +783,7 @@ private fun VaultEdit(entry: VaultEntry?, onBack: () -> Unit, onSaved: () -> Uni
                     }
                 }
             }
-            BigButton("Zpět", V_ROW, Color.White, onClick = onBack)
+            BigButton("Zpět", ROW, Color.White, onClick = onBack)
         }
     }
 }
@@ -799,7 +791,7 @@ private fun VaultEdit(entry: VaultEntry?, onBack: () -> Unit, onSaved: () -> Uni
 @Composable
 private fun VaultSmallButton(text: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        modifier.height(44.dp).clip(RoundedCornerShape(14.dp)).background(V_ROW).clickable(onClick = onClick),
+        modifier.height(44.dp).clip(RoundedCornerShape(14.dp)).background(ROW).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
 }
@@ -831,9 +823,9 @@ fun VaultRestoreDialog(backup: VaultBackup, onResult: (String) -> Unit, onDismis
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
-        Column(Modifier.clip(RoundedCornerShape(24.dp)).background(V_PANEL).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.clip(RoundedCornerShape(24.dp)).background(PANEL).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Trezor hesel", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("V souboru je zašifrovaný trezor. Zadej svých 12 slov. Stávající trezor v tomto telefonu se nahradí.", color = V_MUTED, fontSize = 13.sp)
+            Text("V souboru je zašifrovaný trezor. Zadej svých 12 slov. Stávající trezor v tomto telefonu se nahradí.", color = MUTED, fontSize = 13.sp)
             OutlinedTextField(
                 value = text, onValueChange = { text = it; error = null },
                 label = { Text("12 slov") },
@@ -845,12 +837,12 @@ fun VaultRestoreDialog(backup: VaultBackup, onResult: (String) -> Unit, onDismis
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 Text(
                     "Zrušit", color = Color(0xFFCCCCCC), fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(V_ROW).clickable { if (!busy) onDismiss() }
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(ROW).clickable { if (!busy) onDismiss() }
                         .padding(horizontal = 18.dp, vertical = 10.dp)
                 )
                 Text(
-                    if (busy) "Obnovuji…" else "Obnovit", color = V_ON_ACCENT, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(V_ACCENT).clickable {
+                    if (busy) "Obnovuji…" else "Obnovit", color = ON_ACCENT, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(ACCENT).clickable {
                         if (!busy) {
                             busy = true
                             scope.launch {
@@ -878,12 +870,12 @@ private fun VaultPinDialog(onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var bioOn by remember { mutableStateOf(VaultManager.hasBio(context)) }
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
-        Column(Modifier.clip(RoundedCornerShape(24.dp)).background(V_PANEL).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.clip(RoundedCornerShape(24.dp)).background(PANEL).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Rychlé odemykání", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             if (Build.VERSION.SDK_INT >= 28) {
                 Text(
                     if (bioOn) "Vypnout otisk prstu" else "Zapnout otisk prstu", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(V_ROW).clickable {
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ROW).clickable {
                         if (bioOn) {
                             VaultManager.removeBio(context)
                             bioOn = false
@@ -910,7 +902,7 @@ private fun VaultPinDialog(onDismiss: () -> Unit) {
                 )
             }
             Text(if (has) "Změnit PIN" else "Nastavit PIN", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text("PIN (4 až 8 číslic) odemkne trezor jen v tomto telefonu. Po 5 špatných pokusech se smaže a bude potřeba 12 slov.", color = V_MUTED, fontSize = 13.sp)
+            Text("PIN (4 až 8 číslic) odemkne trezor jen v tomto telefonu. Po 5 špatných pokusech se smaže a bude potřeba 12 slov.", color = MUTED, fontSize = 13.sp)
             OutlinedTextField(
                 value = pin, onValueChange = { pin = it.filter { c -> c.isDigit() }.take(8); error = null },
                 label = { Text("PIN") }, singleLine = true,
@@ -929,7 +921,7 @@ private fun VaultPinDialog(onDismiss: () -> Unit) {
             if (has) {
                 Text(
                     "Zrušit PIN", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(V_DANGER).clickable {
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(DANGER).clickable {
                         VaultManager.removePin(context)
                         AppToast.show(context, "PIN zrušen")
                         onDismiss()
@@ -939,12 +931,12 @@ private fun VaultPinDialog(onDismiss: () -> Unit) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 Text(
                     "Zrušit", color = Color(0xFFCCCCCC), fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(V_ROW).clickable { if (!busy) onDismiss() }
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(ROW).clickable { if (!busy) onDismiss() }
                         .padding(horizontal = 18.dp, vertical = 10.dp)
                 )
                 Text(
-                    if (busy) "Ukládám…" else "Uložit", color = V_ON_ACCENT, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(V_ACCENT).clickable {
+                    if (busy) "Ukládám…" else "Uložit", color = ON_ACCENT, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(ACCENT).clickable {
                         if (!busy) {
                             if (pin.isEmpty() && pin2.isEmpty()) {
                                 onDismiss()   // PIN se nemeni (treba jen zapnuty otisk)
