@@ -843,7 +843,7 @@ internal fun MainActivity.showTutorialPlusDialog() {
                 t2.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 b2.addView(t2)
                 val okBtn = styledButton("OK, pokračuj", true)
-                (okBtn.background?.mutate() as? android.graphics.drawable.GradientDrawable)?.setStroke(dp(1), Color.WHITE)
+                (okBtn.background?.mutate() as? GradientDrawable)?.setStroke(dp(1), Color.WHITE)
                 okBtn.setOnClickListener { d2() }
                 val okLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 okLp.topMargin = dp(18)

@@ -113,11 +113,11 @@ class SetupBackdropView(context: Context) : View(context) {
     private fun placeStill() {
         val minDist = min(w, h) * 0.25f
         for (i in stillPos.indices) {
-            for (tries in 0 until 30) {
+            var left = 30   // nejvys 30 pokusu o misto dost daleko od ostatnich
+            do {
                 stillPos[i][0] = rand(edge, max(edge + 1f, w - edge))
                 stillPos[i][1] = rand(edge, max(edge + 1f, h - edge))
-                if ((0 until i).all { j -> hypot(stillPos[i][0] - stillPos[j][0], stillPos[i][1] - stillPos[j][1]) >= minDist }) break
-            }
+            } while (--left > 0 && !(0 until i).all { j -> hypot(stillPos[i][0] - stillPos[j][0], stillPos[i][1] - stillPos[j][1]) >= minDist })
         }
     }
 
@@ -127,11 +127,11 @@ class SetupBackdropView(context: Context) : View(context) {
         val minDist = min(w, h) * 0.3f
         var tx = lx
         var ty = ly
-        for (i in 0 until 12) {
+        var left = 12   // nejvys 12 pokusu o cil dost daleko
+        do {
             tx = rand(edge, max(edge + 1f, w - edge))
             ty = rand(edge, max(edge + 1f, h - edge))
-            if (hypot(tx - lx, ty - ly) >= minDist) break
-        }
+        } while (--left > 0 && hypot(tx - lx, ty - ly) < minDist)
         toX = tx; toY = ty
         val dist = max(1f, hypot(toX - fromX, toY - fromY))
         nx = -(toY - fromY) / dist

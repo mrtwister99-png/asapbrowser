@@ -1,5 +1,7 @@
 package com.example.actimelteambrowser
 
+import kotlin.math.sin
+import kotlin.math.cos
 import androidx.core.graphics.toColorInt
 import android.view.View
 import android.content.Context
@@ -144,8 +146,8 @@ class GestureOrbView(context: Context, var target: View) : View(context) {
                 for (k in 0 until 10) {
                     val r = (if (k % 2 == 0) 13f else 5.6f) * d
                     val a = Math.toRadians(-90.0 + k * 36.0)
-                    val x = cx + (r * Math.cos(a)).toFloat()
-                    val y = cy + 1f * d + (r * Math.sin(a)).toFloat()
+                    val x = cx + (r * cos(a)).toFloat()
+                    val y = cy + 1f * d + (r * sin(a)).toFloat()
                     if (k == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 path.close()

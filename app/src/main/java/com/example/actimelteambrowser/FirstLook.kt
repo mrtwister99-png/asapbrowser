@@ -81,7 +81,7 @@ internal fun MainActivity.applyFirstLook() {
 
 /** Pole maji v prvotnim nastaveni zlute nadpisy: jejich sede zakryti pryc hned. */
 internal fun MainActivity.uncoverFields() {
-    for (v in listOf(findViewById<View>(R.id.urlContainer), bottomFieldView())) covers.remove(v)?.let { v.overlay.remove(it) }
+    for (v in listOf(findViewById(R.id.urlContainer), bottomFieldView())) covers.remove(v)?.let { v.overlay.remove(it) }
 }
 
 /** Pomalu odkryje [views] (a sede listy karet [strips]: true = horni, false = spodni). */

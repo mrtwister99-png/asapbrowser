@@ -1,12 +1,8 @@
-@file:SuppressLint("SetTextI18n")   // texty ukazky jsou zatim napsane primo v kodu
-
 package com.example.actimelteambrowser
 
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
@@ -68,21 +64,27 @@ private class DemoRegion(ctx: Context) : View(ctx) {
     private val handle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val pill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 15f * d; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    private val grey = "#444444".toColorInt()
+    private val darkGreen = "#06281D".toColorInt()
+    private val r = RectF()
+    private val save = RectF()
+    private val cancel = RectF()
+    private fun corner(c: Canvas, cx: Float, cy: Float) {
+        c.drawCircle(cx, cy, 8f * d, handle)
+        c.drawCircle(cx, cy, 8f * d, border)
+    }
     override fun onDraw(c: Canvas) {
-        val r = RectF(x0, y0, x0 + (x1 - x0) * p, y0 + (y1 - y0) * p)
+        r.set(x0, y0, x0 + (x1 - x0) * p, y0 + (y1 - y0) * p)
         c.drawRect(r, fill)
         c.drawRect(r, border)
-        for ((cx, cy) in listOf(r.left to r.top, r.right to r.top, r.left to r.bottom, r.right to r.bottom)) {
-            c.drawCircle(cx, cy, 8f * d, handle)
-            c.drawCircle(cx, cy, 8f * d, border)
-        }
+        corner(c, r.left, r.top); corner(c, r.right, r.top); corner(c, r.left, r.bottom); corner(c, r.right, r.bottom)
         if (p >= 1f) {
             val w = 100f * d; val h = 40f * d; val top = r.bottom + 16f * d
-            val save =  RectF(r.centerX() + 6f * d, top, r.centerX() + 6f * d + w, top + h)
-            val cancel = RectF(r.centerX() - 6f * d - w, top, r.centerX() - 6f * d, top + h)
+            save.set(r.centerX() + 6f * d, top, r.centerX() + 6f * d + w, top + h)
+            cancel.set(r.centerX() - 6f * d - w, top, r.centerX() - 6f * d, top + h)
             pill.color = green; c.drawRoundRect(save, h / 2, h / 2, pill)
-            pill.color = "#444444".toColorInt(); c.drawRoundRect(cancel, h / 2, h / 2, pill)
-            label.color = "#06281D".toColorInt(); c.drawText("Uložit", save.centerX(), save.centerY() + 5f * d, label)
+            pill.color = grey; c.drawRoundRect(cancel, h / 2, h / 2, pill)
+            label.color = darkGreen; c.drawText("Uložit", save.centerX(), save.centerY() + 5f * d, label)
             label.color = Color.WHITE; c.drawText("Zrušit", cancel.centerX(), cancel.centerY() + 5f * d, label)
         }
     }
@@ -94,8 +96,9 @@ private class DemoDot(ctx: Context) : View(ctx) {
     private val d = resources.displayMetrics.density
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.6f * d }
     private val green = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = "#00B055".toColorInt() }
+    private val r = RectF()
     override fun onDraw(c: Canvas) {
-        val r = RectF(1.6f * d, 1.6f * d, width - 1.6f * d, height - 1.6f * d)
+        r.set(1.6f * d, 1.6f * d, width - 1.6f * d, height - 1.6f * d)
         if (p > 0f) c.drawArc(r, -90f, 360f * p.coerceAtMost(1f), true, green)
         c.drawOval(r, ring)
     }
@@ -183,8 +186,8 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     val id = if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) 10 + n else if (n in 1..12 && n != 7 && n != 8) 300 else n
     if ((n == 7 || n == 8) && buttonFunction(n, false) != ButtonDefaults.tap(n)) return false   // tlacitko ma jinou funkci
     // horni a spodni lista: vlastni prubeh (nadpis v poli, tip, OK, animace, kolecka, Preskocit)
-    if (n == 7 || n == 8 || n == 103 || n == 104 || n == 105) return startBarDemo(n)
-    if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) return startBarDemo(10 + n)
+    if (n == 7 || n == 8 || n == 103 || n == 104 || n == 105) { startBarDemo(n); return true }
+    if (n in 1..4 && buttonFunction(n, false) != ButtonFunction.GESTURES) { startBarDemo(10 + n); return true }
 
     demoRunning = true
     if (id == 300 && quickSetupStage == 2) { quickSetupStage = 21; quickSpotOff?.invoke() }
@@ -193,7 +196,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
     val sideTitle = when (id) { 201 -> "SCREENSHOT"; 202 -> "VERZE PRO POČÍTAČ"; 203 -> "NAJÍT NA STRÁNCE"; else -> "GESTA" }
     if (sideDemo && fieldTitleTop == null) { showFieldTitles(sideTitle, "DEMO VIDEO"); topDemoRestore = { clearFieldTitles() } }   // rychle nastaveni: ukazka gest, po ni dotaz "nechat tlacitko?"
     val parent = root as ConstraintLayout
-    val urlBox = findViewById<View>(R.id.urlContainer)
     val adBtn = findViewById<View>(R.id.btnAdBlock)
 
     // ztmaveni v root (skutecne modaly jsou okna nad nim)
@@ -214,7 +216,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
             201, 202, 203 -> (sideBarLeft as? ViewGroup)?.getChildAt(id - 201)?.let { dim.holes.add(rectOf(it).apply { inset(pad, pad) }) }
             in 11..14 -> buttonView(n)?.let { dim.holes.add(rectOf(it).apply { inset(pad, pad) }) }
             300 -> (orbView?.takeIf { it.isVisible } ?: buttonView(n))?.let { dim.holes.add(rectOf(it)); dim.circle = true }   // jen kulicka
-            105 -> for (bid in listOf(R.id.btnNavBack, R.id.btnNavForward)) dim.holes.add(rectOf(findViewById(bid)).apply { inset(pad, pad) })
             else -> dim.holes.add(rectOf(adBtn).apply { inset(pad, pad) })
         }
         if (sideDemo) { dim.holes.add(rectOf(topBar)); dim.holes.add(rectOf(bottomBar)) }
@@ -302,20 +303,6 @@ internal fun MainActivity.startFirstDemo(n: Int): Boolean {
         dim.visibility = View.VISIBLE
         dim.invalidate()
     }
-    // zlute probliknuti (ve vrstve nad vsim, i nad modaly)
-    fun blinkScreen(r: RectF) {
-        val b = IntArray(2); ov.getLocationOnScreen(b)
-        blinkOutline(ov, RectF(r.left - b[0], r.top - b[1], r.right - b[0], r.bottom - b[1]))
-    }
-    fun screenRect(v: View): RectF {
-        val a = IntArray(2); v.getLocationOnScreen(a)
-        return RectF(a[0].toFloat(), a[1].toFloat(), (a[0] + v.width).toFloat(), (a[1] + v.height).toFloat())
-    }
-    fun blinkView(v: View) { if (v.isAttachedToWindow) blinkScreen(screenRect(v)) }
-    fun moveToRect(r: RectF, ms: Long) = moveXY(r.centerX(), r.centerY(), ms)
-    fun holdFinger() { finger.animate().scaleX(1.7f).scaleY(1.7f).setDuration(500).start() }   // drzeni: tecka se zvetsi
-    fun releaseFinger() { finger.animate().scaleX(1f).scaleY(1f).setDuration(200).start() }
-
     // casovy plan: kazdy krok ma svoje zpozdeni od zacatku
     var t = 350L
     fun at(delay: Long, block: () -> Unit) { t += delay; demoHandler.postDelayed({ if (demoRunning) block() }, t) }
@@ -496,7 +483,7 @@ internal fun MainActivity.vaultButtonDemo(btn: View) {
     }
     val loc = IntArray(2)
     btn.getLocationOnScreen(loc)
-    val r = android.graphics.RectF(loc[0].toFloat(), loc[1].toFloat(), (loc[0] + btn.width).toFloat(), (loc[1] + btn.height).toFloat())
+    val r = RectF(loc[0].toFloat(), loc[1].toFloat(), (loc[0] + btn.width).toFloat(), (loc[1] + btn.height).toFloat())
     st.at(0) { st.focus(r); st.say("Trezor hesel – tvoje hesla pod zámkem 🔐"); st.moveTo(r, 650) }
     st.at(1000) { st.tap(); st.blink(r) }
     st.at(1300) {
@@ -570,7 +557,7 @@ internal fun MainActivity.demoButton(text: String, primary: Boolean): TextView {
     return b
 }
 
-private fun MainActivity.startBarDemo(id: Int): Boolean {
+private fun MainActivity.startBarDemo(id: Int) {
     demoRunning = true
     val bottom = id in 11..14 || id == 105   // spodni lista (Domu, sipky, karty, Oblibene, Nastaveni)
     val parent = root as ConstraintLayout
@@ -585,7 +572,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
 
     // videt je jen ukazovana lista; ostatni zmizi (vrati se v endDemo)
     val hidden = ArrayList<Pair<View, Int>>()
-    fun hide(v: View?) { if (v != null && v.visibility == View.VISIBLE) { hidden.add(v to v.visibility); v.visibility = View.INVISIBLE } }
+    fun hide(v: View?) { if (v != null && v.isVisible) { hidden.add(v to v.visibility); v.visibility = View.INVISIBLE } }
     hide(if (bottom) topBar else bottomBar)
     for (k in listOf(5, 6) + extraViews.keys) hide(buttonView(k))
     hide(orbView)
@@ -707,8 +694,8 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
         }
     }
     skip.setOnClickListener {
-        if (choice.visibility == View.VISIBLE) return@setOnClickListener
-        boxWasVisible = box.visibility == View.VISIBLE
+        if (choice.isVisible) return@setOnClickListener
+        boxWasVisible = box.isVisible
         box.visibility = View.INVISIBLE
         askWhat()
         choice.visibility = View.VISIBLE
@@ -886,7 +873,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
             }
         }
         11 -> {
-            val btn = buttonView(1) ?: run { endDemo(); return true }
+            val btn = buttonView(1) ?: run { endDemo(); return }
             // obnoveni: otacejici se ikona, pak domecek (skutecna stranka se nenacita)
             val rm = ImageView(this)
             rm.setColorFilter(Color.WHITE)
@@ -931,7 +918,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
             }
         }
         12 -> {
-            val btn = buttonView(2) ?: run { endDemo(); return true }
+            val btn = buttonView(2) ?: run { endDemo(); return }
             resetHook = {
                 dimOn()
                 if (demoTabsOpen) { hideTabs(); demoTabsOpen = false }
@@ -988,7 +975,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
             }
         }
         13 -> {
-            val btn = buttonView(3) ?: run { endDemo(); return true }
+            val btn = buttonView(3) ?: run { endDemo(); return }
             parts += TopPart(
                 "Klepnutím na hvězdu otevřeš Oblíbené – uložené stránky ve složkách.",
                 "Stránky si třídíš do složek, jak se ti to hodí.", 0
@@ -1014,7 +1001,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
             }
         }
         14 -> {
-            val btn = buttonView(4) ?: run { endDemo(); return true }
+            val btn = buttonView(4) ?: run { endDemo(); return }
             parts += TopPart(
                 "Klepnutím na logo otevřeš Nastavení.",
                 "V Nastavení si upravíš tlačítka, gesta, vzhled a všechno ostatní.", 0
@@ -1038,7 +1025,7 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
             }
         }
     }
-    if (parts.isEmpty()) { endDemo(); return true }
+    if (parts.isEmpty()) { endDemo(); return }
 
     // ---------------- prubeh ----------------
     var gen = 0
@@ -1107,12 +1094,11 @@ private fun MainActivity.startBarDemo(id: Int): Boolean {
         val hit = FrameLayout(this)
         val d = DemoDot(this)
         hit.addView(d, FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER))
-        hit.setOnClickListener { if (choice.visibility != View.VISIBLE) showIntro(k) }   // libovolne preklikani mezi castmi
+        hit.setOnClickListener { if (!choice.isVisible) showIntro(k) }   // libovolne preklikani mezi castmi
         dotsRow.addView(hit, LinearLayout.LayoutParams(dp(40), dp(40)))
         dots.add(d)
     }
     showIntro(0)
-    return true
 }
 
 // ======================= PRVOTNI NASTAVENI: UKAZKA GEST VE SMYCCE =======================

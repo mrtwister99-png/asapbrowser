@@ -93,10 +93,10 @@ internal fun MainActivity.guessResourceType(request: WebResourceRequest): String
     return when {
         !request.isForMainFrame && accept.startsWith("text/html") -> "subdocument"   // reklamni iframy
         accept.contains("text/css") || path.endsWith(".css") -> "stylesheet"
-        accept.contains("image") || IMAGE_EXTS.any { path.endsWith(it) } -> "image"
+        accept.contains("image") || imageExts.any { path.endsWith(it) } -> "image"
         path.endsWith(".js") -> "script"
         accept.contains("video") || accept.contains("audio") ||
-            MEDIA_EXTS.any { path.endsWith(it) } -> "media"
+            mediaExts.any { path.endsWith(it) } -> "media"
         request.requestHeaders["X-Requested-With"] != null -> "xmlhttprequest"
         else -> "other"
     }
@@ -180,7 +180,7 @@ private fun baseDomain(h: String): String {
     val p = h.lowercase().removePrefix("www.").split('.')
     if (p.size <= 2) return p.joinToString(".")
     // co.uk, com.au, ac.jp ... = koncovka ma dve casti, web je az treti od konce (jinak by bbc.co.uk bylo "co.uk")
-    val n = if (p.size >= 3 && p.last().length == 2 && p[p.size - 2] in SECOND_LEVEL) 3 else 2
+    val n = if (p.last().length == 2 && p[p.size - 2] in SECOND_LEVEL) 3 else 2
     return p.takeLast(n).joinToString(".")
 }
 

@@ -4,7 +4,6 @@ import android.app.DownloadManager
 import androidx.core.net.toUri
 import android.webkit.*
 import android.widget.*
-import kotlin.concurrent.thread
 import com.example.actimelteambrowser.core.settings.AppSettings
 import androidx.compose.ui.platform.ComposeView
 import android.graphics.Bitmap

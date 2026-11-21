@@ -64,10 +64,12 @@ import com.example.actimelteambrowser.AppToast
 import com.example.actimelteambrowser.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -105,9 +107,9 @@ private val CARAMEL = Color(0xFFCDA24D)
 private val HEADER_H = 40.dp   // vyska hlavicky dlazdice (nazev + hvezda + krizek)
 
 /** Karty: 1 karta / 2-4 karty / 5 a vice karet (4. pad: "zavrit 1 kartu", "3 karty", "5 karet"). */
-private fun kartyText(n: Int): String = when {
-    n == 1 -> "1 kartu"
-    n in 2..4 -> "$n karty"
+private fun kartyText(n: Int): String = when (n) {
+    1 -> "1 kartu"
+    in 2..4 -> "$n karty"
     else -> "$n karet"
 }
 
@@ -135,7 +137,6 @@ fun TabsScreen(
     onFolderColor: (Long, Int) -> Unit,           // (složka, nová barva)
     onFolderRename: (Long, String) -> Unit,       // (složka, nový název)
     onNew: (Long?) -> Unit,                       // nova karta; id otevrene slozky = karta se prida do ni
-    onDismiss: () -> Unit,
     session: Int = 0,                             // kazde otevreni prehledu = nova hodnota (slozka se zavre)
     groupsMode: Boolean = false,                  // zalozka Skupiny: jen skupiny karet
     onGroupsMode: () -> Unit = {},
@@ -206,10 +207,10 @@ fun TabsScreen(
             endSelect()
         }
     }
-    val requestExtractNow by rememberUpdatedState<(List<Long>) -> Unit>({ ids -> requestExtract(ids) })
+    val requestExtractNow by rememberUpdatedState<(List<Long>) -> Unit> { ids -> requestExtract(ids) }
     LaunchedEffect(dissolving) {
         if (dissolving) {
-            delay(380)
+            delay(380.milliseconds)
             onExtract(pendingExtract)
             dissolving = false
             endSelect()
@@ -515,7 +516,7 @@ fun TabsScreen(
                                     AppToast.show(ctx, if (mt >= 0) "Složka vytvořena" else "Karta přidána do složky")
                                 }
                                 scope.launch {
-                                    delay(250)
+                                    delay(250.milliseconds)
                                     justDragged = false
                                 }
                             },
@@ -523,7 +524,7 @@ fun TabsScreen(
                                 draggingId = null
                                 mergeTarget = null
                                 scope.launch {
-                                    delay(250)
+                                    delay(250.milliseconds)
                                     justDragged = false
                                 }
                             }
@@ -870,6 +871,11 @@ private fun TabTileCard(
             .graphicsLayer { scaleX = stretch; scaleY = stretch }
             .clip(shape)
             .background(PANEL)
+            // barva karty = 40 % pres celou kartu (karty jdou barevne rozeznat)
+            .drawWithContent {
+                drawContent()
+                if (tile.color != 0 && !tile.folder) drawRect(Color(tile.color).copy(alpha = 0.4f))
+            }
             .then(borderMod)
             .clickable(onClick = onClick)
     ) {

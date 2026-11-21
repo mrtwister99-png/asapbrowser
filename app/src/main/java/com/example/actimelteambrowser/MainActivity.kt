@@ -11,6 +11,7 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
 import android.webkit.*
+import kotlin.math.abs
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.*
@@ -83,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     internal var lastSystemBottom = 0
     internal val tabs = BrowserTabs()
     internal val tabTiles = mutableStateOf<List<TabTile>>(emptyList())
-    internal val overviewSession = androidx.compose.runtime.mutableIntStateOf(0)
+    internal val overviewSession = mutableIntStateOf(0)
 
     // Slozky v prehledu karet: skupina karet (id karet), v prehledu se ukaze jako jedna dlazdice na miste prvni karty
     // (logika slozek je v TabManager.kt; karty samotne jsou v `tabs`)
@@ -762,8 +763,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Pripony pro odhad typu zdroje (hotove konstanty, aby se na kazdy pozadavek nekompilovalo Regex)
-    internal val IMAGE_EXTS = arrayOf(".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
-    internal val MEDIA_EXTS = arrayOf(".mp4", ".webm", ".m3u8", ".mpd", ".ts")
+    internal val imageExts = arrayOf(".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+    internal val mediaExts = arrayOf(".mp4", ".webm", ".m3u8", ".mpd", ".ts")
 
     // ---------------- KARTY (taby) ----------------
 
@@ -819,7 +820,7 @@ class MainActivity : AppCompatActivity() {
             }
             // Odkaz na web s jinou volbou "verze pro pocitac": prepnout UA UZ PRED nactenim (jedno nacteni).
             // Drive se to zjistilo az v onPageStarted, stranka se zastavila a nacitala podruhe.
-            override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val r = request ?: return false
                 if (view == null || !r.isForMainFrame || r.method != "GET" || tab.incognito) return false
                 val url = r.url.toString()
@@ -977,7 +978,7 @@ class MainActivity : AppCompatActivity() {
                         endPull()
                     } else if (pullStartY >= 0f) {
                         val dy = ev.y - pullStartY
-                        if (dy > dp(12) && Math.abs(ev.x - pullStartX) < dy / 2) {
+                        if (dy > dp(12) && abs(ev.x - pullStartX) < dy / 2) {
                             val prog = (dy / dp(AppSettings.pullRefreshDistance.get())).coerceIn(0f, 1f)
                             updatePull(prog)
                             if (prog >= 1f && !pullArmed) {
@@ -990,7 +991,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP -> {
                     val dy = ev.y - pullStartY
-                    if (pullStartY >= 0f && dy > dp(AppSettings.pullRefreshDistance.get()) && Math.abs(ev.x - pullStartX) < dy / 2 && isWebUrl(wv.url.orEmpty())) {
+                    if (pullStartY >= 0f && dy > dp(AppSettings.pullRefreshDistance.get()) && abs(ev.x - pullStartX) < dy / 2 && isWebUrl(wv.url.orEmpty())) {
                         wv.reload()
                         AppToast.show(this@MainActivity, "Načítám znovu")
                         startPullLoading()

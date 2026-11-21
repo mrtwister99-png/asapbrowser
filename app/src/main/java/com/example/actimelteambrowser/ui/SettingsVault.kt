@@ -800,9 +800,7 @@ private fun VaultSmallButton(text: String, modifier: Modifier, onClick: () -> Un
 private fun copySecret(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val clip = ClipData.newPlainText("trezor", text)
-    if (Build.VERSION.SDK_INT >= 24) {
-        clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
-    }
+    clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
     cm.setPrimaryClip(clip)
     Handler(Looper.getMainLooper()).postDelayed({
         runCatching {

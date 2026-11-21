@@ -1,5 +1,7 @@
 package com.example.actimelteambrowser.data
 
+import android.annotation.SuppressLint
+import androidx.core.net.toUri
 import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Context
@@ -100,7 +102,7 @@ object DownloadsStore {
     /** Vybrana slozka (null = vychozi Stazene). */
     fun folder(context: Context): Uri? {
         AppSettings.init(context)
-        return AppSettings.downloadFolder.get().ifBlank { null }?.let { Uri.parse(it) }
+        return AppSettings.downloadFolder.get().ifBlank { null }?.let { it.toUri() }
     }
 
     /** Citelny nazev vybrane slozky. */
@@ -112,6 +114,7 @@ object DownloadsStore {
     }
 
     /** Novy soubor ve vybrane slozce / ve Stazenych. Vraci (uri, proud) nebo null. */
+    @SuppressLint("Recycle")   // proud se vraci volajicimu, ten ho zavira
     private fun createTarget(context: Context, name: String, mime: String): Pair<Uri, OutputStream>? {
         val cr = context.contentResolver
         folder(context)?.let { tree ->
@@ -201,14 +204,14 @@ object DownloadsStore {
 
     /** Smaze soubor z telefonu i ze seznamu. */
     fun delete(context: Context, item: DlItem) {
-        if (item.uri != null) deleteUri(context, Uri.parse(item.uri))
+        if (item.uri != null) deleteUri(context, item.uri.toUri())
         else quiet { (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).remove(item.id) }
         forget(context, item.id)
     }
 
     /** Adresa souboru pro otevreni jinou aplikaci. */
     fun openUri(context: Context, item: DlItem): Uri? =
-        item.uri?.let { Uri.parse(it) }
+        item.uri?.let { it.toUri() }
             ?: runCatching { (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).getUriForDownloadedFile(item.id) }.getOrNull()
 
     // ---------------- seznam ----------------
@@ -241,7 +244,7 @@ object DownloadsStore {
             val d = byId[r.id] ?: continue
             if (d.status != DownloadManager.STATUS_SUCCESSFUL) continue
             val claim = synchronized(moving) { moving.add(r.id) }
-            if (claim) try { moveToFolder(context, dm, r, d, Uri.parse(mv)) } finally { synchronized(moving) { moving.remove(r.id) } }
+            if (claim) try { moveToFolder(context, dm, r, d, mv.toUri()) } finally { synchronized(moving) { moving.remove(r.id) } }
         }
         val fresh = synchronized(this) { load() }
         val gone = fresh.filter { it.uri == null && it.id in dmIds && !byId.containsKey(it.id) }.map { it.id }.toSet()

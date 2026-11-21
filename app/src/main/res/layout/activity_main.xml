@@ -262,7 +262,7 @@
                 android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_home_filled"
-                android:tint="#00B055"
+                app:tint="#00B055"
                 android:visibility="invisible"/>
         </FrameLayout>
 

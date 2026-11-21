@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.core.adblock
 
+import androidx.core.net.toUri
 import android.net.Uri
 
 object AdBlocker {
@@ -61,7 +62,7 @@ object AdBlocker {
     }
 
     fun isAd(url: String): Boolean {
-        val uri = Uri.parse(url)
+        val uri = url.toUri()
         val host = uri.host?.lowercase() ?: return false
         val path = uri.path?.lowercase() ?: ""
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Appka je zatim jen cesky a texty jsou zamerne primo v kodu: varovani o prekladech se nehlasi (Gradle lint i Android Studio). -->
+<lint>
+    <issue id="SetTextI18n" severity="ignore" />
+    <issue id="HardcodedText" severity="ignore" />
+</lint>

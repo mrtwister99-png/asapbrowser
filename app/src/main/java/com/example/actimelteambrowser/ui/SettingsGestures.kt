@@ -147,7 +147,8 @@ data class GestureTheme(
     val areaBg: Color = Color(0x33000000),
     val keyColors: List<Int>? = null,   // barva tlacitka 1-9 (0 = vychozi)
     val glyph: Color? = null,           // barva znaku (cislo, tecka, obrys); null = vychozi bila
-    val trail: Color = Color(0xFF00B055),   // barva projeti (cara a zvyrazneni klavesy)
+    val trail: Color = Color(0xFF00B055),   // barva znaku po projeti (projete tlacitko a efekt)
+    val line: Color? = null,            // barva cary za prstem; null = stejna jako trail
     val trailStyle: Int = 0,            // spoj: 0 cara, 1 carkovana, 2 teckovana, 3-7 znaky (srdce, kary, krize, piky, smajlik)
     val effect: Int = -1,               // -1 podle vzhledu, 0 zadny, 1 mini UFO, 2 kruh, 3 ctverecek, 4 hvezdicky
     val areaAlpha: Float = 1f,
@@ -368,7 +369,7 @@ fun GestureSurface(
         }
 
         // spoj: cara, carkovana, teckovana nebo znaky v rade za prstem
-        val tc = trailC.copy(alpha = 0.9f * va)
+        val tc = (th.line ?: trailC).copy(alpha = 0.9f * va)
         if (th.trailStyle in 0..2) {
             for (st in strokes) {
                 if (st.size < 2) continue
@@ -508,6 +509,7 @@ object GestureLook {
             keyColors = keyColors()?.toList(),
             glyph = AppSettings.gestureGlyphColor.get().takeIf { owned && it != 0 }?.let { Color(it) },
             trail = AppSettings.gestureTrailColor.get().takeIf { owned && it != 0 }?.let { Color(it) } ?: GESTURE_GREEN,
+            line = AppSettings.gestureLineColor.get().takeIf { owned && it != 0 }?.let { Color(it) },
             trailStyle = if (owned) AppSettings.gestureTrail.get().coerceIn(0, 7) else 0,
             effect = AppSettings.gestureEffect.get().takeIf { owned && it in 0..4 } ?: autoEffect(forStyle),
             areaAlpha = areaAlpha(),
@@ -1046,6 +1048,7 @@ fun GesturePanel(
     var glyphColor by remember { mutableStateOf(AppSettings.gestureGlyphColor.get()) }
     var trailColor by remember { mutableStateOf(AppSettings.gestureTrailColor.get()) }
     var trailStyle by remember { mutableStateOf(AppSettings.gestureTrail.get()) }
+    var lineColor by remember { mutableStateOf(AppSettings.gestureLineColor.get()) }
     var effect by remember { mutableStateOf(AppSettings.gestureEffect.get()) }
     val keyColors = remember { mutableStateListOf<Int>().apply { addAll(GestureLook.rawKeyColors().toList()) } }
     var colorKey by remember { mutableStateOf(9) }        // vybrane tlacitko pro barvu (9 = vsechna stejne)
@@ -1271,13 +1274,13 @@ fun GesturePanel(
                             Column(Modifier.weight(1f)) {
                                 Text(if (colorsOwned) "Barvy a efekty" else "🔒 Barvy a efekty",
                                     color = if (colorsOwned) Color.White else MUTED, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                Text(if (colorsOwned) "plocha, tlačítka, znak, projetí, spoj a efekt" else "zamčeno",
+                                Text(if (colorsOwned) "plocha, tlačítka, znak, čára a efekt" else "zamčeno",
                                     color = MUTED, fontSize = 12.sp)
                             }
                             OpenArrow(colorsOpen && colorsOwned, if (colorsOwned) Color.White else MUTED)
                         }
                         if (colorsOwned && colorsOpen) {
-                            Chips(listOf("Plocha", "Tlačítka", "Znak", "Projetí", "Spoj", "Efekt"), colorTarget) { colorTarget = it }
+                            Chips(listOf("Plocha", "Tlačítka", "Znak", "Čára", "Efekt"), colorTarget) { colorTarget = it }
                             when (colorTarget) {
                                 0 -> {
                                     Text("Barva celého podkladu plochy.", color = Color(0xFFCCCCCC), fontSize = 13.sp)
@@ -1314,27 +1317,30 @@ fun GesturePanel(
                                     PagedPalette(glyphColor) { c -> glyphColor = c; AppSettings.gestureGlyphColor.set(c); onChanged() }
                                 }
                                 3 -> {
-                                    Text("Barva při projetí – čára za prstem a projeté tlačítko.", color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                                    PagedPalette(trailColor) { c -> trailColor = c; AppSettings.gestureTrailColor.set(c); onChanged() }
-                                }
-                                4 -> {
-                                    Text("Čím se spojují projetá tlačítka (znaky se kreslí v řadě za prstem).", color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                                    Chips(listOf("Čára", "Čárkovaná", "Tečkovaná", "♥ Srdce", "♦ Káry", "♣ Kříže", "♠ Piky", "☺ Smajlík"), trailStyle) {
+                                    // Cara za prstem: typ (cara, carkovana, teckovana, znaky) + barva
+                                    Text("Typ čáry za prstem (znaky se kreslí v řadě za prstem).", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                                    Chips(listOf("Plná", "Čárkovaná", "Tečkovaná", "♥ Srdce", "♦ Káry", "♣ Kříže", "♠ Piky", "☺ Smajlík"), trailStyle) {
                                         trailStyle = it; AppSettings.gestureTrail.set(it); onChanged()
                                     }
+                                    Text("Barva čáry (Výchozí = stejná jako barva po projetí).", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                                    PagedPalette(lineColor) { c -> lineColor = c; AppSettings.gestureLineColor.set(c); onChanged() }
                                 }
                                 else -> {
-                                    Text("Efekt při projetí tlačítkem.", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                                    // Efekt: animace pri projeti + zmena barvy projeteho znaku
+                                    Text("Animace při projetí tlačítkem.", color = Color(0xFFCCCCCC), fontSize = 13.sp)
                                     // -1 podle vzhledu, 0 zadny, 1 mini UFO, 2 kruh, 3 ctverecek, 4 hvezdicky
                                     Chips(listOf("Podle vzhledu", "Mini UFO", "Kruh", "Čtvereček", "Hvězdičky", "Žádný"),
                                         when (effect) { -1 -> 0; 0 -> 5; else -> effect }) { k ->
                                         effect = when (k) { 0 -> -1; 5 -> 0; else -> k }
                                         AppSettings.gestureEffect.set(effect); onChanged()
                                     }
+                                    Text("Barva znaku po projetí – projeté tlačítko a animace.", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                                    PagedPalette(trailColor) { c -> trailColor = c; AppSettings.gestureTrailColor.set(c); onChanged() }
                                 }
                             }
                             PanelButton("Vrátit výchozí barvy a efekty") {
-                                areaColor = 0; glyphColor = 0; trailColor = 0; trailStyle = 0; effect = -1
+                                areaColor = 0; glyphColor = 0; trailColor = 0; lineColor = 0; trailStyle = 0; effect = -1
+                                AppSettings.gestureLineColor.set(0)
                                 for (k in 0..8) keyColors[k] = 0
                                 AppSettings.gestureAreaColor.set(0); AppSettings.gestureGlyphColor.set(0); AppSettings.gestureTrailColor.set(0)
                                 AppSettings.gestureTrail.set(0); AppSettings.gestureEffect.set(-1)

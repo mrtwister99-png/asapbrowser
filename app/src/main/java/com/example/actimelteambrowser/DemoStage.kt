@@ -19,10 +19,10 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.core.graphics.toColorInt
 
 /**
@@ -100,14 +100,10 @@ internal object DemoMarks {
 }
 
 /** Oznaci prvek, aby na nej ukazka umela ukazat (ulozi jeho polohu na obrazovce). */
-internal fun Modifier.demoMark(key: String): Modifier = composed {
-    val view = LocalView.current
-    this.onGloballyPositioned { c ->
-        val b = c.boundsInWindow()
-        val loc = IntArray(2)
-        view.rootView.getLocationOnScreen(loc)
-        DemoMarks.rects[key] = RectF(b.left + loc[0], b.top + loc[1], b.right + loc[0], b.bottom + loc[1])
-    }
+internal fun Modifier.demoMark(key: String): Modifier = onGloballyPositioned { c ->
+    val b = c.boundsInWindow()
+    val off = c.positionOnScreen() - c.positionInWindow()   // posun okna na obrazovce
+    DemoMarks.rects[key] = RectF(b.left + off.x, b.top + off.y, b.right + off.x, b.bottom + off.y)
 }
 
 /** Kratky zluty obrys, ktery 3x problikne nad obdelnikem (souradnice v ramci [host]). */

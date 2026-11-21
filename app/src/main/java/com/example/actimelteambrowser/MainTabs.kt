@@ -573,7 +573,6 @@ internal fun MainActivity.setupTabsOverlay() {
                 }
                 hideTabs()
             },
-            onDismiss = { hideTabs() },
             session = overviewSession.intValue
         )
     }
@@ -1146,7 +1145,7 @@ private fun MainActivity.attachTileTouch(tile: View, tab: BrowserTab, list: List
                         val tg = groupOf(target.id)
                         if (dg !== tg) {
                             tabManager.removeFromGroups(listOf(tab.id))
-                            if (tg != null) tg.members.add(tg.members.indexOf(target.id).coerceAtLeast(0), tab.id)
+                            tg?.members?.add(tg.members.indexOf(target.id).coerceAtLeast(0), tab.id)
                             pruneGroups()
                         } else if (dg != null) {
                             tabManager.moveInGroup(-dg.id, tab.id, target.id)

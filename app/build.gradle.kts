@@ -28,6 +28,9 @@ android {
             }
         }
     }
+    lint {
+        disable += "SetTextI18n"   // texty jsou zatim zamerne psane primo v kodu (appka je jen cesky)
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

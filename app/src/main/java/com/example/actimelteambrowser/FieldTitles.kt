@@ -12,7 +12,7 @@ import androidx.core.graphics.toColorInt
 /**
  * Nadpisy v textovych polich (prvotni nastaveni, demo videa): horni a dolni pole ukazou velky zluty text na tmavem
  * podkladu a nejde do nich psat. Pole jsou "cista": bez zamku a Sdilet nahore a bez sipek a lupy dole (vic mista pro text);
- * [keep] = ikony, ktere zustanou (ukazka prave tohoto tlacitka). clearFieldTitles vrati pole do bezne podoby.
+ * `keep` = ikony, ktere zustanou (ukazka prave tohoto tlacitka). clearFieldTitles vrati pole do bezne podoby.
  * topUrlText() vraci behem nadpisu nadpis, takze ho nacteni stranky neprepise.
  */
 internal var fieldTitleTop: String? = null

@@ -1,7 +1,6 @@
 package com.example.actimelteambrowser
 
 import android.view.View
-import androidx.core.graphics.toColorInt
 import kotlin.math.roundToInt
 import androidx.core.view.*
 import com.example.actimelteambrowser.core.settings.AppSettings
@@ -40,6 +39,7 @@ internal fun MainActivity.enterGestureConfig() {
     // pruhledna vrstva: pohlti klepnuti do webu, list a tlacitek; v TESTu pusti dal jen dotyk na kulicku gest
     val scrim = View(this)
     scrim.isClickable = true
+    @Suppress("ClickableViewAccessibility")   // vrstva jen pohlcuje dotyky, zadne klepnuti neobsluhuje
     scrim.setOnTouchListener { _, ev -> gestureTestMode && gestureTestTouch(ev) }
     scrim.elevation = dp(30).toFloat()   // nad listami i pruhy karet (20), pod plochou gest (35): vse je videt, ale neklika se na to
     val slp = ConstraintLayout.LayoutParams(0, 0)
@@ -233,7 +233,7 @@ internal fun MainActivity.showGestures(test: Boolean = false, demoBounds: ((Floa
     // napoveda gest zacina pod hornim polem (a listou karet); schovane listy = hned nahore
     val topDp = if (topBar.translationY < 0f) 8 else ((topBar.height - lastSystemTopPx + stripTopPx) / density).toInt() + 6
     // anonymni karta: cara za tahem i efekt pri pruchodu klavesou jsou modre (barva anonymniho rezimu)
-    val theme = GestureLook.theme().let { if (tabs.active()?.incognito == true) it.copy(trail = androidx.compose.ui.graphics.Color(0xFF006AFF)) else it }
+    val theme = GestureLook.theme().let { if (tabs.active()?.incognito == true) it.copy(trail = androidx.compose.ui.graphics.Color(0xFF006AFF), line = androidx.compose.ui.graphics.Color(0xFF006AFF)) else it }
     gestureView.setContent {
         GestureOverlay(
             style = style,

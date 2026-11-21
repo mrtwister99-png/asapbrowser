@@ -1,5 +1,6 @@
 package com.example.actimelteambrowser.ui
 
+import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -226,7 +227,7 @@ private object SiteAssets {
 @Composable
 internal fun SiteIconLite(url: String) {
     val ctx = LocalContext.current
-    val host = remember(url) { try { android.net.Uri.parse(url).host?.removePrefix("www.").orEmpty() } catch (e: Exception) { "" } }
+    val host = remember(url) { try { url.toUri().host?.removePrefix("www.").orEmpty() } catch (e: Exception) { "" } }
     val icon by produceState<android.graphics.Bitmap?>(null, host) {
         value = if (host.isBlank()) null else withContext(Dispatchers.IO) { SiteAssets.icon(ctx, host) }
     }
@@ -250,7 +251,7 @@ internal fun SiteIconLite(url: String) {
 @Composable
 internal fun SiteThumb(url: String) {
     val ctx = LocalContext.current
-    val host = remember(url) { try { android.net.Uri.parse(url).host?.removePrefix("www.").orEmpty() } catch (e: Exception) { "" } }
+    val host = remember(url) { try { url.toUri().host?.removePrefix("www.").orEmpty() } catch (e: Exception) { "" } }
     val assets by produceState<Pair<android.graphics.Bitmap?, android.graphics.Bitmap?>>(Pair(null, null), host) {
         value = if (host.isBlank()) Pair(null, null)
         else withContext(Dispatchers.IO) { Pair(SiteAssets.thumb(ctx, host), SiteAssets.icon(ctx, host)) }

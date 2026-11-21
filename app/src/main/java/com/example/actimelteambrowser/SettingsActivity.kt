@@ -387,7 +387,7 @@ class SettingsActivity : ComponentActivity() {
             val msg = try {
                 SettingsCodes.import(this, text, rest, merge).also {
                     // nahrane vlastni nastaveni = uzivatel appku zna: zlute svitici / blikajici tutorial skonci
-                    com.example.actimelteambrowser.core.settings.AppSettings.liveTutorial.set("")
+                    AppSettings.liveTutorial.set("")
                 }
             } catch (e: Exception) {
                 "Import selhal: " + (e.message ?: "neznámá chyba")

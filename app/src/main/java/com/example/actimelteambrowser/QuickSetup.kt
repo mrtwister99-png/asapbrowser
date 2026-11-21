@@ -1,5 +1,9 @@
 package com.example.actimelteambrowser
 
+import androidx.core.graphics.withTranslation
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withSave
+import androidx.core.view.isEmpty
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
@@ -121,7 +125,7 @@ private fun MainActivity.bodyText(t: String): TextView {
 
 // Okno s textem a tlacitky pod sebou (prvni = hlavni zelene); kazde tlacitko okno zavre a spusti svou akci.
 // Jen pred prvotnim nastavenim (vychozi prohlizec, chces nastaveni?); samotne kroky nastaveni uz okna nemaji.
-private fun MainActivity.choiceDialog(title: String, text: String, extra: View? = null, vararg buttons: Pair<String, () -> Unit>) {
+private fun MainActivity.choiceDialog(title: String, text: String, vararg buttons: Pair<String, () -> Unit>) {
     showStyledDialog(
         // s pozadim s UFO staci mensi ztmaveni (jinak by UFO nebyla videt)
         title = title, negativeText = null, dimAmount = if (firstBackdrop != null) 0.45f else 0.8f, strokeColor = "#FFD600".toColorInt(),
@@ -130,11 +134,6 @@ private fun MainActivity.choiceDialog(title: String, text: String, extra: View? 
         val body = LinearLayout(this)
         body.orientation = LinearLayout.VERTICAL
         body.addView(bodyText(text))
-        if (extra != null) {
-            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            lp.topMargin = dp(14)
-            body.addView(extra, lp)
-        }
         buttons.forEachIndexed { i, (label, action) ->
             val b = styledButton(label, i == 0)
             b.setOnClickListener { dismiss(); action() }
@@ -151,7 +150,6 @@ internal fun MainActivity.afterWelcome() {
     choiceDialog(
         "Výchozí prohlížeč",
         "ASAP si můžete nastavit jako váš výchozí prohlížeč. Odkazy z jiných aplikací se pak otevřou tady. Chcete to?",
-        null,
         "Ano" to { requestDefaultBrowser { askQuickSetup() } },
         "Ne" to { askQuickSetup() }
     )
@@ -184,7 +182,6 @@ private fun MainActivity.askQuickSetup() {
     choiceDialog(
         "Rychlé nastavení",
         "Chceš si v pár krocích projít hlavní možnosti prohlížeče? Nebo to přeskoč – všechno zůstane ve výchozí podobě a nové věci ti ukážou žluté obrysy.",
-        null,
         "Projdu si rychlé nastavení možností prohlížeče" to { quickGo(1) },
         "Přeskočit rychlé nastavení" to { hideFirstBackdrop(); startLiveTutorial() }
     )
@@ -289,13 +286,12 @@ private fun MainActivity.cardText(card: LinearLayout, text: String) {
 }
 
 // Tlacitko pod tipem (primary = zelene OK, jinak tmave s cervenym obrysem)
-@Suppress("UNUSED_PARAMETER")
-private fun MainActivity.cardButton(card: LinearLayout, label: String, primary: Boolean, first: Boolean, action: () -> Unit) {
+private fun MainActivity.cardButton(card: LinearLayout, label: String, primary: Boolean, action: () -> Unit) {
     val col = card.tag as? LinearLayout ?: card
     val b = demoButton(label, primary)
     b.setOnClickListener { action() }
     val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-    lp.topMargin = dp(if (col.childCount == 0) 12 else 8)
+    lp.topMargin = dp(if (col.isEmpty()) 12 else 8)
     col.addView(b, lp)
 }
 
@@ -304,7 +300,7 @@ private fun MainActivity.tipCard(text: String, okText: String? = null, outline: 
     showSetupCard { card ->
         cardText(card, text)
         if (okText != null && onOk != null) {
-            cardButton(card, okText, true, true, onOk)
+            cardButton(card, okText, true, onOk)
             if (outline) (card.tag as? LinearLayout)?.let { col ->
                 col.getChildAt(col.childCount - 1)?.background = GradientDrawable().apply {
                     setColor("#00B055".toColorInt()); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Color.WHITE)
@@ -433,7 +429,7 @@ private fun MainActivity.quickStage1() {
             views.add(v)
         }
         paint()
-        cardButton(card, "OK, pokračuj", true, true) {
+        cardButton(card, "OK, pokračuj", true) {
             var u = url.text.toString().trim()
             if (u.isNotEmpty() && !u.startsWith("http://") && !u.startsWith("https://")) u = "https://$u"
             if (u.isNotEmpty() && runCatching { u.toUri().host }.getOrNull()?.contains('.') == true) AppSettings.homeUrl.set(u)
@@ -476,7 +472,7 @@ private fun MainActivity.quickStageBottom() {
 
 private fun MainActivity.quickStageBottomField() {
     setupGen++
-    val arrows = listOf(findViewById<View>(R.id.btnNavBack), findViewById<View>(R.id.btnNavForward))
+    val arrows = listOf<View>(findViewById(R.id.btnNavBack), findViewById(R.id.btnNavForward))
     showFieldTitles("SPODNÍ LIŠTA", "TEXTOVÉ POLE", keep = setOf(R.id.btnNavBack, R.id.btnNavForward))
     arrows.forEach { it.alpha = 0f }   // sipky a lupa se objevi az po probliknuti
     val lupa = etSearchMain.compoundDrawablesRelative[0]?.mutate()
@@ -505,7 +501,7 @@ private fun MainActivity.quickStageTop() {
     showFieldTitles("HORNÍ LIŠTA", null)
     greyFieldOutline(findViewById(R.id.urlContainer))
     setupDim(listOf(topBar, stripPlaceholderView(true)))
-    val btns = listOf(findViewById<View>(R.id.btnAdBlock), findViewById<View>(R.id.btnVpn))
+    val btns = listOf<View>(findViewById(R.id.btnAdBlock), findViewById(R.id.btnVpn))
     tipCard("Horní lišta – tlačítka")
     setupAfter(400) {
         btns.forEach { setupBlink(it) }
@@ -710,15 +706,16 @@ private class FillDrawable(val bmp: android.graphics.Bitmap?, color: Int, val ra
         this.color = color
         if (bmp != null) colorFilter = android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN)
     }
+    private val rect = android.graphics.RectF()
     override fun draw(canvas: android.graphics.Canvas) {
         val b = bounds
         val h = b.height()
-        canvas.save()
+        canvas.withSave {
         if (topDown) canvas.clipRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.top + h * k)
         else canvas.clipRect(b.left.toFloat(), b.bottom - h * k, b.right.toFloat(), b.bottom.toFloat())
         if (bmp != null) canvas.drawBitmap(bmp, b.left.toFloat(), b.top.toFloat(), p)
-        else canvas.drawRoundRect(android.graphics.RectF(b), radius, radius, p)
-        canvas.restore()
+        else canvas.drawRoundRect(rect.apply { set(b) }, radius, radius, p)
+        }
     }
     override fun setAlpha(alpha: Int) { p.alpha = alpha; invalidateSelf() }
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
@@ -730,12 +727,12 @@ private class FillDrawable(val bmp: android.graphics.Bitmap?, color: Int, val ra
 private fun snapshotIcons(v: View): android.graphics.Bitmap? {
     val g = v as? ViewGroup ?: return null
     if (v.width <= 0 || v.height <= 0) return null
-    val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+    val bmp = createBitmap(v.width, v.height)
     val c = android.graphics.Canvas(bmp)
     for (i in 0 until g.childCount) {
         val ch = g.getChildAt(i)
         if (ch.visibility != View.VISIBLE || ch.alpha <= 0f) continue
-        c.save(); c.translate(ch.left.toFloat(), ch.top.toFloat()); ch.draw(c); c.restore()
+        c.withTranslation(ch.left.toFloat(), ch.top.toFloat()) { ch.draw(this) }
     }
     return bmp
 }
